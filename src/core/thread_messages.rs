@@ -18,7 +18,7 @@ where
         .unwrap();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SongRecognizedMessage {
     pub artist_name: String,
     pub album_name: Option<String>,

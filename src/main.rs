@@ -28,6 +28,7 @@ mod core {
 
 #[cfg(feature = "gui")]
 mod gui {
+    pub mod artwork_window;
     pub mod main_window;
     pub mod song_history_interface;
 

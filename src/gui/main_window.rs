@@ -31,6 +31,7 @@ use crate::utils::filesystem_operations::{
 
 use crate::core::preferences::{Preferences, PreferencesInterface};
 
+use crate::gui::artwork_window::ArtworkWindow;
 use crate::gui::context_menu::ContextMenuUtil;
 use crate::gui::history_entry::HistoryEntry;
 use crate::gui::listed_device::ListedDevice;
@@ -73,6 +74,9 @@ struct App {
     processing_rx: async_channel::Receiver<ProcessingMessage>,
     http_tx: async_channel::Sender<HTTPMessage>,
     http_rx: async_channel::Receiver<HTTPMessage>,
+
+    artwork_window: Rc<RefCell<Option<ArtworkWindow>>>,
+    last_recognized_song: Rc<RefCell<Option<SongRecognizedMessage>>>,
 }
 
 // #[gtk::template_callbacks(functions)]
@@ -163,6 +167,9 @@ impl App {
             processing_rx,
             http_tx,
             http_rx,
+
+            artwork_window: Rc::new(RefCell::new(None)),
+            last_recognized_song: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -317,6 +324,8 @@ impl App {
             set_recording,
             enable_mpris_cli,
             enable_pipewire_cli,
+            self.artwork_window.clone(),
+            self.last_recognized_song.clone(),
         );
         self.setup_actions(application, enable_mpris_cli);
         #[cfg(target_os = "linux")]
@@ -701,6 +710,8 @@ impl App {
         set_recording: bool,
         _enable_mpris_cli: bool,
         enable_pipewire_cli: bool,
+        artwork_window: Rc<RefCell<Option<ArtworkWindow>>>,
+        last_recognized_song: Rc<RefCell<Option<SongRecognizedMessage>>>,
     ) {
         // Setup communication using threads + smol-rs/async-channel::unbounded listener
 
@@ -964,6 +975,11 @@ impl App {
                             }
                         }
                         SongRecognized(message) => {
+                            last_recognized_song.replace(Some((*message).clone()));
+                            if let Some(ref artwork) = *artwork_window.borrow() {
+                                artwork.update(&message);
+                            }
+
                             results_section.set_visible(true);
 
                             // https://gtk-rs.org/gtk4-rs/git/docs/gdk4/struct.Texture.html#method.from_bytes
@@ -1174,9 +1190,30 @@ impl App {
         let recognize_file_row: adw::PreferencesRow =
             self.builder.object("recognize_file_row").unwrap();
         let spinner_row: adw::PreferencesRow = self.builder.object("spinner_row").unwrap();
+        let artwork_window = self.artwork_window.clone();
+        let last_recognized_song = self.last_recognized_song.clone();
 
         let ctx_buffered_log = self.ctx_buffered_log.clone();
         let ctx_logger_source_id = self.ctx_logger_source_id.clone();
+
+        let artwork_window_for_action = artwork_window.clone();
+        let last_recognized_song_for_action = last_recognized_song.clone();
+        let action_show_artwork = gio::ActionEntry::builder("show-artwork")
+            .activate(move |window: &adw::ApplicationWindow, _, _| {
+                if artwork_window_for_action.borrow().is_none() {
+                    let application = window.application().expect("SongRec application");
+                    let artwork = ArtworkWindow::new(&application);
+                    if let Some(ref message) = *last_recognized_song_for_action.borrow() {
+                        artwork.update(message);
+                    }
+                    *artwork_window_for_action.borrow_mut() = Some(artwork);
+                }
+
+                if let Some(ref artwork) = *artwork_window_for_action.borrow() {
+                    artwork.present();
+                }
+            })
+            .build();
 
         let action_show_about = gio::ActionEntry::builder("show-about")
             .activate(move |window, _, _| {
@@ -1496,6 +1533,7 @@ impl App {
 
         window.add_action_entries([
             action_show_about,
+            action_show_artwork,
             action_recognize_file,
             action_search_youtube,
             action_export_to_csv,
