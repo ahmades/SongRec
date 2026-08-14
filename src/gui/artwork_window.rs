@@ -1,6 +1,8 @@
 use crate::core::thread_messages::SongRecognizedMessage;
 use adw::prelude::*;
 use gettextrs::gettext;
+use std::cell::Cell;
+use std::rc::Rc;
 
 pub struct ArtworkWindow {
     window: gtk::Window,
@@ -71,22 +73,22 @@ impl ArtworkWindow {
         let title_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
             .wrap(true)
-            .css_classes(["title-2"])
+            .css_classes(["now-playing-title"])
             .build();
         let artist_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
             .wrap(true)
-            .css_classes(["title-3"])
+            .css_classes(["now-playing-artist"])
             .build();
         let album_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
             .wrap(true)
-            .css_classes(["dim-label"])
+            .css_classes(["now-playing-album"])
             .build();
         let details_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
             .wrap(true)
-            .css_classes(["dim-label"])
+            .css_classes(["now-playing-details"])
             .build();
 
         root.append(&artwork_frame);
@@ -95,6 +97,47 @@ impl ArtworkWindow {
         root.append(&album_label);
         root.append(&details_label);
         window.set_child(Some(&root));
+
+        // Use a dedicated CSS provider for the Now Playing labels. Their font sizes
+        // are recalculated from the actual window size, so resizing and fullscreen
+        // both use exactly the same sizing path.
+        let text_css = gtk::CssProvider::new();
+        if let Some(display) = gdk::Display::default() {
+            gtk::style_context_add_provider_for_display(
+                &display,
+                &text_css,
+                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+        }
+
+        let last_size = Rc::new(Cell::new((0, 0)));
+        let text_css_for_resize = text_css.clone();
+        let last_size_for_resize = last_size.clone();
+        window.add_tick_callback(move |widget, _| {
+            let size = (widget.width(), widget.height());
+            if size != last_size_for_resize.get() {
+                last_size_for_resize.set(size);
+
+                let width_scale = size.0 as f64 / 720.0;
+                let height_scale = size.1 as f64 / 820.0;
+                let scale = width_scale.min(height_scale).clamp(0.60, 2.25);
+
+                let title_size = (32.0 * scale).round() as i32;
+                let artist_size = (24.0 * scale).round() as i32;
+                let album_size = (18.0 * scale).round() as i32;
+                let details_size = (14.0 * scale).round() as i32;
+
+                let css = format!(
+                    ".now-playing-title {{ font-size: {title_size}px; }}
+                     .now-playing-artist {{ font-size: {artist_size}px; }}
+                     .now-playing-album {{ font-size: {album_size}px; }}
+                     .now-playing-details {{ font-size: {details_size}px; }}"
+                );
+                text_css_for_resize.load_from_string(&css);
+            }
+
+            glib::ControlFlow::Continue
+        });
 
         let window_for_button = window.clone();
         fullscreen_button.connect_clicked(move |_| {
@@ -111,8 +154,6 @@ impl ArtworkWindow {
             if key == gtk::gdk::Key::Escape {
                 if window_for_key.is_fullscreen() {
                     window_for_key.unfullscreen();
-                } else {
-                    window_for_key.close();
                 }
                 glib::Propagation::Stop
             } else {
