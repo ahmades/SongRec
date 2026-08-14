@@ -773,6 +773,29 @@ impl App {
         let rate_limited_message: gtk::Label = self.builder.object("rate_limited_message").unwrap();
         let results_image: gtk::Image = self.builder.object("results_image").unwrap();
         let results_label: gtk::Label = self.builder.object("results_label").unwrap();
+
+        // Double-clicking the small recognition artwork opens the dedicated artwork window.
+        let artwork_window_for_results = artwork_window.clone();
+        let last_recognized_song_for_results = last_recognized_song.clone();
+        let application_for_results = application.clone();
+        let results_click = gtk::GestureClick::new();
+        results_click.set_button(1);
+        results_click.connect_pressed(move |_, n_press, _, _| {
+            if n_press == 2 {
+                if artwork_window_for_results.borrow().is_none() {
+                    let artwork = ArtworkWindow::new(&application_for_results);
+                    if let Some(ref message) = *last_recognized_song_for_results.borrow() {
+                        artwork.update(message);
+                    }
+                    *artwork_window_for_results.borrow_mut() = Some(artwork);
+                }
+
+                if let Some(ref artwork) = *artwork_window_for_results.borrow() {
+                    artwork.present();
+                }
+            }
+        });
+        results_image.add_controller(results_click);
         let loopback_switch: adw::SwitchRow = self.builder.object("loopback_switch").unwrap();
 
         #[cfg(target_os = "linux")]
@@ -1196,25 +1219,6 @@ impl App {
         let ctx_buffered_log = self.ctx_buffered_log.clone();
         let ctx_logger_source_id = self.ctx_logger_source_id.clone();
 
-        let artwork_window_for_action = artwork_window.clone();
-        let last_recognized_song_for_action = last_recognized_song.clone();
-        let action_show_artwork = gio::ActionEntry::builder("show-artwork")
-            .activate(move |window: &adw::ApplicationWindow, _, _| {
-                if artwork_window_for_action.borrow().is_none() {
-                    let application = window.application().expect("SongRec application");
-                    let artwork = ArtworkWindow::new(&application);
-                    if let Some(ref message) = *last_recognized_song_for_action.borrow() {
-                        artwork.update(message);
-                    }
-                    *artwork_window_for_action.borrow_mut() = Some(artwork);
-                }
-
-                if let Some(ref artwork) = *artwork_window_for_action.borrow() {
-                    artwork.present();
-                }
-            })
-            .build();
-
         let action_show_about = gio::ActionEntry::builder("show-about")
             .activate(move |window, _, _| {
                 about_dialog.set_visible(true);
@@ -1533,7 +1537,6 @@ impl App {
 
         window.add_action_entries([
             action_show_about,
-            action_show_artwork,
             action_recognize_file,
             action_search_youtube,
             action_export_to_csv,

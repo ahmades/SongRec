@@ -10,7 +10,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-14 00:24+0200\n"
+"POT-Creation-Date: 2026-08-14 16:51+0200\n"
 "PO-Revision-Date: 2026-05-11 12:15+0000\n"
 "Last-Translator: marcelo cripe <marcelocripe@gmail.com>\n"
 "Language-Team: Portuguese (Brazil) <https://weblate.fossplant.re/projects/"
@@ -52,7 +52,7 @@ msgstr "Atenção! Não há conexão com a internet"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:909 src/gui/main_window.rs:921
+#: src/gui/main_window.rs:932 src/gui/main_window.rs:944
 msgid "No match for this song"
 msgstr "A música não pôde ser identificada"
 
@@ -232,7 +232,7 @@ msgstr ""
 
 #: src/core/preferences.rs:58 src/core/preferences.rs:77
 #: src/gui/main_window.rs:302 src/gui/interface.blp:123
-#: src/gui/interface.blp:579 src/gui/interface.blp:629
+#: src/gui/interface.blp:574 src/gui/interface.blp:624
 msgid "Search on YouTube"
 msgstr "Pesquisar no YouTube"
 
@@ -257,15 +257,15 @@ msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr ""
 "A taxa da amostragem passada ao codificar o pacote do ‘Shazam’ não é válida"
 
-#: src/gui/artwork_window.rs:28
+#: src/gui/artwork_window.rs:26
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:32
+#: src/gui/artwork_window.rs:30
 msgid "Toggle fullscreen"
 msgstr ""
 
-#: src/gui/artwork_window.rs:61
+#: src/gui/artwork_window.rs:59
 msgid "No artwork available"
 msgstr ""
 
@@ -281,27 +281,27 @@ msgstr "Ocorreu um erro na conexão com a internet"
 msgid "Unable to enable notification icon"
 msgstr "Não foi possível ativar o ícone das notificações"
 
-#: src/gui/main_window.rs:815 src/gui/main_window.rs:896
+#: src/gui/main_window.rs:838 src/gui/main_window.rs:919
 msgid "Unable to enable MPRIS support"
 msgstr "A funcionalidade do ‘MPRIS’ não pôde ser ativada"
 
-#: src/gui/main_window.rs:918
+#: src/gui/main_window.rs:941
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:999
+#: src/gui/main_window.rs:1022
 msgid "Song recognized"
 msgstr "A música foi identificada"
 
-#: src/gui/main_window.rs:1136
+#: src/gui/main_window.rs:1159
 msgid "Are you sure you want to wipe history?"
 msgstr "Você tem certeza de que quer apagar a histórico?"
 
-#: src/gui/main_window.rs:1142
+#: src/gui/main_window.rs:1165
 msgid "_Yes"
 msgstr "_Sim"
 
-#: src/gui/main_window.rs:1143
+#: src/gui/main_window.rs:1166
 msgid "_Cancel"
 msgstr "_Cancelar"
 
@@ -404,15 +404,15 @@ msgstr "Opções do histórico..."
 msgid "Recognition history"
 msgstr "Histórico das identificações"
 
-#: src/gui/interface.blp:230 src/gui/interface.blp:329
+#: src/gui/interface.blp:230 src/gui/interface.blp:324
 msgid "Song name"
 msgstr "Nome da música"
 
-#: src/gui/interface.blp:241 src/gui/interface.blp:340
+#: src/gui/interface.blp:241 src/gui/interface.blp:335
 msgid "Album"
 msgstr "Álbum"
 
-#: src/gui/interface.blp:254 src/gui/interface.blp:353
+#: src/gui/interface.blp:254 src/gui/interface.blp:348
 msgid "Recognition date"
 msgstr "Data da identificação"
 
@@ -420,37 +420,33 @@ msgstr "Data da identificação"
 msgid "View favorites"
 msgstr "Exibir os favoritos"
 
-#: src/gui/interface.blp:285
-msgid "Show artwork"
-msgstr ""
-
-#: src/gui/interface.blp:293
+#: src/gui/interface.blp:288
 msgid "Application menu"
 msgstr "Menu do programa"
 
-#: src/gui/interface.blp:368 src/gui/interface.blp:531
+#: src/gui/interface.blp:363 src/gui/interface.blp:526
 msgid "Export to CSV"
 msgstr "Exportar para o formato ‘CSV’"
 
-#: src/gui/interface.blp:375
+#: src/gui/interface.blp:370
 msgid "Favorites"
 msgstr "Favoritos"
 
-#: src/gui/interface.blp:382
+#: src/gui/interface.blp:377
 msgid "General preferences"
 msgstr "Preferências gerais"
 
-#: src/gui/interface.blp:386
+#: src/gui/interface.blp:381
 msgid "Notify when a new song is recognized or network error is encountered"
 msgstr ""
 "Notificar quando uma nova música for reconhecida ou quando ocorrer um erro "
 "na conexão com a internet"
 
-#: src/gui/interface.blp:387 src/gui/interface.blp:486
+#: src/gui/interface.blp:382 src/gui/interface.blp:481
 msgid "Show notifications"
 msgstr "Exibir as notificações"
 
-#: src/gui/interface.blp:393
+#: src/gui/interface.blp:388
 msgid ""
 "Bump a song to the top of the history list and remove the former entry when "
 "the same song is detected multiple times"
@@ -458,11 +454,11 @@ msgstr ""
 "Impulsionar uma música para a parte superior da lista do histórico e remover "
 "a entrada anterior quando a mesma música for detectada várias vezes"
 
-#: src/gui/interface.blp:395
+#: src/gui/interface.blp:390
 msgid "No duplicates in history"
 msgstr "Não há duplicatas no histórico"
 
-#: src/gui/interface.blp:401
+#: src/gui/interface.blp:396
 msgid ""
 "When closing the window, minimize to system tray using KSNI instead of "
 "closing the app. Please note that you may have to increase the \"request "
@@ -475,25 +471,25 @@ msgstr ""
 "em execução em segundo plano para reduzir as chances de atingir a limitação "
 "da taxa de transferência."
 
-#: src/gui/interface.blp:403
+#: src/gui/interface.blp:398
 msgid "Minimize to system tray"
 msgstr "Minimizar para a bandeja do sistema"
 
-#: src/gui/interface.blp:409
+#: src/gui/interface.blp:404
 msgid "Network preferences"
 msgstr "Preferências da conexão de rede"
 
-#: src/gui/interface.blp:425
+#: src/gui/interface.blp:420
 msgid "By default 8, increase if you are rate-limited"
 msgstr ""
 "Por padrão, o valor é 8. Se você atingiu o limite da taxa de transferência "
 "aumente o valor"
 
-#: src/gui/interface.blp:426
+#: src/gui/interface.blp:421
 msgid "Shazam interval between requests in seconds"
 msgstr "Intervalo em segundos entre as solicitações do Shazam"
 
-#: src/gui/interface.blp:434
+#: src/gui/interface.blp:429
 msgid ""
 "MPRIS will display information about recognized songs in places like the "
 "GNOME or KDE control panel"
@@ -501,71 +497,71 @@ msgstr ""
 "O ‘MPRIS’ exibirá as informações sobre as músicas que foram reconhecidas nos "
 "locais como no painel de controle do GNOME ou do KDE"
 
-#: src/gui/interface.blp:436
+#: src/gui/interface.blp:431
 msgid "Enable MPRIS"
 msgstr "Ativar o ‘MPRIS’"
 
-#: src/gui/interface.blp:442
+#: src/gui/interface.blp:437
 msgid "Search preferences"
 msgstr "Preferências da pesquisa"
 
-#: src/gui/interface.blp:445
+#: src/gui/interface.blp:440
 msgid "Custom search engine action"
 msgstr "Ações do mecanismo da pesquisa personalizada"
 
-#: src/gui/interface.blp:450
+#: src/gui/interface.blp:445
 msgid "Custom search engine URL"
 msgstr "Endereço do URL do mecanismo da pesquisa personalizada"
 
-#: src/gui/interface.blp:461
+#: src/gui/interface.blp:456
 msgid "Settings"
 msgstr "Configurações"
 
-#: src/gui/interface.blp:491
+#: src/gui/interface.blp:486
 msgid "_Preferences..."
 msgstr "_Preferências..."
 
-#: src/gui/interface.blp:498
+#: src/gui/interface.blp:493
 msgid "_Keyboard Shortcuts"
 msgstr ""
 
-#: src/gui/interface.blp:503
+#: src/gui/interface.blp:498
 msgid "About..."
 msgstr "Sobre..."
 
-#: src/gui/interface.blp:536
+#: src/gui/interface.blp:531
 msgid "Delete history"
 msgstr "Excluir o histórico"
 
-#: src/gui/interface.blp:541
+#: src/gui/interface.blp:536
 msgid "Select a file to recognize"
 msgstr "Escolha um arquivo de áudio que você quer identificar"
 
-#: src/gui/interface.blp:553 src/gui/interface.blp:603
+#: src/gui/interface.blp:548 src/gui/interface.blp:598
 msgid "Copy artist and track"
 msgstr "Copiar o nome do artista e o título da música"
 
-#: src/gui/interface.blp:559 src/gui/interface.blp:609
+#: src/gui/interface.blp:554 src/gui/interface.blp:604
 msgid "Copy artist"
 msgstr "Copiar o nome do artista"
 
-#: src/gui/interface.blp:565 src/gui/interface.blp:615
+#: src/gui/interface.blp:560 src/gui/interface.blp:610
 msgid "Copy track name"
 msgstr "Copiar o título da música"
 
-#: src/gui/interface.blp:571 src/gui/interface.blp:621
+#: src/gui/interface.blp:566 src/gui/interface.blp:616
 msgid "Copy album"
 msgstr "Copiar o nome do álbum"
 
-#: src/gui/interface.blp:587
+#: src/gui/interface.blp:582
 msgid "Delete from History"
 msgstr "Excluir do histórico"
 
-#: src/gui/interface.blp:593
+#: src/gui/interface.blp:588
 msgid "Add to Favorites"
 msgstr "Adicionar aos favoritos"
 
-#: src/gui/interface.blp:637
+#: src/gui/interface.blp:632
 msgid "Remove from Favorites"
 msgstr "Remover dos favoritos"
 

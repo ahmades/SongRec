@@ -333,13 +333,6 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                 <child type="top">
                   <object class="AdwHeaderBar" id="title_bar">
                     <child type="end">
-                      <object class="GtkButton" id="show_artwork_button">
-                        <property name="action-name">win.show-artwork</property>
-                        <property name="icon-name">image-x-generic-symbolic</property>
-                        <property name="tooltip-text" translatable="yes">Show artwork</property>
-                      </object>
-                    </child>
-                    <child>
                       <object class="GtkMenuButton" id="menu_button">
                         <property name="accessible-role">34</property>
                         <property name="has-tooltip">true</property>

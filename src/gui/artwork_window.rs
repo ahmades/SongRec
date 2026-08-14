@@ -1,8 +1,6 @@
 use crate::core::thread_messages::SongRecognizedMessage;
 use adw::prelude::*;
 use gettextrs::gettext;
-use std::cell::Cell;
-use std::rc::Rc;
 
 pub struct ArtworkWindow {
     window: gtk::Window,
@@ -15,7 +13,7 @@ pub struct ArtworkWindow {
 }
 
 impl ArtworkWindow {
-    pub fn new(application: &gtk::Application) -> Self {
+    pub fn new(application: &adw::Application) -> Self {
         let window = gtk::Window::builder()
             .application(application)
             .title("SongRec")
@@ -96,16 +94,12 @@ impl ArtworkWindow {
         root.append(&details_label);
         window.set_child(Some(&root));
 
-        let fullscreened = Rc::new(Cell::new(false));
-        let fullscreened_for_button = fullscreened.clone();
         let window_for_button = window.clone();
         fullscreen_button.connect_clicked(move |_| {
-            let fullscreen = !fullscreened_for_button.get();
-            fullscreened_for_button.set(fullscreen);
-            if fullscreen {
-                window_for_button.fullscreen();
-            } else {
+            if window_for_button.is_fullscreen() {
                 window_for_button.unfullscreen();
+            } else {
+                window_for_button.fullscreen();
             }
         });
 
@@ -113,7 +107,11 @@ impl ArtworkWindow {
         let window_for_key = window.clone();
         key_controller.connect_key_pressed(move |_, key, _, _| {
             if key == gtk::gdk::Key::Escape {
-                window_for_key.unfullscreen();
+                if window_for_key.is_fullscreen() {
+                    window_for_key.unfullscreen();
+                } else {
+                    window_for_key.close();
+                }
                 glib::Propagation::Stop
             } else {
                 glib::Propagation::Proceed
