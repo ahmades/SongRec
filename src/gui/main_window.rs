@@ -1213,9 +1213,6 @@ impl App {
         let recognize_file_row: adw::PreferencesRow =
             self.builder.object("recognize_file_row").unwrap();
         let spinner_row: adw::PreferencesRow = self.builder.object("spinner_row").unwrap();
-        let artwork_window = self.artwork_window.clone();
-        let last_recognized_song = self.last_recognized_song.clone();
-
         let ctx_buffered_log = self.ctx_buffered_log.clone();
         let ctx_logger_source_id = self.ctx_logger_source_id.clone();
 

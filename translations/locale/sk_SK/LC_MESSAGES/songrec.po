@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-14 16:51+0200\n"
+"POT-Creation-Date: 2026-08-14 17:08+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -227,15 +227,15 @@ msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr ""
 "Pri kódovaní paketu Shazam bola odovzdaná nesprávna vzorkovacia frekvencia"
 
-#: src/gui/artwork_window.rs:26
+#: src/gui/artwork_window.rs:28
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:30
+#: src/gui/artwork_window.rs:32
 msgid "Toggle fullscreen"
 msgstr ""
 
-#: src/gui/artwork_window.rs:59
+#: src/gui/artwork_window.rs:61
 msgid "No artwork available"
 msgstr ""
 

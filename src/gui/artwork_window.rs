@@ -22,6 +22,8 @@ impl ArtworkWindow {
             .resizable(true)
             .build();
 
+        window.set_hide_on_close(true);
+
         let header = gtk::HeaderBar::new();
         header.set_title_widget(Some(&gtk::Label::new(Some(&gettext("Now playing")))));
 
