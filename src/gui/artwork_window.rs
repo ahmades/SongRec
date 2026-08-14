@@ -12,11 +12,10 @@ pub struct ArtworkWindow {
     artist_label: gtk::Label,
     album_label: gtk::Label,
     details_label: gtk::Label,
-    fullscreen: Rc<Cell<bool>>,
 }
 
 impl ArtworkWindow {
-    pub fn new(application: &adw::Application) -> Self {
+    pub fn new(application: &gtk::Application) -> Self {
         let window = gtk::Window::builder()
             .application(application)
             .title("SongRec")
@@ -114,7 +113,7 @@ impl ArtworkWindow {
         let window_for_key = window.clone();
         key_controller.connect_key_pressed(move |_, key, _, _| {
             if key == gtk::gdk::Key::Escape {
-                window_for_key.close();
+                window_for_key.unfullscreen();
                 glib::Propagation::Stop
             } else {
                 glib::Propagation::Proceed
@@ -130,7 +129,6 @@ impl ArtworkWindow {
             artist_label,
             album_label,
             details_label,
-            fullscreen: fullscreened,
         }
     }
 
@@ -169,17 +167,5 @@ impl ArtworkWindow {
 
     pub fn present(&self) {
         self.window.present();
-    }
-
-    pub fn is_visible(&self) -> bool {
-        self.window.is_visible()
-    }
-
-    pub fn close(&self) {
-        if self.fullscreen.get() {
-            self.window.unfullscreen();
-            self.fullscreen.set(false);
-        }
-        self.window.close();
     }
 }
