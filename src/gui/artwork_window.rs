@@ -125,7 +125,7 @@ impl ArtworkWindow {
                 let title_size = (32.0 * scale).round() as i32;
                 let artist_size = (24.0 * scale).round() as i32;
                 let album_size = (18.0 * scale).round() as i32;
-                let details_size = (14.0 * scale).round() as i32;
+                let details_size = (18.0 * scale).round() as i32;
 
                 let css = format!(
                     ".now-playing-title {{ font-size: {title_size}px; }}
@@ -183,15 +183,13 @@ impl ArtworkWindow {
                 .filter(|value| !value.is_empty())
                 .unwrap_or(""),
         );
-
-        let mut details = Vec::new();
-        if let Some(year) = message.release_year.as_deref().filter(|v| !v.is_empty()) {
-            details.push(year.to_string());
-        }
-        if let Some(genre) = message.genre.as_deref().filter(|v| !v.is_empty()) {
-            details.push(genre.to_string());
-        }
-        self.details_label.set_label(&details.join(" • "));
+        self.details_label.set_label(
+            message
+                .release_year
+                .as_deref()
+                .filter(|value| !value.is_empty())
+                .unwrap_or(""),
+        );
 
         if let Some(bytes) = message.cover_image.as_ref()
             && let Ok(texture) = gdk::Texture::from_bytes(&glib::Bytes::from(bytes))
