@@ -339,7 +339,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                         <property name="tooltip-text" translatable="yes">Show artwork</property>
                       </object>
                     </child>
-                    <child type="end">
+                    <child>
                       <object class="GtkMenuButton" id="menu_button">
                         <property name="accessible-role">34</property>
                         <property name="has-tooltip">true</property>
