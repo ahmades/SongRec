@@ -150,15 +150,26 @@ impl ArtworkWindow {
 
         let key_controller = gtk::EventControllerKey::new();
         let window_for_key = window.clone();
-        key_controller.connect_key_pressed(move |_, key, _, _| {
-            if key == gtk::gdk::Key::Escape {
+        key_controller.connect_key_pressed(move |_, key, _, _| match key {
+            gtk::gdk::Key::Escape => {
                 if window_for_key.is_fullscreen() {
                     window_for_key.unfullscreen();
                 }
+
                 glib::Propagation::Stop
-            } else {
-                glib::Propagation::Proceed
             }
+
+            gtk::gdk::Key::F11 => {
+                if window_for_key.is_fullscreen() {
+                    window_for_key.unfullscreen();
+                } else {
+                    window_for_key.fullscreen();
+                }
+
+                glib::Propagation::Stop
+            }
+
+            _ => glib::Propagation::Proceed,
         });
         window.add_controller(key_controller);
 
