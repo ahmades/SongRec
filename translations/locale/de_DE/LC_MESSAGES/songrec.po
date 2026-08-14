@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-14 22:51+0200\n"
+"POT-Creation-Date: 2026-08-15 00:04+0200\n"
 "PO-Revision-Date: 2022-10-09 13:27+0200\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -225,11 +225,7 @@ msgstr "Ungültige Abtastrate bei der Codierung des Shazam Pakets übergeben"
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:34
-msgid "Toggle fullscreen"
-msgstr ""
-
-#: src/gui/artwork_window.rs:63
+#: src/gui/artwork_window.rs:57
 msgid "No artwork available"
 msgstr ""
 

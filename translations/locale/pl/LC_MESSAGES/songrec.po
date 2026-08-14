@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-14 22:51+0200\n"
+"POT-Creation-Date: 2026-08-15 00:04+0200\n"
 "PO-Revision-Date: 2021-12-26 11:36+0100\n"
 "Last-Translator: Rafał Mikrut <qarminkrut@gmail.com>\n"
 "Language-Team: \n"
@@ -221,11 +221,7 @@ msgstr ""
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:34
-msgid "Toggle fullscreen"
-msgstr ""
-
-#: src/gui/artwork_window.rs:63
+#: src/gui/artwork_window.rs:57
 msgid "No artwork available"
 msgstr ""
 

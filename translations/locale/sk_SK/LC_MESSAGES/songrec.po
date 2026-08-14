@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-14 22:51+0200\n"
+"POT-Creation-Date: 2026-08-15 00:04+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -231,11 +231,7 @@ msgstr ""
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:34
-msgid "Toggle fullscreen"
-msgstr ""
-
-#: src/gui/artwork_window.rs:63
+#: src/gui/artwork_window.rs:57
 msgid "No artwork available"
 msgstr ""
 

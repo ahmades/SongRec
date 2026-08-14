@@ -28,12 +28,6 @@ impl ArtworkWindow {
 
         let header = gtk::HeaderBar::new();
         header.set_title_widget(Some(&gtk::Label::new(Some(&gettext("Now playing")))));
-
-        let fullscreen_button = gtk::Button::builder()
-            .icon_name("view-fullscreen-symbolic")
-            .tooltip_text(gettext("Toggle fullscreen"))
-            .build();
-        header.pack_end(&fullscreen_button);
         window.set_titlebar(Some(&header));
 
         let root = gtk::Box::builder()
@@ -139,37 +133,19 @@ impl ArtworkWindow {
             glib::ControlFlow::Continue
         });
 
-        let window_for_button = window.clone();
-        fullscreen_button.connect_clicked(move |_| {
-            if window_for_button.is_fullscreen() {
-                window_for_button.unfullscreen();
-            } else {
-                window_for_button.fullscreen();
-            }
-        });
-
         let key_controller = gtk::EventControllerKey::new();
         let window_for_key = window.clone();
-        key_controller.connect_key_pressed(move |_, key, _, _| match key {
-            gtk::gdk::Key::Escape => {
-                if window_for_key.is_fullscreen() {
-                    window_for_key.unfullscreen();
-                }
-
-                glib::Propagation::Stop
-            }
-
-            gtk::gdk::Key::F11 => {
+        key_controller.connect_key_pressed(move |_, key, _, _| {
+            if key == gtk::gdk::Key::F11 {
                 if window_for_key.is_fullscreen() {
                     window_for_key.unfullscreen();
                 } else {
                     window_for_key.fullscreen();
                 }
-
                 glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
             }
-
-            _ => glib::Propagation::Proceed,
         });
         window.add_controller(key_controller);
 

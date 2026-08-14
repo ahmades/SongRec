@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-14 22:51+0200\n"
+"POT-Creation-Date: 2026-08-15 00:04+0200\n"
 "PO-Revision-Date: 2026-03-09 02:16+0000\n"
 "Last-Translator: Marin <25437947+marin-m@users.noreply.github.com>\n"
 "Language-Team: Dutch <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -227,11 +227,7 @@ msgstr ""
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:34
-msgid "Toggle fullscreen"
-msgstr ""
-
-#: src/gui/artwork_window.rs:63
+#: src/gui/artwork_window.rs:57
 msgid "No artwork available"
 msgstr ""
 
