@@ -301,8 +301,7 @@ fn dominant_background_color(image: &image::DynamicImage) -> (u8, u8, u8) {
     let target_lightness = if saturation < 0.08 { 0.13 } else { 0.17 };
     let target_saturation = saturation.clamp(0.18, 0.78);
 
-    //let chroma = (1.0 - (2.0 * target_lightness - 1.0).abs()) * target_saturation;
-    let chroma: f32 = (1.0_f32 - (2.0_f32 * target_lightness - 1.0_f32).abs()) * target_saturation;
+    let chroma: f32 = (1.0f32 - (2.0f32 * target_lightness - 1.0f32).abs()) * target_saturation;
     let x = chroma * (1.0 - ((hue * 6.0).rem_euclid(2.0) - 1.0).abs());
     let m = target_lightness - chroma / 2.0;
     let (r1, g1, b1) = match (hue * 6.0).floor() as i32 {
