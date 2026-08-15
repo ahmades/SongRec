@@ -12,6 +12,7 @@ pub struct ArtworkWindow {
     artist_label: gtk::Label,
     album_label: gtk::Label,
     details_label: gtk::Label,
+    background_css: gtk::CssProvider,
 }
 
 impl ArtworkWindow {
@@ -89,8 +90,25 @@ impl ArtworkWindow {
         root.append(&title_label);
         root.append(&artist_label);
         root.append(&album_label);
+        root.add_css_class("now-playing-background");
         root.append(&details_label);
         window.set_child(Some(&root));
+
+        // The Now Playing window deliberately does not follow the system theme.
+        // Its background is derived from the current cover art, while the text is
+        // forced to a light foreground color with enough contrast against it.
+        let background_css = gtk::CssProvider::new();
+        if let Some(display) = gdk::Display::default() {
+            gtk::style_context_add_provider_for_display(
+                &display,
+                &background_css,
+                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+        }
+        background_css.load_from_string(
+            ".now-playing-background { background-color: #181818; color: #ffffff; }
+             .now-playing-background > label { color: #ffffff; }",
+        );
 
         // Use a dedicated CSS provider for the Now Playing labels. Their font sizes
         // are recalculated from the actual window size, so resizing and fullscreen
@@ -157,6 +175,7 @@ impl ArtworkWindow {
             artist_label,
             album_label,
             details_label,
+            background_css,
         }
     }
 
@@ -184,14 +203,127 @@ impl ArtworkWindow {
             self.artwork.set_paintable(Some(&texture));
             self.artwork.set_visible(true);
             self.artwork_placeholder.set_visible(false);
+            self.set_background_from_cover(bytes);
         } else {
             self.artwork.set_paintable(Option::<&gdk::Texture>::None);
             self.artwork.set_visible(false);
             self.artwork_placeholder.set_visible(true);
+            self.set_background_color((24, 24, 24));
         }
+    }
+
+    fn set_background_from_cover(&self, bytes: &[u8]) {
+        let color = image::load_from_memory(bytes)
+            .ok()
+            .map(|image| dominant_background_color(&image))
+            .unwrap_or((24, 24, 24));
+
+        self.set_background_color(color);
+    }
+
+    fn set_background_color(&self, (red, green, blue): (u8, u8, u8)) {
+        let css = format!(
+            ".now-playing-background {{ background-color: rgb({red}, {green}, {blue}); color: #ffffff; }}
+             .now-playing-background > label {{ color: #ffffff; }}
+             .now-playing-background .now-playing-title,
+             .now-playing-background .now-playing-artist,
+             .now-playing-background .now-playing-album,
+             .now-playing-background .now-playing-details {{ color: #ffffff; }}"
+        );
+        self.background_css.load_from_string(&css);
     }
 
     pub fn present(&self) {
         self.window.present();
     }
+}
+
+fn dominant_background_color(image: &image::DynamicImage) -> (u8, u8, u8) {
+    let small = image.thumbnail(48, 48).to_rgb8();
+    let mut histogram = std::collections::HashMap::<u32, f32>::new();
+
+    for pixel in small.pixels() {
+        let [red, green, blue] = pixel.0;
+        let max = red.max(green).max(blue) as f32 / 255.0;
+        let min = red.min(green).min(blue) as f32 / 255.0;
+        let saturation = if max == 0.0 { 0.0 } else { (max - min) / max };
+
+        // Very bright pixels make poor backgrounds and neutral pixels carry
+        // little visual information, so give them much less influence.
+        let luminance = 0.2126 * red as f32 / 255.0
+            + 0.7152 * green as f32 / 255.0
+            + 0.0722 * blue as f32 / 255.0;
+        if luminance > 0.92 {
+            continue;
+        }
+
+        let quantize = |value: u8| -> u8 { (value / 32) * 32 + 16 };
+        let qr = quantize(red) as u32;
+        let qg = quantize(green) as u32;
+        let qb = quantize(blue) as u32;
+        let key = (qr << 16) | (qg << 8) | qb;
+        let weight = 1.0 + saturation * 2.5;
+        *histogram.entry(key).or_default() += weight;
+    }
+
+    let (key, _) = histogram
+        .into_iter()
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .unwrap_or(((24u32 << 16) | (24u32 << 8) | 24u32, 1.0));
+
+    let mut red = ((key >> 16) & 0xff) as f32 / 255.0;
+    let mut green = ((key >> 8) & 0xff) as f32 / 255.0;
+    let mut blue = (key & 0xff) as f32 / 255.0;
+
+    // Convert the chosen color to HSL so we can keep its hue while making it
+    // dark enough for white UI text.
+    let max = red.max(green).max(blue);
+    let min = red.min(green).min(blue);
+    let lightness = (max + min) / 2.0;
+    let delta = max - min;
+
+    let saturation = if delta == 0.0 {
+        0.0
+    } else {
+        delta / (1.0 - (2.0 * lightness - 1.0).abs())
+    };
+
+    let hue = if delta == 0.0 {
+        0.0
+    } else if max == red {
+        ((green - blue) / delta).rem_euclid(6.0) / 6.0
+    } else if max == green {
+        (((blue - red) / delta) + 2.0) / 6.0
+    } else {
+        (((red - green) / delta) + 4.0) / 6.0
+    };
+
+    let target_lightness = if saturation < 0.08 { 0.13 } else { 0.17 };
+    let target_saturation = saturation.clamp(0.18, 0.78);
+
+    //let chroma = (1.0 - (2.0 * target_lightness - 1.0).abs()) * target_saturation;
+    let chroma: f32 = (1.0_f32 - (2.0_f32 * target_lightness - 1.0_f32).abs()) * target_saturation;
+    let x = chroma * (1.0 - ((hue * 6.0).rem_euclid(2.0) - 1.0).abs());
+    let m = target_lightness - chroma / 2.0;
+    let (r1, g1, b1) = match (hue * 6.0).floor() as i32 {
+        0 => (chroma, x, 0.0),
+        1 => (x, chroma, 0.0),
+        2 => (0.0, chroma, x),
+        3 => (0.0, x, chroma),
+        4 => (x, 0.0, chroma),
+        _ => (chroma, 0.0, x),
+    };
+
+    red = r1 + m;
+    green = g1 + m;
+    blue = b1 + m;
+
+    // White text has a contrast ratio of at least 4.5:1 when relative
+    // luminance is <= ~0.183. The fixed lightness above keeps us comfortably
+    // below that threshold while retaining the artwork's hue.
+    (
+        (red * 255.0).round() as u8,
+        (green * 255.0).round() as u8,
+        (blue * 255.0).round() as u8,
+    )
 }

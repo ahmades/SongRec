@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 00:04+0200\n"
+"POT-Creation-Date: 2026-08-15 11:48+0200\n"
 "PO-Revision-Date: 2021-12-26 11:36+0100\n"
 "Last-Translator: Rafał Mikrut <qarminkrut@gmail.com>\n"
 "Language-Team: \n"
@@ -217,11 +217,11 @@ msgstr ""
 "Nieprawidłowa częstotliwość próbkowania przekazana podczas kodowania pakietu "
 "Shazam"
 
-#: src/gui/artwork_window.rs:30
+#: src/gui/artwork_window.rs:31
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:57
+#: src/gui/artwork_window.rs:58
 msgid "No artwork available"
 msgstr ""
 

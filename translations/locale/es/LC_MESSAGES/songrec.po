@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 00:04+0200\n"
+"POT-Creation-Date: 2026-08-15 11:48+0200\n"
 "PO-Revision-Date: 2022-07-24 13:29+0200\n"
 "Last-Translator: Ismael Ferreras Morezuelas <swyterzone+songrec@gmail.com>\n"
 "Language-Team: Swyter <swyterzone@gmail.com>\n"
@@ -228,11 +228,11 @@ msgstr ""
 "La frecuencia de reproducción  proporcionada para codificar el paquete de "
 "Shazam no parece que sea correcta"
 
-#: src/gui/artwork_window.rs:30
+#: src/gui/artwork_window.rs:31
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:57
+#: src/gui/artwork_window.rs:58
 msgid "No artwork available"
 msgstr ""
 

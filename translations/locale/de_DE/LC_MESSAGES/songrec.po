@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 00:04+0200\n"
+"POT-Creation-Date: 2026-08-15 11:48+0200\n"
 "PO-Revision-Date: 2022-10-09 13:27+0200\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -221,11 +221,11 @@ msgstr "Ungültiges Frequenzband im dekodierten Shazam Paket"
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "Ungültige Abtastrate bei der Codierung des Shazam Pakets übergeben"
 
-#: src/gui/artwork_window.rs:30
+#: src/gui/artwork_window.rs:31
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:57
+#: src/gui/artwork_window.rs:58
 msgid "No artwork available"
 msgstr ""
 

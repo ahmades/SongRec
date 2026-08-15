@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 00:04+0200\n"
+"POT-Creation-Date: 2026-08-15 11:48+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -201,11 +201,11 @@ msgstr ""
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr ""
 
-#: src/gui/artwork_window.rs:30
+#: src/gui/artwork_window.rs:31
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:57
+#: src/gui/artwork_window.rs:58
 msgid "No artwork available"
 msgstr ""
 

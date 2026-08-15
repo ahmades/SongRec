@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 00:04+0200\n"
+"POT-Creation-Date: 2026-08-15 11:48+0200\n"
 "PO-Revision-Date: 2026-03-09 12:56+0000\n"
 "Last-Translator: Mu7ammed Basha "
 "<mu7basha@users.noreply.weblate.fossplant.re>\n"
@@ -220,11 +220,11 @@ msgstr "نطاق التردد غير صالح في فك ترميز حزمة Shaz
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "عبَر معدل عينة غير صالح أثناء ترميز حزمة Shazam"
 
-#: src/gui/artwork_window.rs:30
+#: src/gui/artwork_window.rs:31
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:57
+#: src/gui/artwork_window.rs:58
 msgid "No artwork available"
 msgstr ""
 

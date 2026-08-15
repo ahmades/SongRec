@@ -49,7 +49,7 @@ directories = { version = "6.0" }
 toml = "1.0.1"
 app_dirs = { version = "1.2.1" } # For obtaining and creating either the %APPDATA%, the dotfile path or similar
 soup3 = { version = "0.8.0", features = [ "v3_4" ] }
-image = { version = "0.25.9", default-features = false, features = ["png"] }
+image = { version = "0.25.9", default-features = false, features = ["png", "jpeg"] }
 
 [build-dependencies]
 gettext-sys = { version = "0.26.0", features = ["gettext-system"] }
