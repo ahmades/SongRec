@@ -102,7 +102,7 @@ impl ArtworkWindow {
             );
         }
         background_css.load_from_string(
-            ".now-playing-background { background-color: #181818; color: #ffffff; padding: 24px; }
+            ".now-playing-background { background-color: #181818; color: #ffffff; padding: 96px; }
              .now-playing-background > label { color: #ffffff; }",
         );
 
@@ -219,7 +219,7 @@ impl ArtworkWindow {
 
     fn set_background_color(&self, (red, green, blue): (u8, u8, u8)) {
         let css = format!(
-            ".now-playing-background {{ background-color: rgb({red}, {green}, {blue}); color: #ffffff; padding: 24px; }}
+            ".now-playing-background {{ background-color: rgb({red}, {green}, {blue}); color: #ffffff; padding: 96px; }}
              .now-playing-background > label {{ color: #ffffff; }}
              .now-playing-background .now-playing-title,
              .now-playing-background .now-playing-artist,
