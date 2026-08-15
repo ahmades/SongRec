@@ -34,11 +34,8 @@ impl ArtworkWindow {
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(18)
-            .margin_top(24)
-            .margin_bottom(24)
-            .margin_start(24)
-            .margin_end(24)
             .build();
+        root.add_css_class("now-playing-background");
 
         let artwork_frame = gtk::AspectFrame::builder()
             .ratio(1.0)
@@ -90,7 +87,6 @@ impl ArtworkWindow {
         root.append(&title_label);
         root.append(&artist_label);
         root.append(&album_label);
-        root.add_css_class("now-playing-background");
         root.append(&details_label);
         window.set_child(Some(&root));
 
@@ -106,7 +102,7 @@ impl ArtworkWindow {
             );
         }
         background_css.load_from_string(
-            ".now-playing-background { background-color: #181818; color: #ffffff; }
+            ".now-playing-background { background-color: #181818; color: #ffffff; padding: 24px; }
              .now-playing-background > label { color: #ffffff; }",
         );
 
@@ -223,7 +219,7 @@ impl ArtworkWindow {
 
     fn set_background_color(&self, (red, green, blue): (u8, u8, u8)) {
         let css = format!(
-            ".now-playing-background {{ background-color: rgb({red}, {green}, {blue}); color: #ffffff; }}
+            ".now-playing-background {{ background-color: rgb({red}, {green}, {blue}); color: #ffffff; padding: 24px; }}
              .now-playing-background > label {{ color: #ffffff; }}
              .now-playing-background .now-playing-title,
              .now-playing-background .now-playing-artist,

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 11:48+0200\n"
+"POT-Creation-Date: 2026-08-15 21:46+0200\n"
 "PO-Revision-Date: 2024-01-21 20:01+0100\n"
 "Last-Translator: Pau Giuli <pau@giuli.cat>\n"
 "Language-Team: \n"
@@ -222,7 +222,7 @@ msgstr "Freqüència de mostreig invàlida en codificar el paquet Shazam"
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:58
+#: src/gui/artwork_window.rs:55
 msgid "No artwork available"
 msgstr ""
 

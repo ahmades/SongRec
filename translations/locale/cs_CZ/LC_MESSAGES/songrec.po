@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 11:48+0200\n"
+"POT-Creation-Date: 2026-08-15 21:46+0200\n"
 "PO-Revision-Date: 2026-07-09 20:02+0000\n"
 "Last-Translator: Fjuro <fjuro@users.noreply.weblate.fossplant.re>\n"
 "Language-Team: Czech <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -226,7 +226,7 @@ msgstr "Předána neplatná vzorkovací frekvence při kódování paketu Shazam
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:58
+#: src/gui/artwork_window.rs:55
 msgid "No artwork available"
 msgstr ""
 
