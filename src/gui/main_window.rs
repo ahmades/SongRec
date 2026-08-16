@@ -222,11 +222,19 @@ impl App {
         });
 
         application.connect_activate(move |application| {
-            let main_window = &application.windows()[0];
-
-            // Raise/highlight the existing window whenever a second
-            // GUI instance is attempted to be launched
-            main_window.present();
+            // The Now Playing window is a plain GTK window and is therefore
+            // not part of application.windows(). Still, do not assume a
+            // particular window ordering here: explicitly find SongRec's
+            // main Adwaita application window.
+            if let Some(main_window) = application
+                .windows()
+                .into_iter()
+                .find_map(|window| window.downcast::<adw::ApplicationWindow>().ok())
+            {
+                // Raise/highlight the existing main window whenever a second
+                // GUI instance is attempted to be launched.
+                main_window.present();
+            }
         });
 
         application.connect_startup(move |application| {
@@ -777,13 +785,12 @@ impl App {
         // Double-clicking the small recognition artwork opens the dedicated artwork window.
         let artwork_window_for_results = artwork_window.clone();
         let last_recognized_song_for_results = last_recognized_song.clone();
-        let application_for_results = application.clone();
         let results_click = gtk::GestureClick::new();
         results_click.set_button(1);
         results_click.connect_pressed(move |_, n_press, _, _| {
             if n_press == 2 {
                 if artwork_window_for_results.borrow().is_none() {
-                    let artwork = ArtworkWindow::new(&application_for_results);
+                    let artwork = ArtworkWindow::new();
                     if let Some(ref message) = *last_recognized_song_for_results.borrow() {
                         artwork.update(message);
                     }
@@ -796,6 +803,17 @@ impl App {
             }
         });
         results_image.add_controller(results_click);
+
+        // Now Playing is intentionally not a GApplication window, so it
+        // cannot keep the SongRec process alive by itself. Explicitly close
+        // it when the main window is closed as well.
+        let artwork_window_for_close = artwork_window.clone();
+        window.connect_close_request(move |_| {
+            if let Some(ref artwork) = *artwork_window_for_close.borrow() {
+                artwork.close();
+            }
+            glib::Propagation::Proceed
+        });
         let loopback_switch: adw::SwitchRow = self.builder.object("loopback_switch").unwrap();
 
         #[cfg(target_os = "linux")]

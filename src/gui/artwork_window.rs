@@ -16,14 +16,12 @@ pub struct ArtworkWindow {
 }
 
 impl ArtworkWindow {
-    pub fn new(application: &adw::Application) -> Self {
+    pub fn new() -> Self {
         let window = gtk::Window::builder()
-            .application(application)
             .title("SongRec")
             .default_width(720)
             .default_height(820)
             .resizable(true)
-            .destroy_with_parent(true)
             .hide_on_close(true)
             .build();
 
@@ -231,6 +229,10 @@ impl ArtworkWindow {
 
     pub fn present(&self) {
         self.window.present();
+    }
+
+    pub fn close(&self) {
+        self.window.close();
     }
 }
 

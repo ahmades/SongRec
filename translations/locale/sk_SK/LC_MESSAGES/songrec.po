@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-16 00:56+0200\n"
+"POT-Creation-Date: 2026-08-16 12:51+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -45,7 +45,7 @@ msgstr "Upozornenie: Sieť nedostupná"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:932 src/gui/main_window.rs:944
+#: src/gui/main_window.rs:950 src/gui/main_window.rs:962
 msgid "No match for this song"
 msgstr "Žiadna zhoda pre túto skladbu"
 
@@ -201,7 +201,7 @@ msgid "Audio error: No input device available"
 msgstr "Chyba zvuku: Nie je k dispozícii žiadne vstupné zariadenie"
 
 #: src/core/preferences.rs:58 src/core/preferences.rs:77
-#: src/gui/main_window.rs:302 src/gui/interface.blp:123
+#: src/gui/main_window.rs:310 src/gui/interface.blp:123
 #: src/gui/interface.blp:574 src/gui/interface.blp:624
 msgid "Search on YouTube"
 msgstr "Vyhľadať na YouTube"
@@ -227,47 +227,47 @@ msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr ""
 "Pri kódovaní paketu Shazam bola odovzdaná nesprávna vzorkovacia frekvencia"
 
-#: src/gui/artwork_window.rs:34
+#: src/gui/artwork_window.rs:29
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:58
+#: src/gui/artwork_window.rs:53
 msgid "No artwork available"
 msgstr ""
 
-#: src/gui/main_window.rs:260
+#: src/gui/main_window.rs:268
 msgid "Application error"
 msgstr "Chyba aplikácie"
 
-#: src/gui/main_window.rs:281
+#: src/gui/main_window.rs:289
 msgid "Network error"
 msgstr "Chyba siete"
 
-#: src/gui/main_window.rs:357
+#: src/gui/main_window.rs:365
 msgid "Unable to enable notification icon"
 msgstr "Nie je možné aktivovať ikonu upozornenia"
 
-#: src/gui/main_window.rs:838 src/gui/main_window.rs:919
+#: src/gui/main_window.rs:856 src/gui/main_window.rs:937
 msgid "Unable to enable MPRIS support"
 msgstr "Nie je možné zapnúť podporu MPRIS"
 
-#: src/gui/main_window.rs:941
+#: src/gui/main_window.rs:959
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:1022
+#: src/gui/main_window.rs:1040
 msgid "Song recognized"
 msgstr "Skladba rozpoznaná"
 
-#: src/gui/main_window.rs:1159
+#: src/gui/main_window.rs:1177
 msgid "Are you sure you want to wipe history?"
 msgstr "Naozaj chcete vymazať históriu?"
 
-#: src/gui/main_window.rs:1165
+#: src/gui/main_window.rs:1183
 msgid "_Yes"
 msgstr "_Áno"
 
-#: src/gui/main_window.rs:1166
+#: src/gui/main_window.rs:1184
 msgid "_Cancel"
 msgstr "_Zrušiť"
 
