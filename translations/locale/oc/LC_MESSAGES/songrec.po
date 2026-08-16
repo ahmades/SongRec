@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-16 18:13+0200\n"
+"POT-Creation-Date: 2026-08-17 00:14+0200\n"
 "PO-Revision-Date: 2026-04-19 16:15+0000\n"
 "Last-Translator: Mejans <farga@mejans.fr>\n"
 "Language-Team: Occitan <https://weblate.fossplant.re/projects/songrec/"
@@ -45,7 +45,7 @@ msgstr "Avís : ret non accessible"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:948 src/gui/main_window.rs:960
+#: src/gui/main_window.rs:1021 src/gui/main_window.rs:1033
 msgid "No match for this song"
 msgstr "Cap de correspondéncia per aquesta cançon"
 
@@ -176,17 +176,17 @@ msgstr ""
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:58 src/core/preferences.rs:77
+#: src/core/preferences.rs:62 src/core/preferences.rs:83
 #: src/gui/main_window.rs:307 src/gui/interface.blp:129
-#: src/gui/interface.blp:580 src/gui/interface.blp:630
+#: src/gui/interface.blp:608 src/gui/interface.blp:658
 msgid "Search on YouTube"
 msgstr ""
 
-#: src/core/preferences.rs:93
+#: src/core/preferences.rs:101
 msgid "When parsing the preferences file:"
 msgstr ""
 
-#: src/core/preferences.rs:161
+#: src/core/preferences.rs:175
 msgid "When saving the preferences file:"
 msgstr ""
 
@@ -202,11 +202,11 @@ msgstr ""
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr ""
 
-#: src/gui/artwork_window.rs:29
+#: src/gui/artwork_window.rs:32
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:53
+#: src/gui/artwork_window.rs:56
 msgid "No artwork available"
 msgstr ""
 
@@ -222,27 +222,27 @@ msgstr ""
 msgid "Unable to enable notification icon"
 msgstr ""
 
-#: src/gui/main_window.rs:854 src/gui/main_window.rs:935
+#: src/gui/main_window.rs:912 src/gui/main_window.rs:1008
 msgid "Unable to enable MPRIS support"
 msgstr ""
 
-#: src/gui/main_window.rs:957
+#: src/gui/main_window.rs:1030
 msgid "_Ok"
 msgstr ""
 
-#: src/gui/main_window.rs:1038
+#: src/gui/main_window.rs:1111
 msgid "Song recognized"
 msgstr ""
 
-#: src/gui/main_window.rs:1175
+#: src/gui/main_window.rs:1248
 msgid "Are you sure you want to wipe history?"
 msgstr ""
 
-#: src/gui/main_window.rs:1181
+#: src/gui/main_window.rs:1254
 msgid "_Yes"
 msgstr ""
 
-#: src/gui/main_window.rs:1182
+#: src/gui/main_window.rs:1255
 msgid "_Cancel"
 msgstr ""
 
@@ -358,7 +358,7 @@ msgstr ""
 msgid "Application menu"
 msgstr ""
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:532
+#: src/gui/interface.blp:369 src/gui/interface.blp:560
 msgid "Export to CSV"
 msgstr ""
 
@@ -374,7 +374,7 @@ msgstr ""
 msgid "Notify when a new song is recognized or network error is encountered"
 msgstr ""
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:487
+#: src/gui/interface.blp:388 src/gui/interface.blp:515
 msgid "Show notifications"
 msgstr ""
 
@@ -401,88 +401,116 @@ msgid "Minimize to system tray"
 msgstr ""
 
 #: src/gui/interface.blp:410
-msgid "Network preferences"
+msgid "Now Playing preferences"
+msgstr ""
+
+#: src/gui/interface.blp:413
+msgid "Show only the artwork in the Now Playing window"
+msgstr ""
+
+#: src/gui/interface.blp:414
+msgid "Hide track info"
+msgstr ""
+
+#: src/gui/interface.blp:418
+msgid "Choose how the artwork-derived background is rendered"
+msgstr ""
+
+#: src/gui/interface.blp:419
+msgid "Background style"
 msgstr ""
 
 #: src/gui/interface.blp:426
+msgid "Gradient"
+msgstr ""
+
+#: src/gui/interface.blp:431
+msgid "Solid"
+msgstr ""
+
+#: src/gui/interface.blp:438
+msgid "Network preferences"
+msgstr ""
+
+#: src/gui/interface.blp:454
 msgid "By default 8, increase if you are rate-limited"
 msgstr ""
 
-#: src/gui/interface.blp:427
+#: src/gui/interface.blp:455
 msgid "Shazam interval between requests in seconds"
 msgstr ""
 
-#: src/gui/interface.blp:435
+#: src/gui/interface.blp:463
 msgid ""
 "MPRIS will display information about recognized songs in places like the "
 "GNOME or KDE control panel"
 msgstr ""
 
-#: src/gui/interface.blp:437
+#: src/gui/interface.blp:465
 msgid "Enable MPRIS"
 msgstr ""
 
-#: src/gui/interface.blp:443
+#: src/gui/interface.blp:471
 msgid "Search preferences"
 msgstr ""
 
-#: src/gui/interface.blp:446
+#: src/gui/interface.blp:474
 msgid "Custom search engine action"
 msgstr ""
 
-#: src/gui/interface.blp:451
+#: src/gui/interface.blp:479
 msgid "Custom search engine URL"
 msgstr ""
 
-#: src/gui/interface.blp:462
+#: src/gui/interface.blp:490
 msgid "Settings"
 msgstr ""
 
-#: src/gui/interface.blp:492
+#: src/gui/interface.blp:520
 msgid "_Preferences..."
 msgstr ""
 
-#: src/gui/interface.blp:499
+#: src/gui/interface.blp:527
 msgid "_Keyboard Shortcuts"
 msgstr ""
 
-#: src/gui/interface.blp:504
+#: src/gui/interface.blp:532
 msgid "About..."
 msgstr ""
 
-#: src/gui/interface.blp:537
+#: src/gui/interface.blp:565
 msgid "Delete history"
 msgstr ""
 
-#: src/gui/interface.blp:542
+#: src/gui/interface.blp:570
 msgid "Select a file to recognize"
 msgstr ""
 
-#: src/gui/interface.blp:554 src/gui/interface.blp:604
+#: src/gui/interface.blp:582 src/gui/interface.blp:632
 msgid "Copy artist and track"
 msgstr ""
 
-#: src/gui/interface.blp:560 src/gui/interface.blp:610
+#: src/gui/interface.blp:588 src/gui/interface.blp:638
 msgid "Copy artist"
 msgstr ""
 
-#: src/gui/interface.blp:566 src/gui/interface.blp:616
+#: src/gui/interface.blp:594 src/gui/interface.blp:644
 msgid "Copy track name"
 msgstr ""
 
-#: src/gui/interface.blp:572 src/gui/interface.blp:622
+#: src/gui/interface.blp:600 src/gui/interface.blp:650
 msgid "Copy album"
 msgstr ""
 
-#: src/gui/interface.blp:588
+#: src/gui/interface.blp:616
 msgid "Delete from History"
 msgstr ""
 
-#: src/gui/interface.blp:594
+#: src/gui/interface.blp:622
 msgid "Add to Favorites"
 msgstr ""
 
-#: src/gui/interface.blp:638
+#: src/gui/interface.blp:666
 msgid "Remove from Favorites"
 msgstr ""
 

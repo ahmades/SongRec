@@ -22,6 +22,8 @@ pub struct Preferences {
     pub current_device_name: Option<String>,
     pub website_search_url: Option<String>,
     pub website_search_text: Option<String>,
+    pub hide_now_playing_info: Option<bool>,
+    pub now_playing_background_style: Option<String>,
 }
 
 impl Preferences {
@@ -39,6 +41,8 @@ impl Preferences {
             current_device_name: None,
             website_search_url: None,
             website_search_text: None,
+            hide_now_playing_info: None,
+            now_playing_background_style: None,
         }
     }
 
@@ -56,6 +60,8 @@ impl Preferences {
             current_device_name: None,
             website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
             website_search_text: Some(gettext("Search on YouTube".to_string())),
+            hide_now_playing_info: Some(false),
+            now_playing_background_style: Some("gradient".to_string()),
         }
     }
 }
@@ -75,6 +81,8 @@ impl Default for Preferences {
             current_device_name: None,
             website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
             website_search_text: Some(gettext("Search on YouTube".to_string())),
+            hide_now_playing_info: Some(false),
+            now_playing_background_style: Some("gradient".to_string()),
         }
     }
 }
@@ -156,6 +164,12 @@ impl PreferencesInterface {
             website_search_text: update_preferences
                 .website_search_text
                 .or_else(|| current_preferences.website_search_text.clone()),
+            hide_now_playing_info: update_preferences
+                .hide_now_playing_info
+                .or(current_preferences.hide_now_playing_info),
+            now_playing_background_style: update_preferences
+                .now_playing_background_style
+                .or_else(|| current_preferences.now_playing_background_style.clone()),
         };
         if let Err(error) = self.write() {
             error!("{} {}", gettext("When saving the preferences file:"), error);

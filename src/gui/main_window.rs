@@ -31,7 +31,7 @@ use crate::utils::filesystem_operations::{
 
 use crate::core::preferences::{Preferences, PreferencesInterface};
 
-use crate::gui::artwork_window::ArtworkWindow;
+use crate::gui::artwork_window::{ArtworkWindow, BackgroundStyle};
 use crate::gui::context_menu::ContextMenuUtil;
 use crate::gui::history_entry::HistoryEntry;
 use crate::gui::listed_device::ListedDevice;
@@ -772,6 +772,12 @@ impl App {
         let spinner_row: adw::PreferencesRow = self.builder.object("spinner_row").unwrap();
         let volume_row: adw::PreferencesRow = self.builder.object("volume_row").unwrap();
         let volume_gauge: gtk::ProgressBar = self.builder.object("volume_gauge").unwrap();
+        let hide_track_info_setting: adw::SwitchRow =
+            self.builder.object("hide_track_info_setting").unwrap();
+        let background_style_gradient: gtk::CheckButton =
+            self.builder.object("background_style_gradient").unwrap();
+        let background_style_solid: gtk::CheckButton =
+            self.builder.object("background_style_solid").unwrap();
         let results_section: adw::PreferencesGroup =
             self.builder.object("results_section").unwrap();
         let no_network_message: gtk::Label = self.builder.object("no_network_message").unwrap();
@@ -779,15 +785,67 @@ impl App {
         let results_image: gtk::Image = self.builder.object("results_image").unwrap();
         let results_label: gtk::Label = self.builder.object("results_label").unwrap();
 
+        let initial_preferences = preferences_interface_ptr
+            .lock()
+            .unwrap()
+            .preferences
+            .clone();
+        hide_track_info_setting
+            .set_active(initial_preferences.hide_now_playing_info.unwrap_or(false));
+        match BackgroundStyle::from_preference(
+            initial_preferences.now_playing_background_style.as_deref(),
+        ) {
+            BackgroundStyle::Gradient => background_style_gradient.set_active(true),
+            BackgroundStyle::Solid => background_style_solid.set_active(true),
+        }
+
+        let gui_tx_for_hide_info = self.gui_tx.clone();
+        hide_track_info_setting.connect_active_notify(move |switch_row| {
+            let mut preference = Preferences::new();
+            preference.hide_now_playing_info = Some(switch_row.is_active());
+            gui_tx_for_hide_info
+                .try_send(GUIMessage::UpdatePreference(preference))
+                .unwrap();
+        });
+
+        let gui_tx_for_gradient = self.gui_tx.clone();
+        background_style_gradient.connect_toggled(move |check| {
+            if check.is_active() {
+                let mut preference = Preferences::new();
+                preference.now_playing_background_style = Some("gradient".to_string());
+                gui_tx_for_gradient
+                    .try_send(GUIMessage::UpdatePreference(preference))
+                    .unwrap();
+            }
+        });
+
+        let gui_tx_for_solid = self.gui_tx.clone();
+        background_style_solid.connect_toggled(move |check| {
+            if check.is_active() {
+                let mut preference = Preferences::new();
+                preference.now_playing_background_style = Some("solid".to_string());
+                gui_tx_for_solid
+                    .try_send(GUIMessage::UpdatePreference(preference))
+                    .unwrap();
+            }
+        });
+
         // Double-clicking the small recognition artwork opens the dedicated artwork window.
         let artwork_window_for_results = artwork_window.clone();
         let last_recognized_song_for_results = last_recognized_song.clone();
+        let preferences_for_results = preferences_interface_ptr.clone();
         let results_click = gtk::GestureClick::new();
         results_click.set_button(1);
         results_click.connect_pressed(move |_, n_press, _, _| {
             if n_press == 2 {
                 if artwork_window_for_results.borrow().is_none() {
                     let artwork = ArtworkWindow::new();
+                    let preferences = preferences_for_results.lock().unwrap().preferences.clone();
+                    artwork
+                        .set_show_track_info(!preferences.hide_now_playing_info.unwrap_or(false));
+                    artwork.set_background_style(BackgroundStyle::from_preference(
+                        preferences.now_playing_background_style.as_deref(),
+                    ));
                     if let Some(ref message) = *last_recognized_song_for_results.borrow() {
                         artwork.update(message);
                     }
@@ -908,6 +966,21 @@ impl App {
                                 .lock()
                                 .unwrap()
                                 .update(new_preference);
+
+                            if let Some(ref artwork) = *artwork_window.borrow() {
+                                let preferences = preferences_interface_ptr
+                                    .lock()
+                                    .unwrap()
+                                    .preferences
+                                    .clone();
+                                artwork.set_show_track_info(
+                                    !preferences.hide_now_playing_info.unwrap_or(false),
+                                );
+                                artwork.set_background_style(BackgroundStyle::from_preference(
+                                    preferences.now_playing_background_style.as_deref(),
+                                ));
+                            }
+
                             #[cfg(all(target_os = "linux", feature = "mpris"))]
                             if _enable_mpris_cli {
                                 let mpris_enabled = preferences_interface_ptr
@@ -1544,10 +1617,17 @@ impl App {
 
         let artwork_window_for_action = self.artwork_window.clone();
         let last_recognized_song_for_action = self.last_recognized_song.clone();
+        let preferences_for_action = self.preferences_interface.clone();
         let action_show_artwork = gio::ActionEntry::builder("show-artwork")
             .activate(move |_, _, _| {
                 if artwork_window_for_action.borrow().is_none() {
                     let artwork = ArtworkWindow::new();
+                    let preferences = preferences_for_action.lock().unwrap().preferences.clone();
+                    artwork
+                        .set_show_track_info(!preferences.hide_now_playing_info.unwrap_or(false));
+                    artwork.set_background_style(BackgroundStyle::from_preference(
+                        preferences.now_playing_background_style.as_deref(),
+                    ));
                     if let Some(ref message) = *last_recognized_song_for_action.borrow() {
                         artwork.update(message);
                     }

@@ -12,7 +12,10 @@ pub struct ArtworkWindow {
     artist_label: gtk::Label,
     album_label: gtk::Label,
     details_label: gtk::Label,
+    info_box: gtk::Box,
     background_css: gtk::CssProvider,
+    background_style: Cell<BackgroundStyle>,
+    current_background: Cell<NowPlayingBackground>,
 }
 
 impl ArtworkWindow {
@@ -81,11 +84,18 @@ impl ArtworkWindow {
             .css_classes(["now-playing-details"])
             .build();
 
+        let info_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(2)
+            .halign(gtk::Align::Center)
+            .build();
+        info_box.append(&title_label);
+        info_box.append(&artist_label);
+        info_box.append(&album_label);
+        info_box.append(&details_label);
+
         root.append(&artwork_frame);
-        root.append(&title_label);
-        root.append(&artist_label);
-        root.append(&album_label);
-        root.append(&details_label);
+        root.append(&info_box);
         window.set_child(Some(&root));
 
         // The Now Playing window deliberately does not follow the system theme.
@@ -161,6 +171,8 @@ impl ArtworkWindow {
         });
         window.add_controller(key_controller);
 
+        let current_background = NowPlayingBackground::fallback();
+
         Self {
             window,
             artwork,
@@ -169,7 +181,10 @@ impl ArtworkWindow {
             artist_label,
             album_label,
             details_label,
+            info_box,
             background_css,
+            background_style: Cell::new(BackgroundStyle::Gradient),
+            current_background: Cell::new(current_background),
         }
     }
 
@@ -202,19 +217,30 @@ impl ArtworkWindow {
             self.artwork.set_paintable(Option::<&gdk::Texture>::None);
             self.artwork.set_visible(false);
             self.artwork_placeholder.set_visible(true);
-            self.set_background(Background::fallback());
+            self.current_background
+                .set(NowPlayingBackground::fallback());
+            self.apply_background();
         }
     }
 
     fn set_background_from_cover(&self, bytes: &[u8]) {
         let background = image::load_from_memory(bytes)
-            .map(|image| generate_background(&image))
-            .unwrap_or_else(|_| Background::fallback());
+            .map(|image| generate_artwork_background(&image))
+            .unwrap_or_else(|_| NowPlayingBackground::fallback());
 
-        self.set_background(background);
+        self.current_background.set(background);
+        self.apply_background();
     }
 
-    fn set_background(&self, background: Background) {
+    fn apply_background(&self) {
+        let background = self.current_background.get();
+        match self.background_style.get() {
+            BackgroundStyle::Gradient => self.set_gradient_background(background),
+            BackgroundStyle::Solid => self.set_solid_background(background.top),
+        }
+    }
+
+    fn set_gradient_background(&self, background: NowPlayingBackground) {
         let css = format!(
             ".now-playing-background {{
                 background: linear-gradient(to bottom,
@@ -238,6 +264,32 @@ impl ArtworkWindow {
         self.background_css.load_from_string(&css);
     }
 
+    fn set_solid_background(&self, color: (u8, u8, u8)) {
+        let css = format!(
+            ".now-playing-background {{
+                background-color: rgb({}, {}, {});
+                color: #ffffff;
+                padding: 96px;
+            }}
+            .now-playing-background > label {{ color: #ffffff; }}
+            .now-playing-background .now-playing-title,
+            .now-playing-background .now-playing-artist,
+            .now-playing-background .now-playing-album,
+            .now-playing-background .now-playing-details {{ color: #ffffff; }}",
+            color.0, color.1, color.2,
+        );
+        self.background_css.load_from_string(&css);
+    }
+
+    pub fn set_show_track_info(&self, show: bool) {
+        self.info_box.set_visible(show);
+    }
+
+    pub fn set_background_style(&self, style: BackgroundStyle) {
+        self.background_style.set(style);
+        self.apply_background();
+    }
+
     pub fn present(&self) {
         self.window.present();
     }
@@ -247,13 +299,28 @@ impl ArtworkWindow {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackgroundStyle {
+    Gradient,
+    Solid,
+}
+
+impl BackgroundStyle {
+    pub fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("solid") => Self::Solid,
+            _ => Self::Gradient,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
-struct Background {
+struct NowPlayingBackground {
     top: (u8, u8, u8),
     bottom: (u8, u8, u8),
 }
 
-impl Background {
+impl NowPlayingBackground {
     fn fallback() -> Self {
         Self {
             top: (28, 27, 30),
@@ -262,7 +329,11 @@ impl Background {
     }
 }
 
-fn generate_background(image: &image::DynamicImage) -> Background {
+/// Build a dark artwork-derived background with a related gradient.
+///
+/// The palette extraction favors rich colors from the artwork while keeping
+/// enough contrast for the white Now Playing metadata.
+fn generate_artwork_background(image: &image::DynamicImage) -> NowPlayingBackground {
     let small = image.thumbnail(72, 72).to_rgb8();
 
     // Quantize into compact RGB buckets while keeping weighted sums so the
@@ -329,11 +400,11 @@ fn generate_background(image: &image::DynamicImage) -> Background {
     });
 
     let Some(bucket) = candidate else {
-        return Background::fallback();
+        return NowPlayingBackground::fallback();
     };
 
     if bucket.weight <= f32::EPSILON {
-        return Background::fallback();
+        return NowPlayingBackground::fallback();
     }
 
     let red = bucket.red / bucket.weight;
@@ -349,7 +420,7 @@ fn generate_background(image: &image::DynamicImage) -> Background {
         (saturation * 1.08).clamp(0.22, 0.70)
     };
 
-    // Start with a dark accent then move it darker as needed
+    // Start with a dark accent, then move it darker as needed
     // until white text has a genuine WCAG-style contrast margin.
     let mut top_lightness = if target_saturation == 0.0 {
         0.135
@@ -377,7 +448,7 @@ fn generate_background(image: &image::DynamicImage) -> Background {
         bottom_saturation *= 0.96;
     };
 
-    Background { top, bottom }
+    NowPlayingBackground { top, bottom }
 }
 
 fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
