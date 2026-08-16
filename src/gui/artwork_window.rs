@@ -134,10 +134,10 @@ impl ArtworkWindow {
                 let details_size = (18.0 * scale).round() as i32;
 
                 let css = format!(
-                    ".now-playing-title {{ font-size: {title_size}px; }}
-                     .now-playing-artist {{ font-size: {artist_size}px; }}
-                     .now-playing-album {{ font-size: {album_size}px; }}
-                     .now-playing-details {{ font-size: {details_size}px; }}"
+                    ".now-playing-title {{ font-size: {title_size}px; font-weight: bold; }}
+                     .now-playing-artist {{ font-size: {artist_size}px; font-weight: bold; }}
+                     .now-playing-album {{ font-size: {album_size}px; font-weight: bold; }}
+                     .now-playing-details {{ font-size: {details_size}px; font-weight: bold; }}"
                 );
                 text_css_for_resize.load_from_string(&css);
             }
