@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-16 12:51+0200\n"
+"POT-Creation-Date: 2026-08-16 18:13+0200\n"
 "PO-Revision-Date: 2026-07-09 20:02+0000\n"
 "Last-Translator: Fjuro <fjuro@users.noreply.weblate.fossplant.re>\n"
 "Language-Team: Czech <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -46,7 +46,7 @@ msgstr "Varování: síť není dostupná"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:950 src/gui/main_window.rs:962
+#: src/gui/main_window.rs:948 src/gui/main_window.rs:960
 msgid "No match for this song"
 msgstr "Nenalezena žádná shoda s touto skladbou"
 
@@ -197,8 +197,8 @@ msgid "Audio error: No input device available"
 msgstr "Chyba zvuku: Není dostupné žádné vstupní zařízení"
 
 #: src/core/preferences.rs:58 src/core/preferences.rs:77
-#: src/gui/main_window.rs:310 src/gui/interface.blp:123
-#: src/gui/interface.blp:574 src/gui/interface.blp:624
+#: src/gui/main_window.rs:307 src/gui/interface.blp:129
+#: src/gui/interface.blp:580 src/gui/interface.blp:630
 msgid "Search on YouTube"
 msgstr "Vyhledat na YouTube"
 
@@ -230,39 +230,39 @@ msgstr ""
 msgid "No artwork available"
 msgstr ""
 
-#: src/gui/main_window.rs:268
+#: src/gui/main_window.rs:265
 msgid "Application error"
 msgstr "Chyba aplikace"
 
-#: src/gui/main_window.rs:289
+#: src/gui/main_window.rs:286
 msgid "Network error"
 msgstr "Chyba sítě"
 
-#: src/gui/main_window.rs:365
+#: src/gui/main_window.rs:362
 msgid "Unable to enable notification icon"
 msgstr "Nepodařilo se povolit ikonu oznámení"
 
-#: src/gui/main_window.rs:856 src/gui/main_window.rs:937
+#: src/gui/main_window.rs:854 src/gui/main_window.rs:935
 msgid "Unable to enable MPRIS support"
 msgstr "Nepodařilo se povolit podporu MPRIS"
 
-#: src/gui/main_window.rs:959
+#: src/gui/main_window.rs:957
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:1040
+#: src/gui/main_window.rs:1038
 msgid "Song recognized"
 msgstr "Skladba rozpoznána"
 
-#: src/gui/main_window.rs:1177
+#: src/gui/main_window.rs:1175
 msgid "Are you sure you want to wipe history?"
 msgstr "Opravdu chcete vymazat historii?"
 
-#: src/gui/main_window.rs:1183
+#: src/gui/main_window.rs:1181
 msgid "_Yes"
 msgstr "_Ano"
 
-#: src/gui/main_window.rs:1184
+#: src/gui/main_window.rs:1182
 msgid "_Cancel"
 msgstr "_Zrušit"
 
@@ -326,75 +326,79 @@ msgstr "CHYBA: Vaše IP byla omezena"
 msgid "Recognition results"
 msgstr "Výsledky rozpoznání"
 
-#: src/gui/interface.blp:130
+#: src/gui/interface.blp:96
+msgid "Open Now Playing"
+msgstr ""
+
+#: src/gui/interface.blp:136
 msgid "Search..."
 msgstr "Hledat…"
 
-#: src/gui/interface.blp:146
+#: src/gui/interface.blp:152
 msgid "Refresh available devices"
 msgstr "Obnovit všechna dostupná zařízení"
 
-#: src/gui/interface.blp:149
+#: src/gui/interface.blp:155
 msgid "Audio input"
 msgstr "Zvukový vstup"
 
-#: src/gui/interface.blp:165
+#: src/gui/interface.blp:171
 msgid "Device"
 msgstr "Zařízení"
 
-#: src/gui/interface.blp:182
+#: src/gui/interface.blp:188
 msgid "Volume:"
 msgstr "Hlasitost:"
 
-#: src/gui/interface.blp:198
+#: src/gui/interface.blp:204
 msgid "History options..."
 msgstr "Nastavení historie…"
 
-#: src/gui/interface.blp:201
+#: src/gui/interface.blp:207
 msgid "Recognition history"
 msgstr "Historie rozpoznávání"
 
-#: src/gui/interface.blp:230 src/gui/interface.blp:324
+#: src/gui/interface.blp:236 src/gui/interface.blp:330
 msgid "Song name"
 msgstr "Název skladby"
 
-#: src/gui/interface.blp:241 src/gui/interface.blp:335
+#: src/gui/interface.blp:247 src/gui/interface.blp:341
 msgid "Album"
 msgstr "Album"
 
-#: src/gui/interface.blp:254 src/gui/interface.blp:348
+#: src/gui/interface.blp:260 src/gui/interface.blp:354
 msgid "Recognition date"
 msgstr "Datum rozpoznání"
 
-#: src/gui/interface.blp:269
+#: src/gui/interface.blp:275
 msgid "View favorites"
 msgstr "Zobrazit oblíbené"
 
-#: src/gui/interface.blp:288
+#: src/gui/interface.blp:294
 msgid "Application menu"
 msgstr "Nabídka aplikace"
 
-#: src/gui/interface.blp:363 src/gui/interface.blp:526
+#: src/gui/interface.blp:369 src/gui/interface.blp:532
 msgid "Export to CSV"
 msgstr "Exportovat do CSV"
 
-#: src/gui/interface.blp:370
+#: src/gui/interface.blp:376
 msgid "Favorites"
 msgstr "Oblíbené"
 
-#: src/gui/interface.blp:377
+#: src/gui/interface.blp:383
 msgid "General preferences"
 msgstr "Obecné předvolby"
 
-#: src/gui/interface.blp:381
+#: src/gui/interface.blp:387
 msgid "Notify when a new song is recognized or network error is encountered"
 msgstr "Oznámit při rozpoznání nové skladby nebo objevení chyby"
 
-#: src/gui/interface.blp:382 src/gui/interface.blp:481
+#: src/gui/interface.blp:388 src/gui/interface.blp:487
 msgid "Show notifications"
 msgstr "Zobrazit oznámení"
 
-#: src/gui/interface.blp:388
+#: src/gui/interface.blp:394
 msgid ""
 "Bump a song to the top of the history list and remove the former entry when "
 "the same song is detected multiple times"
@@ -402,11 +406,11 @@ msgstr ""
 "Přesunout skladbu na začátek seznamu historie a odstranit předchozí záznam, "
 "pokud je stejná skladba detekována vícekrát"
 
-#: src/gui/interface.blp:390
+#: src/gui/interface.blp:396
 msgid "No duplicates in history"
 msgstr "Žádné duplicitní záznamy v historii"
 
-#: src/gui/interface.blp:396
+#: src/gui/interface.blp:402
 msgid ""
 "When closing the window, minimize to system tray using KSNI instead of "
 "closing the app. Please note that you may have to increase the \"request "
@@ -418,23 +422,23 @@ msgstr ""
 "SongRec běžet na pozadí, možná budete muset zvýšit nastavení „intervalu "
 "požadavků“, abyste snížili pravděpodobnost omezení vaší rychlosti."
 
-#: src/gui/interface.blp:398
+#: src/gui/interface.blp:404
 msgid "Minimize to system tray"
 msgstr "Minimalizovat do systémové lišty"
 
-#: src/gui/interface.blp:404
+#: src/gui/interface.blp:410
 msgid "Network preferences"
 msgstr "Předvolby sítě"
 
-#: src/gui/interface.blp:420
+#: src/gui/interface.blp:426
 msgid "By default 8, increase if you are rate-limited"
 msgstr "Výchozí hodnota je 8, zvyšte, pokud jste byli omezeni"
 
-#: src/gui/interface.blp:421
+#: src/gui/interface.blp:427
 msgid "Shazam interval between requests in seconds"
 msgstr "Interval Shazamu mezi žádostmi v sekundách"
 
-#: src/gui/interface.blp:429
+#: src/gui/interface.blp:435
 msgid ""
 "MPRIS will display information about recognized songs in places like the "
 "GNOME or KDE control panel"
@@ -442,71 +446,71 @@ msgstr ""
 "MPRIS zobrazí informace o rozpoznaných skladbách na místech, jako je "
 "ovládací panel GNOME nebo KDE"
 
-#: src/gui/interface.blp:431
+#: src/gui/interface.blp:437
 msgid "Enable MPRIS"
 msgstr "Povolit MPRIS"
 
-#: src/gui/interface.blp:437
+#: src/gui/interface.blp:443
 msgid "Search preferences"
 msgstr "Předvolby vyhledávání"
 
-#: src/gui/interface.blp:440
+#: src/gui/interface.blp:446
 msgid "Custom search engine action"
 msgstr "Vlastní akce tlačítka vyhledávání"
 
-#: src/gui/interface.blp:445
+#: src/gui/interface.blp:451
 msgid "Custom search engine URL"
 msgstr "Vlastní adresa vyhledávače"
 
-#: src/gui/interface.blp:456
+#: src/gui/interface.blp:462
 msgid "Settings"
 msgstr "Nastavení"
 
-#: src/gui/interface.blp:486
+#: src/gui/interface.blp:492
 msgid "_Preferences..."
 msgstr "_Předvolby…"
 
-#: src/gui/interface.blp:493
+#: src/gui/interface.blp:499
 msgid "_Keyboard Shortcuts"
 msgstr "_Klávesové zkratky"
 
-#: src/gui/interface.blp:498
+#: src/gui/interface.blp:504
 msgid "About..."
 msgstr "O aplikaci…"
 
-#: src/gui/interface.blp:531
+#: src/gui/interface.blp:537
 msgid "Delete history"
 msgstr "Smazat historii"
 
-#: src/gui/interface.blp:536
+#: src/gui/interface.blp:542
 msgid "Select a file to recognize"
 msgstr "Vyberte soubor k rozpoznání"
 
-#: src/gui/interface.blp:548 src/gui/interface.blp:598
+#: src/gui/interface.blp:554 src/gui/interface.blp:604
 msgid "Copy artist and track"
 msgstr "Kopírovat umělce a skladbu"
 
-#: src/gui/interface.blp:554 src/gui/interface.blp:604
+#: src/gui/interface.blp:560 src/gui/interface.blp:610
 msgid "Copy artist"
 msgstr "Kopírovat umělce"
 
-#: src/gui/interface.blp:560 src/gui/interface.blp:610
+#: src/gui/interface.blp:566 src/gui/interface.blp:616
 msgid "Copy track name"
 msgstr "Kopírovat název skladby"
 
-#: src/gui/interface.blp:566 src/gui/interface.blp:616
+#: src/gui/interface.blp:572 src/gui/interface.blp:622
 msgid "Copy album"
 msgstr "Kopírovat album"
 
-#: src/gui/interface.blp:582
+#: src/gui/interface.blp:588
 msgid "Delete from History"
 msgstr "Odstranit z historie"
 
-#: src/gui/interface.blp:588
+#: src/gui/interface.blp:594
 msgid "Add to Favorites"
 msgstr "Přidat do oblíbených"
 
-#: src/gui/interface.blp:632
+#: src/gui/interface.blp:638
 msgid "Remove from Favorites"
 msgstr "Odstranit z oblíbených"
 

@@ -222,17 +222,14 @@ impl App {
         });
 
         application.connect_activate(move |application| {
-            // The Now Playing window is a plain GTK window and is therefore
-            // not part of application.windows(). Still, do not assume a
-            // particular window ordering here: explicitly find SongRec's
-            // main Adwaita application window.
+            // Do not assume a particular window ordering when SongRec is
+            // activated again. The Now Playing window is intentionally a
+            // plain GTK window, so explicitly locate the Adwaita main window.
             if let Some(main_window) = application
                 .windows()
                 .into_iter()
                 .find_map(|window| window.downcast::<adw::ApplicationWindow>().ok())
             {
-                // Raise/highlight the existing main window whenever a second
-                // GUI instance is attempted to be launched.
                 main_window.present();
             }
         });
@@ -804,9 +801,9 @@ impl App {
         });
         results_image.add_controller(results_click);
 
-        // Now Playing is intentionally not a GApplication window, so it
-        // cannot keep the SongRec process alive by itself. Explicitly close
-        // it when the main window is closed as well.
+        // Now Playing is deliberately not a GApplication window. Explicitly
+        // close it when the main SongRec window closes so it can never outlive
+        // the main application window or affect later application activation.
         let artwork_window_for_close = artwork_window.clone();
         window.connect_close_request(move |_| {
             if let Some(ref artwork) = *artwork_window_for_close.borrow() {
@@ -814,6 +811,7 @@ impl App {
             }
             glib::Propagation::Proceed
         });
+
         let loopback_switch: adw::SwitchRow = self.builder.object("loopback_switch").unwrap();
 
         #[cfg(target_os = "linux")]
@@ -1544,6 +1542,24 @@ impl App {
             })
             .build();
 
+        let artwork_window_for_action = self.artwork_window.clone();
+        let last_recognized_song_for_action = self.last_recognized_song.clone();
+        let action_show_artwork = gio::ActionEntry::builder("show-artwork")
+            .activate(move |_, _, _| {
+                if artwork_window_for_action.borrow().is_none() {
+                    let artwork = ArtworkWindow::new();
+                    if let Some(ref message) = *last_recognized_song_for_action.borrow() {
+                        artwork.update(message);
+                    }
+                    *artwork_window_for_action.borrow_mut() = Some(artwork);
+                }
+
+                if let Some(ref artwork) = *artwork_window_for_action.borrow() {
+                    artwork.present();
+                }
+            })
+            .build();
+
         let action_show_menu = gio::ActionEntry::builder("show-menu")
             .activate(move |_, _, _| {
                 menu_button.activate();
@@ -1564,6 +1580,7 @@ impl App {
             action_no_dupes_setting,
             action_refresh_devices,
             action_close,
+            action_show_artwork,
             action_show_menu,
         ]);
 

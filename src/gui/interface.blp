@@ -90,6 +90,12 @@ Adw.ApplicationWindow main_window {
                 title: _("Recognition results");
                 visible: false;
 
+                header-suffix: Button show_artwork_button {
+                  action-name: "win.show-artwork";
+                  icon-name: "window-new-symbolic";
+                  tooltip-text: _("Open Now Playing");
+                };
+
                 Adw.PreferencesRow results_row {
                   activatable: false;
                   selectable: false;
