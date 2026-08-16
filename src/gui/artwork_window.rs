@@ -202,27 +202,38 @@ impl ArtworkWindow {
             self.artwork.set_paintable(Option::<&gdk::Texture>::None);
             self.artwork.set_visible(false);
             self.artwork_placeholder.set_visible(true);
-            self.set_background_color((24, 24, 24));
+            self.set_background(Background::fallback());
         }
     }
 
     fn set_background_from_cover(&self, bytes: &[u8]) {
-        let color = image::load_from_memory(bytes)
-            .ok()
-            .map(|image| dominant_background_color(&image))
-            .unwrap_or((24, 24, 24));
+        let background = image::load_from_memory(bytes)
+            .map(|image| generate_background(&image))
+            .unwrap_or_else(|_| Background::fallback());
 
-        self.set_background_color(color);
+        self.set_background(background);
     }
 
-    fn set_background_color(&self, (red, green, blue): (u8, u8, u8)) {
+    fn set_background(&self, background: Background) {
         let css = format!(
-            ".now-playing-background {{ background-color: rgb({red}, {green}, {blue}); color: #ffffff; padding: 96px; }}
-             .now-playing-background > label {{ color: #ffffff; }}
-             .now-playing-background .now-playing-title,
-             .now-playing-background .now-playing-artist,
-             .now-playing-background .now-playing-album,
-             .now-playing-background .now-playing-details {{ color: #ffffff; }}"
+            ".now-playing-background {{
+                background: linear-gradient(to bottom,
+                    rgb({}, {}, {}),
+                    rgb({}, {}, {}));
+                color: #ffffff;
+                padding: 96px;
+            }}
+            .now-playing-background > label {{ color: #ffffff; }}
+            .now-playing-background .now-playing-title,
+            .now-playing-background .now-playing-artist,
+            .now-playing-background .now-playing-album,
+            .now-playing-background .now-playing-details {{ color: #ffffff; }}",
+            background.top.0,
+            background.top.1,
+            background.top.2,
+            background.bottom.0,
+            background.bottom.1,
+            background.bottom.2,
         );
         self.background_css.load_from_string(&css);
     }
@@ -236,73 +247,167 @@ impl ArtworkWindow {
     }
 }
 
-fn dominant_background_color(image: &image::DynamicImage) -> (u8, u8, u8) {
-    let small = image.thumbnail(48, 48).to_rgb8();
-    let mut histogram = std::collections::HashMap::<u32, f32>::new();
+#[derive(Debug, Clone, Copy)]
+struct Background {
+    top: (u8, u8, u8),
+    bottom: (u8, u8, u8),
+}
 
-    for pixel in small.pixels() {
+impl Background {
+    fn fallback() -> Self {
+        Self {
+            top: (28, 27, 30),
+            bottom: (9, 9, 11),
+        }
+    }
+}
+
+fn generate_background(image: &image::DynamicImage) -> Background {
+    let small = image.thumbnail(72, 72).to_rgb8();
+
+    // Quantize into compact RGB buckets while keeping weighted sums so the
+    // chosen color is still representative of the source art.
+    #[derive(Default, Clone, Copy)]
+    struct Bucket {
+        weight: f32,
+        red: f32,
+        green: f32,
+        blue: f32,
+    }
+
+    let mut buckets = std::collections::HashMap::<u32, Bucket>::new();
+
+    for (x, y, pixel) in small.enumerate_pixels() {
         let [red, green, blue] = pixel.0;
-        let max = red.max(green).max(blue) as f32 / 255.0;
-        let min = red.min(green).min(blue) as f32 / 255.0;
-        let saturation = if max == 0.0 { 0.0 } else { (max - min) / max };
+        let rf = red as f32 / 255.0;
+        let gf = green as f32 / 255.0;
+        let bf = blue as f32 / 255.0;
 
-        // Very bright pixels make poor backgrounds and neutral pixels carry
-        // little visual information, so give them much less influence.
-        let luminance = 0.2126 * red as f32 / 255.0
-            + 0.7152 * green as f32 / 255.0
-            + 0.0722 * blue as f32 / 255.0;
-        if luminance > 0.92 {
+        let (_, saturation, _) = rgb_to_hsl(rf, gf, bf);
+        let luminance = relative_luminance(rf, gf, bf);
+
+        // Skip colors that are effectively white or black. Neither gives us a
+        // useful accent, and the former is especially bad with white text.
+        if luminance > 0.92 || luminance < 0.018 {
             continue;
         }
 
-        let quantize = |value: u8| -> u8 { (value / 32) * 32 + 16 };
-        let qr = quantize(red) as u32;
-        let qg = quantize(green) as u32;
-        let qb = quantize(blue) as u32;
-        let key = (qr << 16) | (qg << 8) | qb;
-        let weight = 1.0 + saturation * 2.5;
-        *histogram.entry(key).or_default() += weight;
+        // Rich colors should contribute more than grayish colors, while colors
+        // around the middle of the luminance range are generally better UI
+        // accents than highlights or deep shadows.
+        let saturation_weight = 0.35 + saturation.powf(1.35) * 3.5;
+        let luminance_weight = (1.0 - ((luminance - 0.38).abs() / 0.38)).clamp(0.15, 1.0);
+
+        // Slightly favor the center of the artwork. This helps avoid picking
+        // a tiny bright corner or border as the whole application's mood.
+        let nx = (x as f32 + 0.5) / small.width() as f32;
+        let ny = (y as f32 + 0.5) / small.height() as f32;
+        let center_distance = ((nx - 0.5).powi(2) + (ny - 0.5).powi(2)).sqrt();
+        let spatial_weight = (1.15 - center_distance).clamp(0.55, 1.15);
+
+        // A tiny hue-distance factor prevents almost-black/gray colors from
+        // winning simply because there are many of them.
+        let chroma_weight = if saturation < 0.06 { 0.55 } else { 1.0 };
+        let weight = saturation_weight * luminance_weight * spatial_weight * chroma_weight;
+
+        let qr = red >> 4;
+        let qg = green >> 4;
+        let qb = blue >> 4;
+        let key = ((qr as u32) << 8) | ((qg as u32) << 4) | qb as u32;
+
+        let bucket = buckets.entry(key).or_default();
+        bucket.weight += weight;
+        bucket.red += rf * weight;
+        bucket.green += gf * weight;
+        bucket.blue += bf * weight;
     }
 
-    let (key, _) = histogram
-        .into_iter()
-        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-        .unwrap_or(((24u32 << 16) | (24u32 << 8) | 24u32, 1.0));
+    let candidate = buckets.into_values().max_by(|a, b| {
+        a.weight
+            .partial_cmp(&b.weight)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
-    let mut red = ((key >> 16) & 0xff) as f32 / 255.0;
-    let mut green = ((key >> 8) & 0xff) as f32 / 255.0;
-    let mut blue = (key & 0xff) as f32 / 255.0;
+    let Some(bucket) = candidate else {
+        return Background::fallback();
+    };
 
-    // Convert the chosen color to HSL so we can keep its hue while making it
-    // dark enough for white UI text.
-    let max = red.max(green).max(blue);
-    let min = red.min(green).min(blue);
+    if bucket.weight <= f32::EPSILON {
+        return Background::fallback();
+    }
+
+    let red = bucket.red / bucket.weight;
+    let green = bucket.green / bucket.weight;
+    let blue = bucket.blue / bucket.weight;
+    let (hue, saturation, _) = rgb_to_hsl(red, green, blue);
+
+    // A modest saturation floor gives colorful covers a rich mood without
+    // inventing a strong hue for genuinely grayscale artwork.
+    let target_saturation = if saturation < 0.08 {
+        0.0
+    } else {
+        (saturation * 1.08).clamp(0.22, 0.70)
+    };
+
+    // Start with a dark accent then move it darker as needed
+    // until white text has a genuine WCAG-style contrast margin.
+    let mut top_lightness = if target_saturation == 0.0 {
+        0.135
+    } else {
+        0.165
+    };
+    let top = loop {
+        let rgb = hsl_to_rgb(hue, target_saturation, top_lightness);
+        if contrast_ratio(rgb, (255, 255, 255)) >= 4.75 || top_lightness <= 0.07 {
+            break rgb;
+        }
+        top_lightness -= 0.01;
+    };
+
+    // The lower stop keeps the same hue, but is much darker and less saturated.
+    // This makes the metadata area quiet and preserves readable white text.
+    let mut bottom_saturation = (target_saturation * 0.42).min(0.30);
+    let mut bottom_lightness = 0.055;
+    let bottom = loop {
+        let rgb = hsl_to_rgb(hue, bottom_saturation, bottom_lightness);
+        if contrast_ratio(rgb, (255, 255, 255)) >= 7.0 || bottom_lightness <= 0.025 {
+            break rgb;
+        }
+        bottom_lightness -= 0.005;
+        bottom_saturation *= 0.96;
+    };
+
+    Background { top, bottom }
+}
+
+fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
     let lightness = (max + min) / 2.0;
     let delta = max - min;
 
-    let saturation = if delta == 0.0 {
-        0.0
+    if delta <= f32::EPSILON {
+        return (0.0, 0.0, lightness);
+    }
+
+    let saturation = delta / (1.0 - (2.0 * lightness - 1.0).abs());
+    let hue = if max == r {
+        ((g - b) / delta).rem_euclid(6.0) / 6.0
+    } else if max == g {
+        (((b - r) / delta) + 2.0) / 6.0
     } else {
-        delta / (1.0 - (2.0 * lightness - 1.0).abs())
+        (((r - g) / delta) + 4.0) / 6.0
     };
 
-    let hue = if delta == 0.0 {
-        0.0
-    } else if max == red {
-        ((green - blue) / delta).rem_euclid(6.0) / 6.0
-    } else if max == green {
-        (((blue - red) / delta) + 2.0) / 6.0
-    } else {
-        (((red - green) / delta) + 4.0) / 6.0
-    };
+    (hue, saturation, lightness)
+}
 
-    let target_lightness = if saturation < 0.08 { 0.13 } else { 0.17 };
-    let target_saturation = saturation.clamp(0.18, 0.78);
+fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
+    let chroma = (1.0_f32 - (2.0_f32 * l - 1.0_f32).abs()) * s;
+    let x = chroma * (1.0 - ((h * 6.0).rem_euclid(2.0) - 1.0).abs());
+    let m = l - chroma / 2.0;
 
-    let chroma: f32 = (1.0f32 - (2.0f32 * target_lightness - 1.0f32).abs()) * target_saturation;
-    let x = chroma * (1.0 - ((hue * 6.0).rem_euclid(2.0) - 1.0).abs());
-    let m = target_lightness - chroma / 2.0;
-    let (r1, g1, b1) = match (hue * 6.0).floor() as i32 {
+    let (r1, g1, b1) = match (h * 6.0).floor() as i32 {
         0 => (chroma, x, 0.0),
         1 => (x, chroma, 0.0),
         2 => (0.0, chroma, x),
@@ -311,16 +416,38 @@ fn dominant_background_color(image: &image::DynamicImage) -> (u8, u8, u8) {
         _ => (chroma, 0.0, x),
     };
 
-    red = r1 + m;
-    green = g1 + m;
-    blue = b1 + m;
-
-    // White text has a contrast ratio of at least 4.5:1 when relative
-    // luminance is <= ~0.183. The fixed lightness above keeps us comfortably
-    // below that threshold while retaining the artwork's hue.
     (
-        (red * 255.0).round() as u8,
-        (green * 255.0).round() as u8,
-        (blue * 255.0).round() as u8,
+        ((r1 + m).clamp(0.0, 1.0) * 255.0).round() as u8,
+        ((g1 + m).clamp(0.0, 1.0) * 255.0).round() as u8,
+        ((b1 + m).clamp(0.0, 1.0) * 255.0).round() as u8,
     )
+}
+
+fn relative_luminance(r: f32, g: f32, b: f32) -> f32 {
+    fn linearize(channel: f32) -> f32 {
+        if channel <= 0.04045 {
+            channel / 12.92
+        } else {
+            ((channel + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+}
+
+fn contrast_ratio(first: (u8, u8, u8), second: (u8, u8, u8)) -> f32 {
+    let first = relative_luminance(
+        first.0 as f32 / 255.0,
+        first.1 as f32 / 255.0,
+        first.2 as f32 / 255.0,
+    );
+    let second = relative_luminance(
+        second.0 as f32 / 255.0,
+        second.1 as f32 / 255.0,
+        second.2 as f32 / 255.0,
+    );
+
+    let lighter = first.max(second);
+    let darker = first.min(second);
+    (lighter + 0.05) / (darker + 0.05)
 }
