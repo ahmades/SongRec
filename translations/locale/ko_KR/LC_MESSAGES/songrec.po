@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 21:46+0200\n"
+"POT-Creation-Date: 2026-08-16 00:56+0200\n"
 "PO-Revision-Date: 2023-12-30 23:42+0900\n"
 "Last-Translator: 이정희 <daemul72@gmail.com>\n"
 "Language-Team: \n"
@@ -210,11 +210,11 @@ msgstr "디코딩된 Shazam 패킷의 주파수 대역이 잘못되었습니다"
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "Shazam 패킷을 인코딩할 때 잘못된 샘플 속도가 전달되었습니다"
 
-#: src/gui/artwork_window.rs:31
+#: src/gui/artwork_window.rs:34
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:55
+#: src/gui/artwork_window.rs:58
 msgid "No artwork available"
 msgstr ""
 

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 21:46+0200\n"
+"POT-Creation-Date: 2026-08-16 00:56+0200\n"
 "PO-Revision-Date: 2026-07-09 20:02+0000\n"
 "Last-Translator: Fjuro <fjuro@users.noreply.weblate.fossplant.re>\n"
 "Language-Team: Czech <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -222,11 +222,11 @@ msgstr "Neplatný rozsah pásem v dekódovaném paketu Shazamu"
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "Předána neplatná vzorkovací frekvence při kódování paketu Shazamu"
 
-#: src/gui/artwork_window.rs:31
+#: src/gui/artwork_window.rs:34
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:55
+#: src/gui/artwork_window.rs:58
 msgid "No artwork available"
 msgstr ""
 

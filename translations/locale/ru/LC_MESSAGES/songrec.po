@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-15 21:46+0200\n"
+"POT-Creation-Date: 2026-08-16 00:56+0200\n"
 "PO-Revision-Date: 2026-05-18 12:07+1100\n"
 "Last-Translator: Aleksandr Shamaraev <shad@altlinux.org>\n"
 "Language-Team: Russian <https://weblate.fossplant.re/projects/songrec/"
@@ -228,11 +228,11 @@ msgstr "Неверный диапазон частот в декодирован
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "При кодировании пакета Shazam передана неверная частота дискретизации"
 
-#: src/gui/artwork_window.rs:31
+#: src/gui/artwork_window.rs:34
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/artwork_window.rs:55
+#: src/gui/artwork_window.rs:58
 msgid "No artwork available"
 msgstr ""
 
