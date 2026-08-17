@@ -31,10 +31,10 @@ use crate::utils::filesystem_operations::{
 
 use crate::core::preferences::{Preferences, PreferencesInterface};
 
-use crate::gui::artwork_window::{ArtworkWindow, BackgroundStyle};
 use crate::gui::context_menu::ContextMenuUtil;
 use crate::gui::history_entry::HistoryEntry;
 use crate::gui::listed_device::ListedDevice;
+use crate::gui::now_playing_window::{BackgroundStyle, NowPlayingWindow};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -75,7 +75,7 @@ struct App {
     http_tx: async_channel::Sender<HTTPMessage>,
     http_rx: async_channel::Receiver<HTTPMessage>,
 
-    artwork_window: Rc<RefCell<Option<ArtworkWindow>>>,
+    now_playing_window: Rc<RefCell<Option<NowPlayingWindow>>>,
     last_recognized_song: Rc<RefCell<Option<SongRecognizedMessage>>>,
 }
 
@@ -168,7 +168,7 @@ impl App {
             http_tx,
             http_rx,
 
-            artwork_window: Rc::new(RefCell::new(None)),
+            now_playing_window: Rc::new(RefCell::new(None)),
             last_recognized_song: Rc::new(RefCell::new(None)),
         }
     }
@@ -329,7 +329,7 @@ impl App {
             set_recording,
             enable_mpris_cli,
             enable_pipewire_cli,
-            self.artwork_window.clone(),
+            self.now_playing_window.clone(),
             self.last_recognized_song.clone(),
         );
         self.setup_actions(application, enable_mpris_cli);
@@ -715,7 +715,7 @@ impl App {
         set_recording: bool,
         _enable_mpris_cli: bool,
         enable_pipewire_cli: bool,
-        artwork_window: Rc<RefCell<Option<ArtworkWindow>>>,
+        now_playing_window: Rc<RefCell<Option<NowPlayingWindow>>>,
         last_recognized_song: Rc<RefCell<Option<SongRecognizedMessage>>>,
     ) {
         // Setup communication using threads + smol-rs/async-channel::unbounded listener
@@ -831,29 +831,29 @@ impl App {
         });
 
         // Double-clicking the small recognition artwork opens the dedicated artwork window.
-        let artwork_window_for_results = artwork_window.clone();
+        let now_playing_window_for_results = now_playing_window.clone();
         let last_recognized_song_for_results = last_recognized_song.clone();
         let preferences_for_results = preferences_interface_ptr.clone();
         let results_click = gtk::GestureClick::new();
         results_click.set_button(1);
         results_click.connect_pressed(move |_, n_press, _, _| {
             if n_press == 2 {
-                if artwork_window_for_results.borrow().is_none() {
-                    let artwork = ArtworkWindow::new();
+                if now_playing_window_for_results.borrow().is_none() {
+                    let now_playing_window = NowPlayingWindow::new();
                     let preferences = preferences_for_results.lock().unwrap().preferences.clone();
-                    artwork
+                    now_playing_window
                         .set_show_track_info(!preferences.hide_now_playing_info.unwrap_or(false));
-                    artwork.set_background_style(BackgroundStyle::from_preference(
+                    now_playing_window.set_background_style(BackgroundStyle::from_preference(
                         preferences.now_playing_background_style.as_deref(),
                     ));
                     if let Some(ref message) = *last_recognized_song_for_results.borrow() {
-                        artwork.update(message);
+                        now_playing_window.update(message);
                     }
-                    *artwork_window_for_results.borrow_mut() = Some(artwork);
+                    *now_playing_window_for_results.borrow_mut() = Some(now_playing_window);
                 }
 
-                if let Some(ref artwork) = *artwork_window_for_results.borrow() {
-                    artwork.present();
+                if let Some(ref now_playing_window) = *now_playing_window_for_results.borrow() {
+                    now_playing_window.present();
                 }
             }
         });
@@ -862,10 +862,10 @@ impl App {
         // Now Playing is deliberately not a GApplication window. Explicitly
         // close it when the main SongRec window closes so it can never outlive
         // the main application window or affect later application activation.
-        let artwork_window_for_close = artwork_window.clone();
+        let now_playing_window_for_close = now_playing_window.clone();
         window.connect_close_request(move |_| {
-            if let Some(ref artwork) = *artwork_window_for_close.borrow() {
-                artwork.close();
+            if let Some(ref now_playing_window) = *now_playing_window_for_close.borrow() {
+                now_playing_window.close();
             }
             glib::Propagation::Proceed
         });
@@ -967,18 +967,20 @@ impl App {
                                 .unwrap()
                                 .update(new_preference);
 
-                            if let Some(ref artwork) = *artwork_window.borrow() {
+                            if let Some(ref now_playing_window) = *now_playing_window.borrow() {
                                 let preferences = preferences_interface_ptr
                                     .lock()
                                     .unwrap()
                                     .preferences
                                     .clone();
-                                artwork.set_show_track_info(
+                                now_playing_window.set_show_track_info(
                                     !preferences.hide_now_playing_info.unwrap_or(false),
                                 );
-                                artwork.set_background_style(BackgroundStyle::from_preference(
-                                    preferences.now_playing_background_style.as_deref(),
-                                ));
+                                now_playing_window.set_background_style(
+                                    BackgroundStyle::from_preference(
+                                        preferences.now_playing_background_style.as_deref(),
+                                    ),
+                                );
                             }
 
                             #[cfg(all(target_os = "linux", feature = "mpris"))]
@@ -1088,8 +1090,8 @@ impl App {
                         }
                         SongRecognized(message) => {
                             last_recognized_song.replace(Some((*message).clone()));
-                            if let Some(ref artwork) = *artwork_window.borrow() {
-                                artwork.update(&message);
+                            if let Some(ref now_playing_window) = *now_playing_window.borrow() {
+                                now_playing_window.update(&message);
                             }
 
                             results_section.set_visible(true);
@@ -1615,27 +1617,27 @@ impl App {
             })
             .build();
 
-        let artwork_window_for_action = self.artwork_window.clone();
+        let now_playing_window_for_action = self.now_playing_window.clone();
         let last_recognized_song_for_action = self.last_recognized_song.clone();
         let preferences_for_action = self.preferences_interface.clone();
         let action_show_artwork = gio::ActionEntry::builder("show-artwork")
             .activate(move |_, _, _| {
-                if artwork_window_for_action.borrow().is_none() {
-                    let artwork = ArtworkWindow::new();
+                if now_playing_window_for_action.borrow().is_none() {
+                    let now_playing_window = NowPlayingWindow::new();
                     let preferences = preferences_for_action.lock().unwrap().preferences.clone();
-                    artwork
+                    now_playing_window
                         .set_show_track_info(!preferences.hide_now_playing_info.unwrap_or(false));
-                    artwork.set_background_style(BackgroundStyle::from_preference(
+                    now_playing_window.set_background_style(BackgroundStyle::from_preference(
                         preferences.now_playing_background_style.as_deref(),
                     ));
                     if let Some(ref message) = *last_recognized_song_for_action.borrow() {
-                        artwork.update(message);
+                        now_playing_window.update(message);
                     }
-                    *artwork_window_for_action.borrow_mut() = Some(artwork);
+                    *now_playing_window_for_action.borrow_mut() = Some(now_playing_window);
                 }
 
-                if let Some(ref artwork) = *artwork_window_for_action.borrow() {
-                    artwork.present();
+                if let Some(ref now_playing_window) = *now_playing_window_for_action.borrow() {
+                    now_playing_window.present();
                 }
             })
             .build();

@@ -4,7 +4,7 @@ use gettextrs::gettext;
 use std::cell::Cell;
 use std::rc::Rc;
 
-pub struct ArtworkWindow {
+pub struct NowPlayingWindow {
     window: gtk::Window,
     artwork: gtk::Picture,
     artwork_placeholder: gtk::Label,
@@ -18,7 +18,7 @@ pub struct ArtworkWindow {
     current_background: Cell<Background>,
 }
 
-impl ArtworkWindow {
+impl NowPlayingWindow {
     pub fn new() -> Self {
         let window = gtk::Window::builder()
             .title("SongRec")
@@ -38,14 +38,14 @@ impl ArtworkWindow {
             .build();
         root.add_css_class("now-playing-background");
 
-        let artwork_frame = gtk::AspectFrame::builder()
+        let cover_frame = gtk::AspectFrame::builder()
             .ratio(1.0)
             .obey_child(false)
             .hexpand(true)
             .vexpand(true)
             .build();
 
-        let artwork = gtk::Picture::builder()
+        let cover_picture = gtk::Picture::builder()
             .content_fit(gtk::ContentFit::Contain)
             .can_shrink(true)
             .hexpand(true)
@@ -58,10 +58,10 @@ impl ArtworkWindow {
             .valign(gtk::Align::Center)
             .visible(false)
             .build();
-        let artwork_overlay = gtk::Overlay::new();
-        artwork_overlay.set_child(Some(&artwork));
-        artwork_overlay.add_overlay(&artwork_placeholder);
-        artwork_frame.set_child(Some(&artwork_overlay));
+        let cover_overlay = gtk::Overlay::new();
+        cover_overlay.set_child(Some(&cover_picture));
+        cover_overlay.add_overlay(&artwork_placeholder);
+        cover_frame.set_child(Some(&cover_overlay));
 
         let title_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
@@ -94,7 +94,7 @@ impl ArtworkWindow {
         info_box.append(&album_label);
         info_box.append(&details_label);
 
-        root.append(&artwork_frame);
+        root.append(&cover_frame);
         root.append(&info_box);
         window.set_child(Some(&root));
 
@@ -133,23 +133,7 @@ impl ArtworkWindow {
             let size = (widget.width(), widget.height());
             if size != last_size_for_resize.get() {
                 last_size_for_resize.set(size);
-
-                let width_scale = size.0 as f64 / 720.0;
-                let height_scale = size.1 as f64 / 820.0;
-                let scale = width_scale.min(height_scale).clamp(0.60, 2.25);
-
-                let title_size = (32.0 * scale).round() as i32;
-                let artist_size = (24.0 * scale).round() as i32;
-                let album_size = (18.0 * scale).round() as i32;
-                let details_size = (18.0 * scale).round() as i32;
-
-                let css = format!(
-                    ".now-playing-title {{ font-size: {title_size}px; font-weight: bold; }}
-                     .now-playing-artist {{ font-size: {artist_size}px; font-weight: bold; }}
-                     .now-playing-album {{ font-size: {album_size}px; font-weight: bold; }}
-                     .now-playing-details {{ font-size: {details_size}px; font-weight: bold; }}"
-                );
-                text_css_for_resize.load_from_string(&css);
+                text_css_for_resize.load_from_string(&font_css_for_size(size));
             }
 
             glib::ControlFlow::Continue
@@ -175,7 +159,7 @@ impl ArtworkWindow {
 
         Self {
             window,
-            artwork,
+            artwork: cover_picture,
             artwork_placeholder,
             title_label,
             artist_label,
@@ -189,6 +173,16 @@ impl ArtworkWindow {
     }
 
     pub fn update(&self, message: &SongRecognizedMessage) {
+        self.set_metadata(message);
+
+        if let Some(bytes) = message.cover_image.as_ref() {
+            self.apply_cover(bytes);
+        } else {
+            self.set_missing_cover_state();
+        }
+    }
+
+    fn set_metadata(&self, message: &SongRecognizedMessage) {
         self.title_label.set_label(&message.song_name);
         self.artist_label.set_label(&message.artist_name);
         self.album_label.set_label(
@@ -205,28 +199,29 @@ impl ArtworkWindow {
                 .filter(|value| !value.is_empty())
                 .unwrap_or(""),
         );
+    }
 
-        if let Some(bytes) = message.cover_image.as_ref()
-            && let Ok(texture) = gdk::Texture::from_bytes(&glib::Bytes::from(bytes))
-        {
+    fn apply_cover(&self, bytes: &[u8]) {
+        if let Ok(texture) = gdk::Texture::from_bytes(&glib::Bytes::from(bytes)) {
             self.artwork.set_paintable(Some(&texture));
             self.artwork.set_visible(true);
             self.artwork_placeholder.set_visible(false);
             self.set_background_from_cover(bytes);
         } else {
-            self.artwork.set_paintable(Option::<&gdk::Texture>::None);
-            self.artwork.set_visible(false);
-            self.artwork_placeholder.set_visible(true);
-            self.current_background.set(Background::fallback());
-            self.apply_background();
+            self.set_missing_cover_state();
         }
     }
 
-    fn set_background_from_cover(&self, bytes: &[u8]) {
-        let background = image::load_from_memory(bytes)
-            .map(|image| generate_artwork_background(&image))
-            .unwrap_or_else(|_| Background::fallback());
+    fn set_missing_cover_state(&self) {
+        self.artwork.set_paintable(Option::<&gdk::Texture>::None);
+        self.artwork.set_visible(false);
+        self.artwork_placeholder.set_visible(true);
+        self.current_background.set(Background::fallback());
+        self.apply_background();
+    }
 
+    fn set_background_from_cover(&self, bytes: &[u8]) {
+        let background = background_from_cover_image(bytes);
         self.current_background.set(background);
         self.apply_background();
     }
@@ -328,10 +323,34 @@ impl Background {
     }
 }
 
+fn font_css_for_size(size: (i32, i32)) -> String {
+    let width_scale = size.0 as f64 / 720.0;
+    let height_scale = size.1 as f64 / 820.0;
+    let scale = width_scale.min(height_scale).clamp(0.60, 2.25);
+
+    let title_size = (32.0 * scale).round() as i32;
+    let artist_size = (24.0 * scale).round() as i32;
+    let album_size = (18.0 * scale).round() as i32;
+    let details_size = (18.0 * scale).round() as i32;
+
+    format!(
+        ".now-playing-title {{ font-size: {title_size}px; font-weight: bold; }}
+         .now-playing-artist {{ font-size: {artist_size}px; font-weight: bold; }}
+         .now-playing-album {{ font-size: {album_size}px; font-weight: bold; }}
+         .now-playing-details {{ font-size: {details_size}px; font-weight: bold; }}"
+    )
+}
+
+fn background_from_cover_image(bytes: &[u8]) -> Background {
+    image::load_from_memory(bytes)
+        .map(|image| generate_cover_background(&image))
+        .unwrap_or_else(|_| Background::fallback())
+}
+
 /// Build a dark artwork-derived background with a related gradient.
 /// The palette extraction favors rich colors from the artwork while keeping
 /// enough contrast for the white Now Playing metadata.
-fn generate_artwork_background(image: &image::DynamicImage) -> Background {
+fn generate_cover_background(image: &image::DynamicImage) -> Background {
     let small = image.thumbnail(72, 72).to_rgb8();
 
     // Quantize into compact RGB buckets while keeping weighted sums so the

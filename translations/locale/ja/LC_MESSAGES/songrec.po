@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 12:47+0200\n"
+"POT-Creation-Date: 2026-08-17 13:28+0200\n"
 "PO-Revision-Date: 2021-08-23 21:02+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -45,7 +45,7 @@ msgstr ""
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1021 src/gui/main_window.rs:1033
+#: src/gui/main_window.rs:1023 src/gui/main_window.rs:1035
 msgid "No match for this song"
 msgstr "曲が認識されませんでした"
 
@@ -202,14 +202,6 @@ msgstr ""
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr ""
 
-#: src/gui/artwork_window.rs:32
-msgid "Now playing"
-msgstr ""
-
-#: src/gui/artwork_window.rs:56
-msgid "No artwork available"
-msgstr ""
-
 #: src/gui/main_window.rs:265
 msgid "Application error"
 msgstr ""
@@ -222,29 +214,37 @@ msgstr ""
 msgid "Unable to enable notification icon"
 msgstr ""
 
-#: src/gui/main_window.rs:912 src/gui/main_window.rs:1008
+#: src/gui/main_window.rs:912 src/gui/main_window.rs:1010
 msgid "Unable to enable MPRIS support"
 msgstr ""
 
-#: src/gui/main_window.rs:1030
+#: src/gui/main_window.rs:1032
 msgid "_Ok"
 msgstr ""
 
-#: src/gui/main_window.rs:1111
+#: src/gui/main_window.rs:1113
 msgid "Song recognized"
 msgstr "曲が認識されました"
 
-#: src/gui/main_window.rs:1248
+#: src/gui/main_window.rs:1250
 msgid "Are you sure you want to wipe history?"
 msgstr ""
 
-#: src/gui/main_window.rs:1254
+#: src/gui/main_window.rs:1256
 msgid "_Yes"
 msgstr ""
 
-#: src/gui/main_window.rs:1255
+#: src/gui/main_window.rs:1257
 msgid "_Cancel"
 msgstr "_キャンセル"
+
+#: src/gui/now_playing_window.rs:32
+msgid "Now playing"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:56
+msgid "No artwork available"
+msgstr ""
 
 #: src/gui/song_history_interface.rs:95
 msgid "Error when reading the song history on the disk:"

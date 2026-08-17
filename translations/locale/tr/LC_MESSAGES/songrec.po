@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 12:47+0200\n"
+"POT-Creation-Date: 2026-08-17 13:28+0200\n"
 "PO-Revision-Date: 2026-07-06 14:05+0000\n"
 "Last-Translator: Arda Aydın <arda.aydin@operationsilkscarf.com>\n"
 "Language-Team: Turkish <https://weblate.fossplant.re/projects/songrec/"
@@ -45,7 +45,7 @@ msgstr "Uyarı: Ağa ulaşılamıyor"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1021 src/gui/main_window.rs:1033
+#: src/gui/main_window.rs:1023 src/gui/main_window.rs:1035
 msgid "No match for this song"
 msgstr "Bu şarkı için eşleşme yok"
 
@@ -225,14 +225,6 @@ msgstr "Çözülen Shazam paketinde geçersiz frekans bandı"
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "Shazam paketin kodlanırken geçersiz örnekleme hızı verildi"
 
-#: src/gui/artwork_window.rs:32
-msgid "Now playing"
-msgstr ""
-
-#: src/gui/artwork_window.rs:56
-msgid "No artwork available"
-msgstr ""
-
 #: src/gui/main_window.rs:265
 msgid "Application error"
 msgstr "Uygulama hatası"
@@ -245,28 +237,36 @@ msgstr "Ağ hatası"
 msgid "Unable to enable notification icon"
 msgstr "Bildirim ikonu etkinleştirilemedi"
 
-#: src/gui/main_window.rs:912 src/gui/main_window.rs:1008
+#: src/gui/main_window.rs:912 src/gui/main_window.rs:1010
 msgid "Unable to enable MPRIS support"
 msgstr "MPRIS desteği etkinleştirilemedi"
 
-#: src/gui/main_window.rs:1030
+#: src/gui/main_window.rs:1032
 msgid "_Ok"
 msgstr "_Tamam"
 
-#: src/gui/main_window.rs:1111
+#: src/gui/main_window.rs:1113
 msgid "Song recognized"
 msgstr "Şarkı tanındı"
 
-#: src/gui/main_window.rs:1248
+#: src/gui/main_window.rs:1250
 msgid "Are you sure you want to wipe history?"
 msgstr "Geçmişi temizlemek istediğinizden emin misiniz?"
 
-#: src/gui/main_window.rs:1254
+#: src/gui/main_window.rs:1256
 msgid "_Yes"
 msgstr "_Evet"
 
-#: src/gui/main_window.rs:1255
+#: src/gui/main_window.rs:1257
 msgid "_Cancel"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:32
+msgid "Now playing"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:56
+msgid "No artwork available"
 msgstr ""
 
 #: src/gui/song_history_interface.rs:95
