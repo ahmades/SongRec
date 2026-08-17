@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 14:04+0200\n"
+"POT-Creation-Date: 2026-08-17 14:27+0200\n"
 "PO-Revision-Date: 2022-10-09 13:27+0200\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -257,11 +257,11 @@ msgstr ""
 msgid "_Cancel"
 msgstr "_Abbrechen"
 
-#: src/gui/now_playing_window.rs:51
+#: src/gui/now_playing_window.rs:62
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:75
+#: src/gui/now_playing_window.rs:86
 msgid "No artwork available"
 msgstr ""
 

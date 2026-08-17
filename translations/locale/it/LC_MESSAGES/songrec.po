@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 14:04+0200\n"
+"POT-Creation-Date: 2026-08-17 14:27+0200\n"
 "PO-Revision-Date: 2023-09-08 16:03+0200\n"
 "Last-Translator: Gianluca Boiano <morf3089@gmail.com>\n"
 "Language-Team: Albano Battistella  <albano_battistella@hotmail.com>\n"
@@ -261,11 +261,11 @@ msgstr "_Sì"
 msgid "_Cancel"
 msgstr "A_nnulla"
 
-#: src/gui/now_playing_window.rs:51
+#: src/gui/now_playing_window.rs:62
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:75
+#: src/gui/now_playing_window.rs:86
 msgid "No artwork available"
 msgstr ""
 

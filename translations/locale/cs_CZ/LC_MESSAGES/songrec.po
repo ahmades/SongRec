@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 14:04+0200\n"
+"POT-Creation-Date: 2026-08-17 14:27+0200\n"
 "PO-Revision-Date: 2026-07-09 20:02+0000\n"
 "Last-Translator: Fjuro <fjuro@users.noreply.weblate.fossplant.re>\n"
 "Language-Team: Czech <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -258,11 +258,11 @@ msgstr "_Ano"
 msgid "_Cancel"
 msgstr "_Zrušit"
 
-#: src/gui/now_playing_window.rs:51
+#: src/gui/now_playing_window.rs:62
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:75
+#: src/gui/now_playing_window.rs:86
 msgid "No artwork available"
 msgstr ""
 

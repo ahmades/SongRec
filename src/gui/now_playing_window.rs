@@ -1,3 +1,10 @@
+//! Displays the floating Now Playing UI for the current song.
+//!
+//! This window keeps a custom dark presentation based on the album art, applies
+//! a readable high-contrast foreground, and resizes its typography according to
+//! the actual window dimensions so fullscreen and regular resizing share the same
+//! sizing logic.
+
 use crate::core::thread_messages::SongRecognizedMessage;
 use adw::prelude::*;
 use gettextrs::gettext;
@@ -38,6 +45,10 @@ pub struct NowPlayingWindow {
 }
 
 impl NowPlayingWindow {
+    /// Creates a new floating Now Playing window.
+    ///
+    /// The initial UI uses the default dark fallback background and resizes the
+    /// typography from the live window dimensions as the user interacts with it.
     pub fn new() -> Self {
         let window = gtk::Window::builder()
             .title("SongRec")
@@ -193,6 +204,10 @@ impl NowPlayingWindow {
         }
     }
 
+    /// Refreshes the displayed song metadata and artwork using a recognized track.
+    ///
+    /// If the message contains cover art, it is applied to the main image area and
+    /// used to derive the window background; otherwise the fallback state is used.
     pub fn update(&self, message: &SongRecognizedMessage) {
         self.set_metadata(message);
 
@@ -296,24 +311,35 @@ impl NowPlayingWindow {
         self.background_css.load_from_string(&css);
     }
 
+    /// Shows or hides the metadata box for the active track.
     pub fn set_show_track_info(&self, show: bool) {
         self.info_box.set_visible(show);
     }
 
+    /// Sets the background rendering style for the window.
+    ///
+    /// `Gradient` derives the backdrop from the cover art, while `Solid` uses a
+    /// single tone based on the artwork palette.
     pub fn set_background_style(&self, style: BackgroundStyle) {
         self.background_style.set(style);
         self.apply_background();
     }
 
+    /// Presents the window to the user.
     pub fn present(&self) {
         self.window.present();
     }
 
+    /// Closes the window without destroying its internal state.
     pub fn close(&self) {
         self.window.close();
     }
 }
 
+/// Controls the visual treatment of the Now Playing background.
+///
+/// The gradient variant keeps the artwork-derived palette while the solid
+/// variant uses a single accent color to keep the window light and readable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackgroundStyle {
     Gradient,
@@ -344,6 +370,12 @@ impl Background {
     }
 }
 
+/**
+ * Computes a CSS rule for the label font sizes based on the current window dimensions.
+ *
+ * The size is derived from a base font size and scaled to a width/height ratio
+ * that keeps the typography readable across both standard and fullscreen layouts.
+ */
 fn font_css_for_size(size: (i32, i32)) -> String {
     let width_scale = size.0 as f64 / BASE_SCALE_WIDTH;
     let height_scale = size.1 as f64 / BASE_SCALE_HEIGHT;
@@ -364,15 +396,25 @@ fn font_css_for_size(size: (i32, i32)) -> String {
     )
 }
 
+/**
+ * Builds a dark, artwork-derived background from a cover-image byte stream.
+ *
+ * If the image cannot be decoded, the function falls back to the default theme
+ * colors so the UI remains readable.
+ */
 fn background_from_cover_image(bytes: &[u8]) -> Background {
     image::load_from_memory(bytes)
         .map(|image| generate_cover_background(&image))
         .unwrap_or_else(|_| Background::fallback())
 }
 
-/// Build a dark artwork-derived background with a related gradient.
-/// The palette extraction favors rich colors from the artwork while keeping
-/// enough contrast for the white Now Playing metadata.
+/**
+ * Extracts a dark, high-contrast palette from cover art for the window background.
+ *
+ * The function emphasizes saturated artwork colors while avoiding near-white and
+ * near-black values so the white metadata remains readable against the resulting
+ * gradient.
+ */
 fn generate_cover_background(image: &image::DynamicImage) -> Background {
     let small = image.thumbnail(72, 72).to_rgb8();
 
@@ -491,6 +533,9 @@ fn generate_cover_background(image: &image::DynamicImage) -> Background {
     Background { top, bottom }
 }
 
+/**
+ * Converts an RGB color into HSL space for palette extraction and contrast tuning.
+ */
 fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
@@ -513,6 +558,9 @@ fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     (hue, saturation, lightness)
 }
 
+/**
+ * Converts HSL values back into an 8-bit RGB triplet for the generated window background.
+ */
 fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
     let chroma = (1.0_f32 - (2.0_f32 * l - 1.0_f32).abs()) * s;
     let x = chroma * (1.0 - ((h * 6.0).rem_euclid(2.0) - 1.0).abs());
@@ -534,6 +582,9 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
     )
 }
 
+/**
+ * Computes the relative luminance used to keep text contrast high against cover art.
+ */
 fn relative_luminance(r: f32, g: f32, b: f32) -> f32 {
     fn linearize(channel: f32) -> f32 {
         if channel <= 0.04045 {
@@ -546,6 +597,9 @@ fn relative_luminance(r: f32, g: f32, b: f32) -> f32 {
     0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
 }
 
+/**
+ * Returns the WCAG-style contrast ratio between two RGB colors.
+ */
 fn contrast_ratio(first: (u8, u8, u8), second: (u8, u8, u8)) -> f32 {
     let first = relative_luminance(
         first.0 as f32 / 255.0,
