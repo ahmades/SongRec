@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 00:14+0200\n"
+"POT-Creation-Date: 2026-08-17 12:47+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -434,46 +434,18 @@ msgid "Minimize to system tray"
 msgstr "Minimalizovať do systémovej lišty"
 
 #: src/gui/interface.blp:410
-msgid "Now Playing preferences"
-msgstr ""
-
-#: src/gui/interface.blp:413
-msgid "Show only the artwork in the Now Playing window"
-msgstr ""
-
-#: src/gui/interface.blp:414
-msgid "Hide track info"
-msgstr ""
-
-#: src/gui/interface.blp:418
-msgid "Choose how the artwork-derived background is rendered"
-msgstr ""
-
-#: src/gui/interface.blp:419
-msgid "Background style"
-msgstr ""
-
-#: src/gui/interface.blp:426
-msgid "Gradient"
-msgstr ""
-
-#: src/gui/interface.blp:431
-msgid "Solid"
-msgstr ""
-
-#: src/gui/interface.blp:438
 msgid "Network preferences"
 msgstr "Nastavenia siete"
 
-#: src/gui/interface.blp:454
+#: src/gui/interface.blp:426
 msgid "By default 8, increase if you are rate-limited"
 msgstr "Predvolené nastavenie je 8, zvýšte ho, ak ste boli obmedzení"
 
-#: src/gui/interface.blp:455
+#: src/gui/interface.blp:427
 msgid "Shazam interval between requests in seconds"
 msgstr "Interval medzi požiadavkami Shazam v sekundách"
 
-#: src/gui/interface.blp:463
+#: src/gui/interface.blp:435
 msgid ""
 "MPRIS will display information about recognized songs in places like the "
 "GNOME or KDE control panel"
@@ -481,9 +453,37 @@ msgstr ""
 "MPRIS zobrazí informácie o rozpoznaných skladbách na miestach ako ovládací "
 "panel GNOME alebo KDE"
 
-#: src/gui/interface.blp:465
+#: src/gui/interface.blp:437
 msgid "Enable MPRIS"
 msgstr "Povoliť MPRIS"
+
+#: src/gui/interface.blp:443
+msgid "Now Playing preferences"
+msgstr ""
+
+#: src/gui/interface.blp:446
+msgid "Show only the artwork in the Now Playing window"
+msgstr ""
+
+#: src/gui/interface.blp:447
+msgid "Hide track info"
+msgstr ""
+
+#: src/gui/interface.blp:451
+msgid "Choose how the artwork-derived background is rendered"
+msgstr ""
+
+#: src/gui/interface.blp:452
+msgid "Background style"
+msgstr ""
+
+#: src/gui/interface.blp:459
+msgid "Gradient"
+msgstr ""
+
+#: src/gui/interface.blp:464
+msgid "Solid"
+msgstr ""
 
 #: src/gui/interface.blp:471
 msgid "Search preferences"

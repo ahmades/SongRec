@@ -477,40 +477,6 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                       </object>
                     </child>
                     <child>
-                      <object class="AdwPreferencesGroup" id="now_playing_preferences">
-                        <property name="title" translatable="yes">Now Playing preferences</property>
-                        <child>
-                          <object class="AdwSwitchRow" id="hide_track_info_setting">
-                            <property name="subtitle" translatable="yes">Show only the artwork in the Now Playing window</property>
-                            <property name="title" translatable="yes">Hide track info</property>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="AdwActionRow" id="background_style_setting">
-                            <property name="subtitle" translatable="yes">Choose how the artwork-derived background is rendered</property>
-                            <property name="title" translatable="yes">Background style</property>
-                            <child>
-                              <object class="GtkBox">
-                                <property name="spacing">15</property>
-                                <child>
-                                  <object class="GtkCheckButton" id="background_style_gradient">
-                                    <property name="active">true</property>
-                                    <property name="label" translatable="yes">Gradient</property>
-                                  </object>
-                                </child>
-                                <child>
-                                  <object class="GtkCheckButton" id="background_style_solid">
-                                    <property name="group">background_style_gradient</property>
-                                    <property name="label" translatable="yes">Solid</property>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
                       <object class="AdwPreferencesGroup" id="network_preferences">
                         <property name="title" translatable="yes">Network preferences</property>
                         <child>
@@ -541,6 +507,40 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             <property name="subtitle" translatable="yes">MPRIS will display information about recognized songs in places like the GNOME or KDE control panel</property>
                             <property name="title" translatable="yes">Enable MPRIS</property>
                             <property name="visible">false</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup" id="now_playing_preferences">
+                        <property name="title" translatable="yes">Now Playing preferences</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="hide_track_info_setting">
+                            <property name="subtitle" translatable="yes">Show only the artwork in the Now Playing window</property>
+                            <property name="title" translatable="yes">Hide track info</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow" id="background_style_setting">
+                            <property name="subtitle" translatable="yes">Choose how the artwork-derived background is rendered</property>
+                            <property name="title" translatable="yes">Background style</property>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="spacing">15</property>
+                                <child>
+                                  <object class="GtkCheckButton" id="background_style_gradient">
+                                    <property name="active">true</property>
+                                    <property name="label" translatable="yes">Gradient</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkCheckButton" id="background_style_solid">
+                                    <property name="group">background_style_gradient</property>
+                                    <property name="label" translatable="yes">Solid</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>

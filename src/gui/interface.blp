@@ -406,34 +406,6 @@ Adw.ApplicationWindow main_window {
             }
           }
 
-          Adw.PreferencesGroup now_playing_preferences {
-            title: _("Now Playing preferences");
-
-            Adw.SwitchRow hide_track_info_setting {
-              subtitle: _("Show only the artwork in the Now Playing window");
-              title: _("Hide track info");
-            }
-
-            Adw.ActionRow background_style_setting {
-              subtitle: _("Choose how the artwork-derived background is rendered");
-              title: _("Background style");
-
-              Box {
-                spacing: 15;
-
-                CheckButton background_style_gradient {
-                  active: true;
-                  label: _("Gradient");
-                }
-
-                CheckButton background_style_solid {
-                  group: background_style_gradient;
-                  label: _("Solid");
-                }
-              }
-            }
-          }
-
           Adw.PreferencesGroup network_preferences {
             title: _("Network preferences");
 
@@ -464,6 +436,34 @@ Adw.ApplicationWindow main_window {
               );
               title: _("Enable MPRIS");
               visible: false;
+            }
+          }
+
+          Adw.PreferencesGroup now_playing_preferences {
+            title: _("Now Playing preferences");
+
+            Adw.SwitchRow hide_track_info_setting {
+              subtitle: _("Show only the artwork in the Now Playing window");
+              title: _("Hide track info");
+            }
+
+            Adw.ActionRow background_style_setting {
+              subtitle: _("Choose how the artwork-derived background is rendered");
+              title: _("Background style");
+
+              Box {
+                spacing: 15;
+
+                CheckButton background_style_gradient {
+                  active: true;
+                  label: _("Gradient");
+                }
+
+                CheckButton background_style_solid {
+                  group: background_style_gradient;
+                  label: _("Solid");
+                }
+              }
             }
           }
 

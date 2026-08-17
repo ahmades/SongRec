@@ -10,7 +10,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 00:14+0200\n"
+"POT-Creation-Date: 2026-08-17 12:47+0200\n"
 "PO-Revision-Date: 2026-05-11 12:15+0000\n"
 "Last-Translator: marcelo cripe <marcelocripe@gmail.com>\n"
 "Language-Team: Portuguese (Brazil) <https://weblate.fossplant.re/projects/"
@@ -476,48 +476,20 @@ msgid "Minimize to system tray"
 msgstr "Minimizar para a bandeja do sistema"
 
 #: src/gui/interface.blp:410
-msgid "Now Playing preferences"
-msgstr ""
-
-#: src/gui/interface.blp:413
-msgid "Show only the artwork in the Now Playing window"
-msgstr ""
-
-#: src/gui/interface.blp:414
-msgid "Hide track info"
-msgstr ""
-
-#: src/gui/interface.blp:418
-msgid "Choose how the artwork-derived background is rendered"
-msgstr ""
-
-#: src/gui/interface.blp:419
-msgid "Background style"
-msgstr ""
-
-#: src/gui/interface.blp:426
-msgid "Gradient"
-msgstr ""
-
-#: src/gui/interface.blp:431
-msgid "Solid"
-msgstr ""
-
-#: src/gui/interface.blp:438
 msgid "Network preferences"
 msgstr "Preferências da conexão de rede"
 
-#: src/gui/interface.blp:454
+#: src/gui/interface.blp:426
 msgid "By default 8, increase if you are rate-limited"
 msgstr ""
 "Por padrão, o valor é 8. Se você atingiu o limite da taxa de transferência "
 "aumente o valor"
 
-#: src/gui/interface.blp:455
+#: src/gui/interface.blp:427
 msgid "Shazam interval between requests in seconds"
 msgstr "Intervalo em segundos entre as solicitações do Shazam"
 
-#: src/gui/interface.blp:463
+#: src/gui/interface.blp:435
 msgid ""
 "MPRIS will display information about recognized songs in places like the "
 "GNOME or KDE control panel"
@@ -525,9 +497,37 @@ msgstr ""
 "O ‘MPRIS’ exibirá as informações sobre as músicas que foram reconhecidas nos "
 "locais como no painel de controle do GNOME ou do KDE"
 
-#: src/gui/interface.blp:465
+#: src/gui/interface.blp:437
 msgid "Enable MPRIS"
 msgstr "Ativar o ‘MPRIS’"
+
+#: src/gui/interface.blp:443
+msgid "Now Playing preferences"
+msgstr ""
+
+#: src/gui/interface.blp:446
+msgid "Show only the artwork in the Now Playing window"
+msgstr ""
+
+#: src/gui/interface.blp:447
+msgid "Hide track info"
+msgstr ""
+
+#: src/gui/interface.blp:451
+msgid "Choose how the artwork-derived background is rendered"
+msgstr ""
+
+#: src/gui/interface.blp:452
+msgid "Background style"
+msgstr ""
+
+#: src/gui/interface.blp:459
+msgid "Gradient"
+msgstr ""
+
+#: src/gui/interface.blp:464
+msgid "Solid"
+msgstr ""
 
 #: src/gui/interface.blp:471
 msgid "Search preferences"
