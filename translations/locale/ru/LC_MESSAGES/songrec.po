@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 14:27+0200\n"
+"POT-Creation-Date: 2026-08-17 23:50+0200\n"
 "PO-Revision-Date: 2026-05-18 12:07+1100\n"
 "Last-Translator: Aleksandr Shamaraev <shad@altlinux.org>\n"
 "Language-Team: Russian <https://weblate.fossplant.re/projects/songrec/"
@@ -48,7 +48,7 @@ msgstr "Предупреждение: сеть недоступна"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1023 src/gui/main_window.rs:1035
+#: src/gui/main_window.rs:1051 src/gui/main_window.rs:1063
 msgid "No match for this song"
 msgstr "Нет совпадений для этой песни"
 
@@ -202,17 +202,17 @@ msgstr "Аудиоошибка:"
 msgid "Audio error: No input device available"
 msgstr "Аудиоошибка: Нет доступного устройства ввода"
 
-#: src/core/preferences.rs:62 src/core/preferences.rs:83
+#: src/core/preferences.rs:64 src/core/preferences.rs:86
 #: src/gui/main_window.rs:307 src/gui/interface.blp:129
-#: src/gui/interface.blp:608 src/gui/interface.blp:658
+#: src/gui/interface.blp:613 src/gui/interface.blp:663
 msgid "Search on YouTube"
 msgstr "Поиск на YouTube"
 
-#: src/core/preferences.rs:101
+#: src/core/preferences.rs:105
 msgid "When parsing the preferences file:"
 msgstr "При анализе файла настроек:"
 
-#: src/core/preferences.rs:175
+#: src/core/preferences.rs:182
 msgid "When saving the preferences file:"
 msgstr "При сохранении файла настроек:"
 
@@ -240,35 +240,35 @@ msgstr "Сетевая ошибка"
 msgid "Unable to enable notification icon"
 msgstr "Не удаётся включить значок уведомления"
 
-#: src/gui/main_window.rs:912 src/gui/main_window.rs:1010
+#: src/gui/main_window.rs:938 src/gui/main_window.rs:1038
 msgid "Unable to enable MPRIS support"
 msgstr "Невозможно включить поддержку MPRIS"
 
-#: src/gui/main_window.rs:1032
+#: src/gui/main_window.rs:1060
 msgid "_Ok"
 msgstr "Хорошо"
 
-#: src/gui/main_window.rs:1113
+#: src/gui/main_window.rs:1141
 msgid "Song recognized"
 msgstr "Песня распознана"
 
-#: src/gui/main_window.rs:1250
+#: src/gui/main_window.rs:1278
 msgid "Are you sure you want to wipe history?"
 msgstr "Вы уверены, что хотите стереть историю?"
 
-#: src/gui/main_window.rs:1256
+#: src/gui/main_window.rs:1284
 msgid "_Yes"
 msgstr "_Да"
 
-#: src/gui/main_window.rs:1257
+#: src/gui/main_window.rs:1285
 msgid "_Cancel"
 msgstr "_Отменить"
 
-#: src/gui/now_playing_window.rs:62
+#: src/gui/now_playing_window.rs:63
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:86
+#: src/gui/now_playing_window.rs:87
 msgid "No artwork available"
 msgstr ""
 
@@ -384,7 +384,7 @@ msgstr "Посмотреть избранное"
 msgid "Application menu"
 msgstr "Меню приложения"
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:560
+#: src/gui/interface.blp:369 src/gui/interface.blp:565
 msgid "Export to CSV"
 msgstr "Экспорт в CSV"
 
@@ -400,7 +400,7 @@ msgstr "Общие предпочтения"
 msgid "Notify when a new song is recognized or network error is encountered"
 msgstr "Уведомлять о появлении новой песни или возникновении сетевой ошибки"
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:515
+#: src/gui/interface.blp:388 src/gui/interface.blp:520
 msgid "Show notifications"
 msgstr "Показывать уведомления"
 
@@ -463,7 +463,7 @@ msgid "Now Playing preferences"
 msgstr ""
 
 #: src/gui/interface.blp:446
-msgid "Show only the artwork in the Now Playing window"
+msgid "Show only the album artwork"
 msgstr ""
 
 #: src/gui/interface.blp:447
@@ -471,82 +471,90 @@ msgid "Hide track info"
 msgstr ""
 
 #: src/gui/interface.blp:451
-msgid "Choose how the artwork-derived background is rendered"
+msgid "Show only the track on a black background"
 msgstr ""
 
 #: src/gui/interface.blp:452
+msgid "Lights Off"
+msgstr ""
+
+#: src/gui/interface.blp:456
+msgid "Choose how the window's background is rendered"
+msgstr ""
+
+#: src/gui/interface.blp:457
 msgid "Background style"
 msgstr ""
 
-#: src/gui/interface.blp:459
+#: src/gui/interface.blp:464
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/interface.blp:464
+#: src/gui/interface.blp:469
 msgid "Solid"
 msgstr ""
 
-#: src/gui/interface.blp:471
+#: src/gui/interface.blp:476
 msgid "Search preferences"
 msgstr "Настройки поиска"
 
-#: src/gui/interface.blp:474
+#: src/gui/interface.blp:479
 msgid "Custom search engine action"
 msgstr "Пользовательская поисковая система"
 
-#: src/gui/interface.blp:479
+#: src/gui/interface.blp:484
 msgid "Custom search engine URL"
 msgstr "Пользовательский URL поисковой системы"
 
-#: src/gui/interface.blp:490
+#: src/gui/interface.blp:495
 msgid "Settings"
 msgstr "Настройки"
 
-#: src/gui/interface.blp:520
+#: src/gui/interface.blp:525
 msgid "_Preferences..."
 msgstr "_Настройки..."
 
-#: src/gui/interface.blp:527
+#: src/gui/interface.blp:532
 msgid "_Keyboard Shortcuts"
 msgstr ""
 
-#: src/gui/interface.blp:532
+#: src/gui/interface.blp:537
 msgid "About..."
 msgstr "О SongRec..."
 
-#: src/gui/interface.blp:565
+#: src/gui/interface.blp:570
 msgid "Delete history"
 msgstr "Удалить историю"
 
-#: src/gui/interface.blp:570
+#: src/gui/interface.blp:575
 msgid "Select a file to recognize"
 msgstr "Выберите файл для распознавания"
 
-#: src/gui/interface.blp:582 src/gui/interface.blp:632
+#: src/gui/interface.blp:587 src/gui/interface.blp:637
 msgid "Copy artist and track"
 msgstr "Копировать исполнителя и трек"
 
-#: src/gui/interface.blp:588 src/gui/interface.blp:638
+#: src/gui/interface.blp:593 src/gui/interface.blp:643
 msgid "Copy artist"
 msgstr "Копировать исполнителя"
 
-#: src/gui/interface.blp:594 src/gui/interface.blp:644
+#: src/gui/interface.blp:599 src/gui/interface.blp:649
 msgid "Copy track name"
 msgstr "Копировать название трека"
 
-#: src/gui/interface.blp:600 src/gui/interface.blp:650
+#: src/gui/interface.blp:605 src/gui/interface.blp:655
 msgid "Copy album"
 msgstr "Копировать альбом"
 
-#: src/gui/interface.blp:616
+#: src/gui/interface.blp:621
 msgid "Delete from History"
 msgstr "Удалить из истории"
 
-#: src/gui/interface.blp:622
+#: src/gui/interface.blp:627
 msgid "Add to Favorites"
 msgstr "Добавить в Избранное"
 
-#: src/gui/interface.blp:666
+#: src/gui/interface.blp:671
 msgid "Remove from Favorites"
 msgstr "Удалить из Избранного"
 

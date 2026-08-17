@@ -774,6 +774,7 @@ impl App {
         let volume_gauge: gtk::ProgressBar = self.builder.object("volume_gauge").unwrap();
         let hide_track_info_setting: adw::SwitchRow =
             self.builder.object("hide_track_info_setting").unwrap();
+        let lights_off_setting: adw::SwitchRow = self.builder.object("lights_off_setting").unwrap();
         let background_style_gradient: gtk::CheckButton =
             self.builder.object("background_style_gradient").unwrap();
         let background_style_solid: gtk::CheckButton =
@@ -790,8 +791,12 @@ impl App {
             .unwrap()
             .preferences
             .clone();
+        let lights_off_initial = initial_preferences.lights_off_enabled.unwrap_or(false);
         hide_track_info_setting
             .set_active(initial_preferences.hide_now_playing_info.unwrap_or(false));
+        lights_off_setting.set_active(lights_off_initial);
+        // When Lights Off is enabled, the "Hide track info" control is not applicable.
+        hide_track_info_setting.set_sensitive(!lights_off_initial);
         match BackgroundStyle::from_preference(
             initial_preferences.now_playing_background_style.as_deref(),
         ) {
@@ -804,6 +809,26 @@ impl App {
             let mut preference = Preferences::new();
             preference.hide_now_playing_info = Some(switch_row.is_active());
             gui_tx_for_hide_info
+                .try_send(GUIMessage::UpdatePreference(preference))
+                .unwrap();
+        });
+
+        let gui_tx_for_lights_off = self.gui_tx.clone();
+        let hide_for_lights = hide_track_info_setting.clone();
+        lights_off_setting.connect_active_notify(move |switch_row| {
+            let mut preference = Preferences::new();
+            preference.lights_off_enabled = Some(switch_row.is_active());
+            // Disable the hide-track-info control while lights-off is active
+            hide_for_lights.set_sensitive(!switch_row.is_active());
+            if switch_row.is_active() {
+                // force show track info when lights off is enabled
+                let mut p = Preferences::new();
+                p.hide_now_playing_info = Some(false);
+                gui_tx_for_lights_off
+                    .try_send(GUIMessage::UpdatePreference(p))
+                    .unwrap();
+            }
+            gui_tx_for_lights_off
                 .try_send(GUIMessage::UpdatePreference(preference))
                 .unwrap();
         });
@@ -846,6 +871,7 @@ impl App {
                     now_playing_window.set_background_style(BackgroundStyle::from_preference(
                         preferences.now_playing_background_style.as_deref(),
                     ));
+                    now_playing_window.set_lights(preferences.lights_off_enabled.unwrap_or(false));
                     if let Some(ref message) = *last_recognized_song_for_results.borrow() {
                         now_playing_window.update(message);
                     }
@@ -981,6 +1007,8 @@ impl App {
                                         preferences.now_playing_background_style.as_deref(),
                                     ),
                                 );
+                                now_playing_window
+                                    .set_lights(preferences.lights_off_enabled.unwrap_or(false));
                             }
 
                             #[cfg(all(target_os = "linux", feature = "mpris"))]
@@ -1630,6 +1658,7 @@ impl App {
                     now_playing_window.set_background_style(BackgroundStyle::from_preference(
                         preferences.now_playing_background_style.as_deref(),
                     ));
+                    now_playing_window.set_lights(preferences.lights_off_enabled.unwrap_or(false));
                     if let Some(ref message) = *last_recognized_song_for_action.borrow() {
                         now_playing_window.update(message);
                     }
@@ -1648,6 +1677,24 @@ impl App {
             })
             .build();
 
+        let gui_tx_for_toggle = self.gui_tx.clone();
+        let prefs_for_toggle = self.preferences_interface.clone();
+        let action_toggle_lights_off = gio::ActionEntry::builder("toggle-lights-off")
+            .activate(move |_, _, _| {
+                let current = prefs_for_toggle
+                    .lock()
+                    .unwrap()
+                    .preferences
+                    .lights_off_enabled
+                    .unwrap_or(false);
+                let mut new_pref = Preferences::new();
+                new_pref.lights_off_enabled = Some(!current);
+                gui_tx_for_toggle
+                    .try_send(GUIMessage::UpdatePreference(new_pref))
+                    .unwrap();
+            })
+            .build();
+
         window.add_action_entries([
             action_show_about,
             action_recognize_file,
@@ -1663,6 +1710,7 @@ impl App {
             action_refresh_devices,
             action_close,
             action_show_artwork,
+            action_toggle_lights_off,
             action_show_menu,
         ]);
 

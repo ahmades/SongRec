@@ -42,6 +42,7 @@ pub struct NowPlayingWindow {
     background_css: gtk::CssProvider,
     background_style: Cell<BackgroundStyle>,
     current_background: Cell<Background>,
+    lights_off: Cell<bool>,
 }
 
 impl NowPlayingWindow {
@@ -201,6 +202,44 @@ impl NowPlayingWindow {
             background_css,
             background_style: Cell::new(BackgroundStyle::Gradient),
             current_background: Cell::new(current_background),
+            lights_off: Cell::new(false),
+        }
+    }
+
+    /// Enable or disable Lights Off mode.
+    /// When enabled the artwork is hidden and the background becomes pure black
+    /// (either solid or gradient black depending on preference).
+    pub fn set_lights(&self, enabled: bool) {
+        self.lights_off.set(enabled);
+        if enabled {
+            // Keep any cached paintable but hide the artwork while Lights Off
+            // is active. Clearing the paintable would force a re-decode on the
+            // next cover update; hiding preserves the texture for when Lights
+            // Off is later disabled.
+            self.artwork.set_visible(false);
+            self.artwork_placeholder.set_visible(false);
+
+            // Force black background. The background style value will be used
+            // by the caller to choose solid vs gradient; here we just apply
+            // black stops.
+            match self.background_style.get() {
+                BackgroundStyle::Gradient => self.set_gradient_background(Background {
+                    top: (38, 38, 38),
+                    bottom: (0, 0, 0),
+                }),
+                BackgroundStyle::Solid => self.set_solid_background((0, 0, 0)),
+            }
+        } else {
+            // Restore background and artwork state based on current_background
+            self.apply_background();
+            // Show artwork again if there is one
+            if self.artwork.paintable().is_some() {
+                self.artwork.set_visible(true);
+                self.artwork_placeholder.set_visible(false);
+            } else {
+                self.artwork.set_visible(false);
+                self.artwork_placeholder.set_visible(true);
+            }
         }
     }
 
@@ -240,8 +279,15 @@ impl NowPlayingWindow {
     fn apply_cover(&self, bytes: &[u8]) {
         if let Ok(texture) = gdk::Texture::from_bytes(&glib::Bytes::from(bytes)) {
             self.artwork.set_paintable(Some(&texture));
-            self.artwork.set_visible(true);
-            self.artwork_placeholder.set_visible(false);
+            // Respect Lights Off: keep the paintable but don't show the
+            // artwork while Lights Off mode is enabled.
+            if !self.lights_off.get() {
+                self.artwork.set_visible(true);
+                self.artwork_placeholder.set_visible(false);
+            } else {
+                self.artwork.set_visible(false);
+                self.artwork_placeholder.set_visible(false);
+            }
             self.set_background_from_cover(bytes);
         } else {
             self.set_missing_cover_state();
@@ -251,7 +297,12 @@ impl NowPlayingWindow {
     fn set_missing_cover_state(&self) {
         self.artwork.set_paintable(Option::<&gdk::Texture>::None);
         self.artwork.set_visible(false);
-        self.artwork_placeholder.set_visible(true);
+        // If Lights Off is active, don't show the placeholder text either.
+        if self.lights_off.get() {
+            self.artwork_placeholder.set_visible(false);
+        } else {
+            self.artwork_placeholder.set_visible(true);
+        }
         self.current_background.set(Background::fallback());
         self.apply_background();
     }
@@ -263,6 +314,18 @@ impl NowPlayingWindow {
     }
 
     fn apply_background(&self) {
+        if self.lights_off.get() {
+            // Force pure black background when lights off is active
+            match self.background_style.get() {
+                BackgroundStyle::Gradient => self.set_gradient_background(Background {
+                    top: (38, 38, 38),
+                    bottom: (0, 0, 0),
+                }),
+                BackgroundStyle::Solid => self.set_solid_background((0, 0, 0)),
+            }
+            return;
+        }
+
         let background = self.current_background.get();
         match self.background_style.get() {
             BackgroundStyle::Gradient => self.set_gradient_background(background),

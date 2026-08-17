@@ -23,6 +23,7 @@ pub struct Preferences {
     pub website_search_url: Option<String>,
     pub website_search_text: Option<String>,
     pub hide_now_playing_info: Option<bool>,
+    pub lights_off_enabled: Option<bool>,
     pub now_playing_background_style: Option<String>,
 }
 
@@ -42,6 +43,7 @@ impl Preferences {
             website_search_url: None,
             website_search_text: None,
             hide_now_playing_info: None,
+            lights_off_enabled: None,
             now_playing_background_style: None,
         }
     }
@@ -61,6 +63,7 @@ impl Preferences {
             website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
             website_search_text: Some(gettext("Search on YouTube".to_string())),
             hide_now_playing_info: Some(false),
+            lights_off_enabled: Some(false),
             now_playing_background_style: Some("gradient".to_string()),
         }
     }
@@ -82,6 +85,7 @@ impl Default for Preferences {
             website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
             website_search_text: Some(gettext("Search on YouTube".to_string())),
             hide_now_playing_info: Some(false),
+            lights_off_enabled: Some(false),
             now_playing_background_style: Some("gradient".to_string()),
         }
     }
@@ -167,6 +171,9 @@ impl PreferencesInterface {
             hide_now_playing_info: update_preferences
                 .hide_now_playing_info
                 .or(current_preferences.hide_now_playing_info),
+            lights_off_enabled: update_preferences
+                .lights_off_enabled
+                .or(current_preferences.lights_off_enabled),
             now_playing_background_style: update_preferences
                 .now_playing_background_style
                 .or_else(|| current_preferences.now_playing_background_style.clone()),

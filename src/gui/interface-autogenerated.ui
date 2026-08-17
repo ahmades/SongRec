@@ -516,13 +516,19 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                         <property name="title" translatable="yes">Now Playing preferences</property>
                         <child>
                           <object class="AdwSwitchRow" id="hide_track_info_setting">
-                            <property name="subtitle" translatable="yes">Show only the artwork in the Now Playing window</property>
+                            <property name="subtitle" translatable="yes">Show only the album artwork</property>
                             <property name="title" translatable="yes">Hide track info</property>
                           </object>
                         </child>
                         <child>
+                          <object class="AdwSwitchRow" id="lights_off_setting">
+                            <property name="subtitle" translatable="yes">Show only the track on a black background</property>
+                            <property name="title" translatable="yes">Lights Off</property>
+                          </object>
+                        </child>
+                        <child>
                           <object class="AdwActionRow" id="background_style_setting">
-                            <property name="subtitle" translatable="yes">Choose how the artwork-derived background is rendered</property>
+                            <property name="subtitle" translatable="yes">Choose how the window's background is rendered</property>
                             <property name="title" translatable="yes">Background style</property>
                             <child>
                               <object class="GtkBox">

@@ -443,12 +443,17 @@ Adw.ApplicationWindow main_window {
             title: _("Now Playing preferences");
 
             Adw.SwitchRow hide_track_info_setting {
-              subtitle: _("Show only the artwork in the Now Playing window");
+              subtitle: _("Show only the album artwork");
               title: _("Hide track info");
             }
 
+            Adw.SwitchRow lights_off_setting {
+              subtitle: _("Show only the track on a black background");
+              title: _("Lights Off");
+            }
+
             Adw.ActionRow background_style_setting {
-              subtitle: _("Choose how the artwork-derived background is rendered");
+              subtitle: _("Choose how the window's background is rendered");
               title: _("Background style");
 
               Box {
