@@ -15,7 +15,7 @@ pub struct ArtworkWindow {
     info_box: gtk::Box,
     background_css: gtk::CssProvider,
     background_style: Cell<BackgroundStyle>,
-    current_background: Cell<NowPlayingBackground>,
+    current_background: Cell<Background>,
 }
 
 impl ArtworkWindow {
@@ -171,7 +171,7 @@ impl ArtworkWindow {
         });
         window.add_controller(key_controller);
 
-        let current_background = NowPlayingBackground::fallback();
+        let current_background = Background::fallback();
 
         Self {
             window,
@@ -217,8 +217,7 @@ impl ArtworkWindow {
             self.artwork.set_paintable(Option::<&gdk::Texture>::None);
             self.artwork.set_visible(false);
             self.artwork_placeholder.set_visible(true);
-            self.current_background
-                .set(NowPlayingBackground::fallback());
+            self.current_background.set(Background::fallback());
             self.apply_background();
         }
     }
@@ -226,7 +225,7 @@ impl ArtworkWindow {
     fn set_background_from_cover(&self, bytes: &[u8]) {
         let background = image::load_from_memory(bytes)
             .map(|image| generate_artwork_background(&image))
-            .unwrap_or_else(|_| NowPlayingBackground::fallback());
+            .unwrap_or_else(|_| Background::fallback());
 
         self.current_background.set(background);
         self.apply_background();
@@ -240,7 +239,7 @@ impl ArtworkWindow {
         }
     }
 
-    fn set_gradient_background(&self, background: NowPlayingBackground) {
+    fn set_gradient_background(&self, background: Background) {
         let css = format!(
             ".now-playing-background {{
                 background: linear-gradient(to bottom,
@@ -315,12 +314,12 @@ impl BackgroundStyle {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct NowPlayingBackground {
+struct Background {
     top: (u8, u8, u8),
     bottom: (u8, u8, u8),
 }
 
-impl NowPlayingBackground {
+impl Background {
     fn fallback() -> Self {
         Self {
             top: (28, 27, 30),
@@ -330,10 +329,9 @@ impl NowPlayingBackground {
 }
 
 /// Build a dark artwork-derived background with a related gradient.
-///
 /// The palette extraction favors rich colors from the artwork while keeping
 /// enough contrast for the white Now Playing metadata.
-fn generate_artwork_background(image: &image::DynamicImage) -> NowPlayingBackground {
+fn generate_artwork_background(image: &image::DynamicImage) -> Background {
     let small = image.thumbnail(72, 72).to_rgb8();
 
     // Quantize into compact RGB buckets while keeping weighted sums so the
@@ -400,11 +398,11 @@ fn generate_artwork_background(image: &image::DynamicImage) -> NowPlayingBackgro
     });
 
     let Some(bucket) = candidate else {
-        return NowPlayingBackground::fallback();
+        return Background::fallback();
     };
 
     if bucket.weight <= f32::EPSILON {
-        return NowPlayingBackground::fallback();
+        return Background::fallback();
     }
 
     let red = bucket.red / bucket.weight;
@@ -448,7 +446,7 @@ fn generate_artwork_background(image: &image::DynamicImage) -> NowPlayingBackgro
         bottom_saturation *= 0.96;
     };
 
-    NowPlayingBackground { top, bottom }
+    Background { top, bottom }
 }
 
 fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
