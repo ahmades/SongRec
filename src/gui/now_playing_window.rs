@@ -4,6 +4,25 @@ use gettextrs::gettext;
 use std::cell::Cell;
 use std::rc::Rc;
 
+const WINDOW_WIDTH: i32 = 720;
+const WINDOW_HEIGHT: i32 = 820;
+const ROOT_SPACING: i32 = 18;
+const INFO_BOX_SPACING: i32 = 2;
+const BACKGROUND_PADDING_PX: i32 = 96;
+const BASE_SCALE_WIDTH: f64 = 720.0;
+const BASE_SCALE_HEIGHT: f64 = 820.0;
+const MIN_FONT_SCALE: f64 = 0.60;
+const MAX_FONT_SCALE: f64 = 2.25;
+const TITLE_BASE_FONT_SIZE: f64 = 32.0;
+const ARTIST_BASE_FONT_SIZE: f64 = 24.0;
+const ALBUM_BASE_FONT_SIZE: f64 = 18.0;
+const DETAILS_BASE_FONT_SIZE: f64 = 18.0;
+const TITLE_CSS_CLASS: &str = "now-playing-title";
+const ARTIST_CSS_CLASS: &str = "now-playing-artist";
+const ALBUM_CSS_CLASS: &str = "now-playing-album";
+const DETAILS_CSS_CLASS: &str = "now-playing-details";
+const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
+
 pub struct NowPlayingWindow {
     window: gtk::Window,
     artwork: gtk::Picture,
@@ -22,8 +41,8 @@ impl NowPlayingWindow {
     pub fn new() -> Self {
         let window = gtk::Window::builder()
             .title("SongRec")
-            .default_width(720)
-            .default_height(820)
+            .default_width(WINDOW_WIDTH)
+            .default_height(WINDOW_HEIGHT)
             .resizable(true)
             .hide_on_close(true)
             .build();
@@ -34,9 +53,9 @@ impl NowPlayingWindow {
 
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .spacing(18)
+            .spacing(ROOT_SPACING)
             .build();
-        root.add_css_class("now-playing-background");
+        root.add_css_class(BACKGROUND_CSS_CLASS);
 
         let cover_frame = gtk::AspectFrame::builder()
             .ratio(1.0)
@@ -66,27 +85,27 @@ impl NowPlayingWindow {
         let title_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
             .wrap(true)
-            .css_classes(["now-playing-title"])
+            .css_classes([TITLE_CSS_CLASS])
             .build();
         let artist_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
             .wrap(true)
-            .css_classes(["now-playing-artist"])
+            .css_classes([ARTIST_CSS_CLASS])
             .build();
         let album_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
             .wrap(true)
-            .css_classes(["now-playing-album"])
+            .css_classes([ALBUM_CSS_CLASS])
             .build();
         let details_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
             .wrap(true)
-            .css_classes(["now-playing-details"])
+            .css_classes([DETAILS_CSS_CLASS])
             .build();
 
         let info_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .spacing(2)
+            .spacing(INFO_BOX_SPACING)
             .halign(gtk::Align::Center)
             .build();
         info_box.append(&title_label);
@@ -110,8 +129,10 @@ impl NowPlayingWindow {
             );
         }
         background_css.load_from_string(
-            ".now-playing-background { background-color: #181818; color: #ffffff; padding: 96px; }
-             .now-playing-background > label { color: #ffffff; }",
+            &format!(
+                ".{BACKGROUND_CSS_CLASS} {{ background-color: #181818; color: #ffffff; padding: {BACKGROUND_PADDING_PX}px; }}
+                 .{BACKGROUND_CSS_CLASS} > label {{ color: #ffffff; }}",
+            ),
         );
 
         // Use a dedicated CSS provider for the Now Playing labels. Their font sizes
@@ -324,20 +345,22 @@ impl Background {
 }
 
 fn font_css_for_size(size: (i32, i32)) -> String {
-    let width_scale = size.0 as f64 / 720.0;
-    let height_scale = size.1 as f64 / 820.0;
-    let scale = width_scale.min(height_scale).clamp(0.60, 2.25);
+    let width_scale = size.0 as f64 / BASE_SCALE_WIDTH;
+    let height_scale = size.1 as f64 / BASE_SCALE_HEIGHT;
+    let scale = width_scale
+        .min(height_scale)
+        .clamp(MIN_FONT_SCALE, MAX_FONT_SCALE);
 
-    let title_size = (32.0 * scale).round() as i32;
-    let artist_size = (24.0 * scale).round() as i32;
-    let album_size = (18.0 * scale).round() as i32;
-    let details_size = (18.0 * scale).round() as i32;
+    let title_size = (TITLE_BASE_FONT_SIZE * scale).round() as i32;
+    let artist_size = (ARTIST_BASE_FONT_SIZE * scale).round() as i32;
+    let album_size = (ALBUM_BASE_FONT_SIZE * scale).round() as i32;
+    let details_size = (DETAILS_BASE_FONT_SIZE * scale).round() as i32;
 
     format!(
-        ".now-playing-title {{ font-size: {title_size}px; font-weight: bold; }}
-         .now-playing-artist {{ font-size: {artist_size}px; font-weight: bold; }}
-         .now-playing-album {{ font-size: {album_size}px; font-weight: bold; }}
-         .now-playing-details {{ font-size: {details_size}px; font-weight: bold; }}"
+        ".{TITLE_CSS_CLASS} {{ font-size: {title_size}px; font-weight: bold; }}
+         .{ARTIST_CSS_CLASS} {{ font-size: {artist_size}px; font-weight: bold; }}
+         .{ALBUM_CSS_CLASS} {{ font-size: {album_size}px; font-weight: bold; }}
+         .{DETAILS_CSS_CLASS} {{ font-size: {details_size}px; font-weight: bold; }}"
     )
 }
 

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 13:28+0200\n"
+"POT-Creation-Date: 2026-08-17 14:04+0200\n"
 "PO-Revision-Date: 2026-05-18 12:07+1100\n"
 "Last-Translator: Aleksandr Shamaraev <shad@altlinux.org>\n"
 "Language-Team: Russian <https://weblate.fossplant.re/projects/songrec/"
@@ -264,11 +264,11 @@ msgstr "_Да"
 msgid "_Cancel"
 msgstr "_Отменить"
 
-#: src/gui/now_playing_window.rs:32
+#: src/gui/now_playing_window.rs:51
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:56
+#: src/gui/now_playing_window.rs:75
 msgid "No artwork available"
 msgstr ""
 
