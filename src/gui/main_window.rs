@@ -1699,6 +1699,7 @@ impl App {
 
         application.set_accels_for_action("win.close", &["<Primary>Q", "<Primary>W"]);
         application.set_accels_for_action("win.recognize-file", &["<Primary>O"]);
+        application.set_accels_for_action("win.show-artwork", &["<Primary>n"]);
         application
             .set_accels_for_action("win.show-preferences", &["<Primary>comma", "<Primary>P"]);
         application.set_accels_for_action("win.show-menu", &["F10"]);
