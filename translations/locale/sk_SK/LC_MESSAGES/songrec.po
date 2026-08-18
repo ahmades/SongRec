@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-17 23:50+0200\n"
+"POT-Creation-Date: 2026-08-18 11:26+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -45,7 +45,7 @@ msgstr "Upozornenie: Sieť nedostupná"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1051 src/gui/main_window.rs:1063
+#: src/gui/main_window.rs:1045 src/gui/main_window.rs:1057
 msgid "No match for this song"
 msgstr "Žiadna zhoda pre túto skladbu"
 
@@ -239,27 +239,27 @@ msgstr "Chyba siete"
 msgid "Unable to enable notification icon"
 msgstr "Nie je možné aktivovať ikonu upozornenia"
 
-#: src/gui/main_window.rs:938 src/gui/main_window.rs:1038
+#: src/gui/main_window.rs:932 src/gui/main_window.rs:1032
 msgid "Unable to enable MPRIS support"
 msgstr "Nie je možné zapnúť podporu MPRIS"
 
-#: src/gui/main_window.rs:1060
+#: src/gui/main_window.rs:1054
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:1141
+#: src/gui/main_window.rs:1135
 msgid "Song recognized"
 msgstr "Skladba rozpoznaná"
 
-#: src/gui/main_window.rs:1278
+#: src/gui/main_window.rs:1272
 msgid "Are you sure you want to wipe history?"
 msgstr "Naozaj chcete vymazať históriu?"
 
-#: src/gui/main_window.rs:1284
+#: src/gui/main_window.rs:1278
 msgid "_Yes"
 msgstr "_Áno"
 
-#: src/gui/main_window.rs:1285
+#: src/gui/main_window.rs:1279
 msgid "_Cancel"
 msgstr "_Zrušiť"
 

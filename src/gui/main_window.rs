@@ -818,16 +818,10 @@ impl App {
         lights_off_setting.connect_active_notify(move |switch_row| {
             let mut preference = Preferences::new();
             preference.lights_off_enabled = Some(switch_row.is_active());
-            // Disable the hide-track-info control while lights-off is active
-            hide_for_lights.set_sensitive(!switch_row.is_active());
             if switch_row.is_active() {
-                // force show track info when lights off is enabled
-                let mut p = Preferences::new();
-                p.hide_now_playing_info = Some(false);
-                gui_tx_for_lights_off
-                    .try_send(GUIMessage::UpdatePreference(p))
-                    .unwrap();
+                preference.hide_now_playing_info = Some(false);
             }
+            hide_for_lights.set_sensitive(!switch_row.is_active());
             gui_tx_for_lights_off
                 .try_send(GUIMessage::UpdatePreference(preference))
                 .unwrap();
@@ -1677,24 +1671,6 @@ impl App {
             })
             .build();
 
-        let gui_tx_for_toggle = self.gui_tx.clone();
-        let prefs_for_toggle = self.preferences_interface.clone();
-        let action_toggle_lights_off = gio::ActionEntry::builder("toggle-lights-off")
-            .activate(move |_, _, _| {
-                let current = prefs_for_toggle
-                    .lock()
-                    .unwrap()
-                    .preferences
-                    .lights_off_enabled
-                    .unwrap_or(false);
-                let mut new_pref = Preferences::new();
-                new_pref.lights_off_enabled = Some(!current);
-                gui_tx_for_toggle
-                    .try_send(GUIMessage::UpdatePreference(new_pref))
-                    .unwrap();
-            })
-            .build();
-
         window.add_action_entries([
             action_show_about,
             action_recognize_file,
@@ -1710,7 +1686,6 @@ impl App {
             action_refresh_devices,
             action_close,
             action_show_artwork,
-            action_toggle_lights_off,
             action_show_menu,
         ]);
 
