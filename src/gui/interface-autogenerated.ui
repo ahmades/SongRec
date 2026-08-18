@@ -107,8 +107,8 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                 <property name="title" translatable="yes">Recognition results</property>
                                 <property name="visible">false</property>
                                 <property name="header-suffix">
-                                  <object class="GtkButton" id="show_artwork_button">
-                                    <property name="action-name">win.show-artwork</property>
+                                  <object class="GtkButton" id="show_now_playing_button">
+                                    <property name="action-name">win.show-now-playing</property>
                                     <property name="icon-name">window-new-symbolic</property>
                                     <property name="tooltip-text" translatable="yes">Open Now Playing</property>
                                   </object>

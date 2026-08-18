@@ -1642,7 +1642,7 @@ impl App {
         let now_playing_window_for_action = self.now_playing_window.clone();
         let last_recognized_song_for_action = self.last_recognized_song.clone();
         let preferences_for_action = self.preferences_interface.clone();
-        let action_show_artwork = gio::ActionEntry::builder("show-artwork")
+        let action_show_artwork = gio::ActionEntry::builder("show-now-playing")
             .activate(move |_, _, _| {
                 if now_playing_window_for_action.borrow().is_none() {
                     let now_playing_window = NowPlayingWindow::new();
@@ -1699,7 +1699,7 @@ impl App {
 
         application.set_accels_for_action("win.close", &["<Primary>Q", "<Primary>W"]);
         application.set_accels_for_action("win.recognize-file", &["<Primary>O"]);
-        application.set_accels_for_action("win.show-artwork", &["<Primary>n"]);
+        application.set_accels_for_action("win.show-now-playing", &["<Primary>n"]);
         application
             .set_accels_for_action("win.show-preferences", &["<Primary>comma", "<Primary>P"]);
         application.set_accels_for_action("win.show-menu", &["F10"]);
