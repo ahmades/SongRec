@@ -544,7 +544,7 @@ impl NowPlayingWindow {
         self.background_css.load_from_string(&css);
     }
 
-    fn set_solid_background(&self, color: (u8, u8, u8)) {
+    fn set_solid_background(&self, color: RGB) {
         let css = format!(
             ".now-playing-background {{
                 background-color: rgb({}, {}, {});
@@ -612,10 +612,14 @@ impl BackgroundStyle {
     }
 }
 
+type RGB = (u8, u8, u8);
+
+type HSL = (f32, f32, f32);
+
 #[derive(Debug, Clone, Copy)]
 struct Background {
-    top: (u8, u8, u8),
-    bottom: (u8, u8, u8),
+    top: RGB,
+    bottom: RGB,
 }
 
 impl Background {
@@ -693,7 +697,7 @@ fn generate_cover_background(image: &image::DynamicImage) -> Background {
         let gf = green as f32 / 255.0;
         let bf = blue as f32 / 255.0;
 
-        let (_, saturation, _) = rgb_to_hsl(rf, gf, bf);
+        let (_, saturation, _) = rgb_to_hsl((red, green, blue));
         let luminance = relative_luminance(rf, gf, bf);
 
         // Skip colors that are effectively white or black. Neither gives us a
@@ -749,7 +753,11 @@ fn generate_cover_background(image: &image::DynamicImage) -> Background {
     let red = bucket.red / bucket.weight;
     let green = bucket.green / bucket.weight;
     let blue = bucket.blue / bucket.weight;
-    let (hue, saturation, _) = rgb_to_hsl(red, green, blue);
+    let (hue, saturation, _) = rgb_to_hsl((
+        (red * 255.0).round() as u8,
+        (green * 255.0).round() as u8,
+        (blue * 255.0).round() as u8,
+    ));
 
     // A modest saturation floor gives colorful covers a rich mood without
     // inventing a strong hue for genuinely grayscale artwork.
@@ -767,7 +775,7 @@ fn generate_cover_background(image: &image::DynamicImage) -> Background {
         0.165
     };
     let top = loop {
-        let rgb = hsl_to_rgb(hue, target_saturation, top_lightness);
+        let rgb = hsl_to_rgb((hue, target_saturation, top_lightness));
         if contrast_ratio(rgb, (255, 255, 255)) >= 4.75 || top_lightness <= 0.07 {
             break rgb;
         }
@@ -779,7 +787,7 @@ fn generate_cover_background(image: &image::DynamicImage) -> Background {
     let mut bottom_saturation = (target_saturation * 0.42).min(0.30);
     let mut bottom_lightness = 0.055;
     let bottom = loop {
-        let rgb = hsl_to_rgb(hue, bottom_saturation, bottom_lightness);
+        let rgb = hsl_to_rgb((hue, bottom_saturation, bottom_lightness));
         if contrast_ratio(rgb, (255, 255, 255)) >= 7.0 || bottom_lightness <= 0.025 {
             break rgb;
         }
@@ -793,7 +801,11 @@ fn generate_cover_background(image: &image::DynamicImage) -> Background {
 /**
  * Converts an RGB color into HSL space for palette extraction and contrast tuning.
  */
-fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+fn rgb_to_hsl(rgb: RGB) -> HSL {
+    let r = rgb.0 as f32 / 255.0;
+    let g = rgb.1 as f32 / 255.0;
+    let b = rgb.2 as f32 / 255.0;
+
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
     let lightness = (max + min) / 2.0;
@@ -818,7 +830,8 @@ fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
 /**
  * Converts HSL values back into an 8-bit RGB triplet for the generated window background.
  */
-fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
+fn hsl_to_rgb(hsl: HSL) -> RGB {
+    let (h, s, l) = hsl;
     let chroma = (1.0_f32 - (2.0_f32 * l - 1.0_f32).abs()) * s;
     let x = chroma * (1.0 - ((h * 6.0).rem_euclid(2.0) - 1.0).abs());
     let m = l - chroma / 2.0;
@@ -857,7 +870,7 @@ fn relative_luminance(r: f32, g: f32, b: f32) -> f32 {
 /**
  * Returns the WCAG-style contrast ratio between two RGB colors.
  */
-fn contrast_ratio(first: (u8, u8, u8), second: (u8, u8, u8)) -> f32 {
+fn contrast_ratio(first: RGB, second: RGB) -> f32 {
     let first = relative_luminance(
         first.0 as f32 / 255.0,
         first.1 as f32 / 255.0,
