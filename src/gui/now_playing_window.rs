@@ -522,9 +522,10 @@ impl NowPlayingWindow {
 
     fn set_gradient_background(&self, background: Background) {
         let css = format!(
-            ".now-playing-background {{
+            r#".now-playing-background {{
                 background: linear-gradient(to bottom,
                     rgb({}, {}, {}),
+                    20%,
                     rgb({}, {}, {}));
                 color: #ffffff;
                 padding: 96px;
@@ -533,7 +534,7 @@ impl NowPlayingWindow {
             .now-playing-background .now-playing-title,
             .now-playing-background .now-playing-artist,
             .now-playing-background .now-playing-album,
-            .now-playing-background .now-playing-details {{ color: #ffffff; }}",
+            .now-playing-background .now-playing-details {{ color: #ffffff; }}"#,
             background.top.0,
             background.top.1,
             background.top.2,
