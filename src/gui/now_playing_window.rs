@@ -53,11 +53,6 @@ pub struct NowPlayingWindow {
 }
 
 impl NowPlayingWindow {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self::new_with_settings(None, None)
-    }
-
     fn send_preference_update(
         gui_tx: &Option<async_channel::Sender<GUIMessage>>,
         configure: impl FnOnce(&mut Preferences),
@@ -358,7 +353,8 @@ impl NowPlayingWindow {
             .connect_toggled(move |button| {
                 if button.is_active() {
                     Self::send_preference_update(&gui_tx_for_bg, |preference| {
-                        preference.now_playing_background_style = Some("gradient".to_string());
+                        preference.now_playing_background_style =
+                            Some(BackgroundStyle::Gradient.as_preference_value().to_string());
                     });
                 }
             });
@@ -369,7 +365,8 @@ impl NowPlayingWindow {
             .connect_toggled(move |button| {
                 if button.is_active() {
                     Self::send_preference_update(&gui_tx_for_bg_solid, |preference| {
-                        preference.now_playing_background_style = Some("solid".to_string());
+                        preference.now_playing_background_style =
+                            Some(BackgroundStyle::Solid.as_preference_value().to_string());
                     });
                 }
             });
@@ -600,6 +597,13 @@ pub enum BackgroundStyle {
 }
 
 impl BackgroundStyle {
+    pub fn as_preference_value(self) -> &'static str {
+        match self {
+            Self::Gradient => "gradient",
+            Self::Solid => "solid",
+        }
+    }
+
     pub fn from_preference(value: Option<&str>) -> Self {
         match value {
             Some("solid") => Self::Solid,

@@ -806,46 +806,40 @@ impl App {
 
         let gui_tx_for_hide_info = self.gui_tx.clone();
         hide_track_info_setting.connect_active_notify(move |switch_row| {
-            let mut preference = Preferences::new();
-            preference.hide_now_playing_info = Some(switch_row.is_active());
-            gui_tx_for_hide_info
-                .try_send(GUIMessage::UpdatePreference(preference))
-                .unwrap();
+            send_preference_update(&gui_tx_for_hide_info, |preference| {
+                preference.hide_now_playing_info = Some(switch_row.is_active());
+            });
         });
 
         let gui_tx_for_lights_off = self.gui_tx.clone();
         let hide_for_lights = hide_track_info_setting.clone();
         lights_off_setting.connect_active_notify(move |switch_row| {
-            let mut preference = Preferences::new();
-            preference.lights_off_enabled = Some(switch_row.is_active());
-            if switch_row.is_active() {
-                preference.hide_now_playing_info = Some(false);
-            }
+            send_preference_update(&gui_tx_for_lights_off, |preference| {
+                preference.lights_off_enabled = Some(switch_row.is_active());
+                if switch_row.is_active() {
+                    preference.hide_now_playing_info = Some(false);
+                }
+            });
             hide_for_lights.set_sensitive(!switch_row.is_active());
-            gui_tx_for_lights_off
-                .try_send(GUIMessage::UpdatePreference(preference))
-                .unwrap();
         });
 
         let gui_tx_for_gradient = self.gui_tx.clone();
         background_style_gradient.connect_toggled(move |check| {
             if check.is_active() {
-                let mut preference = Preferences::new();
-                preference.now_playing_background_style = Some("gradient".to_string());
-                gui_tx_for_gradient
-                    .try_send(GUIMessage::UpdatePreference(preference))
-                    .unwrap();
+                send_preference_update(&gui_tx_for_gradient, |preference| {
+                    preference.now_playing_background_style =
+                        Some(background_style_value(BackgroundStyle::Gradient).to_string());
+                });
             }
         });
 
         let gui_tx_for_solid = self.gui_tx.clone();
         background_style_solid.connect_toggled(move |check| {
             if check.is_active() {
-                let mut preference = Preferences::new();
-                preference.now_playing_background_style = Some("solid".to_string());
-                gui_tx_for_solid
-                    .try_send(GUIMessage::UpdatePreference(preference))
-                    .unwrap();
+                send_preference_update(&gui_tx_for_solid, |preference| {
+                    preference.now_playing_background_style =
+                        Some(background_style_value(BackgroundStyle::Solid).to_string());
+                });
             }
         });
 
@@ -1751,4 +1745,20 @@ impl App {
 
         window.present();
     }
+}
+
+fn send_preference_update(
+    gui_tx: &async_channel::Sender<GUIMessage>,
+    configure: impl FnOnce(&mut Preferences),
+) {
+    let mut preference = Preferences::new();
+    configure(&mut preference);
+
+    if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
+        error!("failed to send preference update: {error}");
+    }
+}
+
+fn background_style_value(style: BackgroundStyle) -> &'static str {
+    style.as_preference_value()
 }

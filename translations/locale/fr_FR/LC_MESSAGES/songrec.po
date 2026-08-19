@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-19 12:23+0200\n"
+"POT-Creation-Date: 2026-08-19 14:02+0200\n"
 "PO-Revision-Date: 2026-06-27 17:34+0000\n"
 "Last-Translator: Marin <25437947+marin-m@users.noreply.github.com>\n"
 "Language-Team: French <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -48,7 +48,7 @@ msgstr "Avertissement : Pas de connexion réseau"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1060 src/gui/main_window.rs:1072
+#: src/gui/main_window.rs:1054 src/gui/main_window.rs:1066
 msgid "No match for this song"
 msgstr "Chanson non reconnue"
 
@@ -248,55 +248,55 @@ msgstr "Erreur réseau"
 msgid "Unable to enable notification icon"
 msgstr "Impossible d'activer l'icône de notification"
 
-#: src/gui/main_window.rs:936 src/gui/main_window.rs:1047
+#: src/gui/main_window.rs:930 src/gui/main_window.rs:1041
 msgid "Unable to enable MPRIS support"
 msgstr "Impossible d'activer le support de MRPIS"
 
-#: src/gui/main_window.rs:1069
+#: src/gui/main_window.rs:1063
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:1150
+#: src/gui/main_window.rs:1144
 msgid "Song recognized"
 msgstr "Chanson identifiée"
 
-#: src/gui/main_window.rs:1287
+#: src/gui/main_window.rs:1281
 msgid "Are you sure you want to wipe history?"
 msgstr "Êtes-vous sûr⋅e de vouloir supprimer l'historique ?"
 
-#: src/gui/main_window.rs:1293
+#: src/gui/main_window.rs:1287
 msgid "_Yes"
 msgstr "_Oui"
 
-#: src/gui/main_window.rs:1294
+#: src/gui/main_window.rs:1288
 msgid "_Cancel"
 msgstr "_Annuler"
 
-#: src/gui/now_playing_window.rs:88
+#: src/gui/now_playing_window.rs:83
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:112
+#: src/gui/now_playing_window.rs:107
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:260 src/gui/interface.blp:447
+#: src/gui/now_playing_window.rs:255 src/gui/interface.blp:447
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:273
+#: src/gui/now_playing_window.rs:268
 msgid "Lights off"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:282 src/gui/interface.blp:457
+#: src/gui/now_playing_window.rs:277 src/gui/interface.blp:457
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:297 src/gui/interface.blp:464
+#: src/gui/now_playing_window.rs:292 src/gui/interface.blp:464
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:309 src/gui/interface.blp:469
+#: src/gui/now_playing_window.rs:304 src/gui/interface.blp:469
 msgid "Solid"
 msgstr ""
 
