@@ -621,8 +621,8 @@ struct Background {
 impl Background {
     fn fallback() -> Self {
         Self {
-            top: (28, 27, 30),
-            bottom: (9, 9, 11),
+            top: (38, 38, 38),
+            bottom: (0, 0, 0),
         }
     }
 }
