@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-18 11:26+0200\n"
+"POT-Creation-Date: 2026-08-19 11:14+0200\n"
 "PO-Revision-Date: 2023-12-30 23:42+0900\n"
 "Last-Translator: 이정희 <daemul72@gmail.com>\n"
 "Language-Team: \n"
@@ -44,7 +44,7 @@ msgstr "경고: 네트워크에 연결할 수 없음"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1045 src/gui/main_window.rs:1057
+#: src/gui/main_window.rs:1060 src/gui/main_window.rs:1072
 msgid "No match for this song"
 msgstr "이 노래와 일치하는 항목이 없습니다"
 
@@ -222,36 +222,56 @@ msgstr ""
 msgid "Unable to enable notification icon"
 msgstr ""
 
-#: src/gui/main_window.rs:932 src/gui/main_window.rs:1032
+#: src/gui/main_window.rs:936 src/gui/main_window.rs:1047
 msgid "Unable to enable MPRIS support"
 msgstr "MPRIS 지원을 활성화할 수 없습니다"
 
-#: src/gui/main_window.rs:1054
+#: src/gui/main_window.rs:1069
 msgid "_Ok"
 msgstr ""
 
-#: src/gui/main_window.rs:1135
+#: src/gui/main_window.rs:1150
 msgid "Song recognized"
 msgstr "인식된 노래"
 
-#: src/gui/main_window.rs:1272
+#: src/gui/main_window.rs:1287
 msgid "Are you sure you want to wipe history?"
 msgstr ""
 
-#: src/gui/main_window.rs:1278
+#: src/gui/main_window.rs:1293
 msgid "_Yes"
 msgstr ""
 
-#: src/gui/main_window.rs:1279
+#: src/gui/main_window.rs:1294
 msgid "_Cancel"
 msgstr "취소하기(_C)"
 
-#: src/gui/now_playing_window.rs:63
+#: src/gui/now_playing_window.rs:88
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:87
+#: src/gui/now_playing_window.rs:112
 msgid "No artwork available"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:260 src/gui/interface.blp:447
+msgid "Hide track info"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:273
+msgid "Lights off"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:282 src/gui/interface.blp:457
+msgid "Background style"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:297 src/gui/interface.blp:464
+msgid "Gradient"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:309 src/gui/interface.blp:469
+msgid "Solid"
 msgstr ""
 
 #: src/gui/song_history_interface.rs:95
@@ -438,10 +458,6 @@ msgstr ""
 msgid "Show only the album artwork"
 msgstr ""
 
-#: src/gui/interface.blp:447
-msgid "Hide track info"
-msgstr ""
-
 #: src/gui/interface.blp:451
 msgid "Show only the track on a black background"
 msgstr ""
@@ -452,18 +468,6 @@ msgstr ""
 
 #: src/gui/interface.blp:456
 msgid "Choose how the window's background is rendered"
-msgstr ""
-
-#: src/gui/interface.blp:457
-msgid "Background style"
-msgstr ""
-
-#: src/gui/interface.blp:464
-msgid "Gradient"
-msgstr ""
-
-#: src/gui/interface.blp:469
-msgid "Solid"
 msgstr ""
 
 #: src/gui/interface.blp:476

@@ -5,11 +5,13 @@
 //! the actual window dimensions so fullscreen and regular resizing share the same
 //! sizing logic.
 
-use crate::core::thread_messages::SongRecognizedMessage;
+use crate::core::preferences::{Preferences, PreferencesInterface};
+use crate::core::thread_messages::{GUIMessage, SongRecognizedMessage};
 use adw::prelude::*;
 use gettextrs::gettext;
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 const WINDOW_WIDTH: i32 = 720;
 const WINDOW_HEIGHT: i32 = 820;
@@ -43,14 +45,37 @@ pub struct NowPlayingWindow {
     background_style: Cell<BackgroundStyle>,
     current_background: Cell<Background>,
     lights_off: Cell<bool>,
+    hide_track_info: gtk::CheckButton,
+    lights_off_menu: gtk::CheckButton,
+    background_style_gradient: gtk::CheckButton,
+    background_style_solid: gtk::CheckButton,
+    gui_tx: Option<async_channel::Sender<GUIMessage>>,
 }
 
 impl NowPlayingWindow {
-    /// Creates a new floating Now Playing window.
-    ///
-    /// The initial UI uses the default dark fallback background and resizes the
-    /// typography from the live window dimensions as the user interacts with it.
+    #[allow(dead_code)]
     pub fn new() -> Self {
+        Self::new_with_settings(None, None)
+    }
+
+    fn send_preference_update(
+        gui_tx: &Option<async_channel::Sender<GUIMessage>>,
+        configure: impl FnOnce(&mut Preferences),
+    ) {
+        let mut preference = Preferences::new();
+        configure(&mut preference);
+
+        if let Some(gui_tx) = gui_tx {
+            if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
+                eprintln!("failed to send preference update: {error}");
+            }
+        }
+    }
+
+    pub fn new_with_settings(
+        gui_tx: Option<async_channel::Sender<GUIMessage>>,
+        preferences_interface: Option<Arc<Mutex<PreferencesInterface>>>,
+    ) -> Self {
         let window = gtk::Window::builder()
             .title("SongRec")
             .default_width(WINDOW_WIDTH)
@@ -190,7 +215,17 @@ impl NowPlayingWindow {
 
         let current_background = Background::fallback();
 
-        Self {
+        let hide_track_info = gtk::CheckButton::new();
+        let lights_off_menu = gtk::CheckButton::new();
+        let background_style_gradient = gtk::CheckButton::new();
+        let background_style_solid = gtk::CheckButton::new();
+
+        let prefs = preferences_interface
+            .as_ref()
+            .map(|preferences_interface| preferences_interface.lock().unwrap().preferences.clone())
+            .unwrap_or_default();
+
+        let now_playing = Self {
             window,
             artwork: cover_picture,
             artwork_placeholder,
@@ -203,7 +238,181 @@ impl NowPlayingWindow {
             background_style: Cell::new(BackgroundStyle::Gradient),
             current_background: Cell::new(current_background),
             lights_off: Cell::new(false),
+            hide_track_info: hide_track_info.clone(),
+            lights_off_menu: lights_off_menu.clone(),
+            background_style_gradient: background_style_gradient.clone(),
+            background_style_solid: background_style_solid.clone(),
+            gui_tx,
+        };
+
+        let popover = gtk::Popover::new();
+        popover.set_has_arrow(false);
+        let menu_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(6)
+            .build();
+
+        let hide_track_info_row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let hide_track_info_label = gtk::Label::new(Some(&gettext("Hide track info")));
+        hide_track_info_row.append(&hide_track_info_label);
+        hide_track_info.set_halign(gtk::Align::End);
+        hide_track_info.set_hexpand(true);
+        hide_track_info_row.append(&hide_track_info);
+        hide_track_info.set_active(prefs.hide_now_playing_info.unwrap_or(false));
+        menu_box.append(&hide_track_info_row);
+
+        let lights_off_row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let lights_off_label = gtk::Label::new(Some(&gettext("Lights off")));
+        lights_off_row.append(&lights_off_label);
+        lights_off_menu.set_halign(gtk::Align::End);
+        lights_off_menu.set_hexpand(true);
+        lights_off_row.append(&lights_off_menu);
+        lights_off_menu.set_active(prefs.lights_off_enabled.unwrap_or(false));
+        menu_box.append(&lights_off_row);
+
+        let background_style_button = gtk::MenuButton::builder()
+            .label(&gettext("Background style"))
+            .halign(gtk::Align::Start)
+            .build();
+        let background_style_popover = gtk::Popover::new();
+        background_style_popover.set_has_arrow(false);
+        let background_style_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(6)
+            .build();
+
+        let gradient_row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let gradient_label = gtk::Label::new(Some(&gettext("Gradient")));
+        gradient_row.append(&gradient_label);
+        background_style_gradient.set_halign(gtk::Align::End);
+        background_style_gradient.set_hexpand(true);
+        gradient_row.append(&background_style_gradient);
+        background_style_box.append(&gradient_row);
+
+        let solid_row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let solid_label = gtk::Label::new(Some(&gettext("Solid")));
+        solid_row.append(&solid_label);
+        background_style_solid.set_halign(gtk::Align::End);
+        background_style_solid.set_hexpand(true);
+        solid_row.append(&background_style_solid);
+        background_style_box.append(&solid_row);
+
+        background_style_popover.set_child(Some(&background_style_box));
+        background_style_button.set_popover(Some(&background_style_popover));
+        match BackgroundStyle::from_preference(prefs.now_playing_background_style.as_deref()) {
+            BackgroundStyle::Gradient => background_style_gradient.set_active(true),
+            BackgroundStyle::Solid => background_style_solid.set_active(true),
         }
+        menu_box.append(&background_style_button);
+        popover.set_child(Some(&menu_box));
+
+        let popover_for_click = popover.clone();
+        let window_for_click = now_playing.window.clone();
+        popover_for_click.set_parent(&window_for_click);
+
+        let gesture = gtk::GestureClick::new();
+        gesture.set_button(3);
+        gesture.connect_pressed(move |_, _, x, y| {
+            let pointing_rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
+            popover_for_click.set_pointing_to(Some(&pointing_rect));
+            popover_for_click.popup();
+        });
+        now_playing.window.add_controller(gesture);
+
+        let gui_tx_for_hide = now_playing.gui_tx.clone();
+        now_playing.hide_track_info.connect_toggled(move |button| {
+            Self::send_preference_update(&gui_tx_for_hide, |preference| {
+                preference.hide_now_playing_info = Some(button.is_active());
+            });
+        });
+
+        let gui_tx_for_lights = now_playing.gui_tx.clone();
+        now_playing.lights_off_menu.connect_toggled(move |button| {
+            Self::send_preference_update(&gui_tx_for_lights, |preference| {
+                preference.lights_off_enabled = Some(button.is_active());
+                if button.is_active() {
+                    preference.hide_now_playing_info = Some(false);
+                }
+            });
+        });
+
+        let gui_tx_for_bg = now_playing.gui_tx.clone();
+        now_playing
+            .background_style_gradient
+            .connect_toggled(move |button| {
+                if button.is_active() {
+                    Self::send_preference_update(&gui_tx_for_bg, |preference| {
+                        preference.now_playing_background_style = Some("gradient".to_string());
+                    });
+                }
+            });
+
+        let gui_tx_for_bg_solid = now_playing.gui_tx.clone();
+        now_playing
+            .background_style_solid
+            .connect_toggled(move |button| {
+                if button.is_active() {
+                    Self::send_preference_update(&gui_tx_for_bg_solid, |preference| {
+                        preference.now_playing_background_style = Some("solid".to_string());
+                    });
+                }
+            });
+
+        now_playing
+    }
+
+    pub fn refresh_from_preferences(&self, preferences: &Preferences) {
+        let hide_info = preferences.hide_now_playing_info.unwrap_or(false);
+        let lights_off = preferences.lights_off_enabled.unwrap_or(false);
+        let desired_style =
+            BackgroundStyle::from_preference(preferences.now_playing_background_style.as_deref());
+
+        if self.hide_track_info.is_active() != hide_info {
+            self.hide_track_info.set_active(hide_info);
+        }
+        self.set_show_track_info(!hide_info);
+
+        if self.lights_off_menu.is_active() != lights_off {
+            self.lights_off_menu.set_active(lights_off);
+        }
+        self.hide_track_info.set_sensitive(!lights_off);
+        self.set_lights(lights_off);
+
+        match desired_style {
+            BackgroundStyle::Gradient => {
+                if self.background_style_gradient.is_active() != true {
+                    self.background_style_gradient.set_active(true);
+                }
+                if self.background_style_solid.is_active() != false {
+                    self.background_style_solid.set_active(false);
+                }
+            }
+            BackgroundStyle::Solid => {
+                if self.background_style_gradient.is_active() != false {
+                    self.background_style_gradient.set_active(false);
+                }
+                if self.background_style_solid.is_active() != true {
+                    self.background_style_solid.set_active(true);
+                }
+            }
+        }
+        self.set_background_style(desired_style);
     }
 
     /// Enable or disable Lights Off mode.
