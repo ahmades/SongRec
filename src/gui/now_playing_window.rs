@@ -109,7 +109,7 @@ impl NowPlayingWindow {
             .build();
 
         let artwork_placeholder = gtk::Label::builder()
-            .label(&gettext("No artwork available"))
+            .label(&gettext("Listening..."))
             .halign(gtk::Align::Center)
             .valign(gtk::Align::Center)
             .visible(false)

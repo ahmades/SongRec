@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-18 04:28+0200\n"
+"POT-Creation-Date: 2026-08-19 12:23+0200\n"
 "PO-Revision-Date: 2026-04-19 16:15+0000\n"
 "Last-Translator: Mejans <farga@mejans.fr>\n"
 "Language-Team: Occitan <https://weblate.fossplant.re/projects/songrec/"
@@ -243,7 +243,7 @@ msgid "Now playing"
 msgstr ""
 
 #: src/gui/now_playing_window.rs:112
-msgid "No artwork available"
+msgid "Listening..."
 msgstr ""
 
 #: src/gui/now_playing_window.rs:260 src/gui/interface.blp:447

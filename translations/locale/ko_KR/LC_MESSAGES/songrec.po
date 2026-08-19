@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-18 04:28+0200\n"
+"POT-Creation-Date: 2026-08-19 12:23+0200\n"
 "PO-Revision-Date: 2023-12-30 23:42+0900\n"
 "Last-Translator: 이정희 <daemul72@gmail.com>\n"
 "Language-Team: \n"
@@ -251,7 +251,7 @@ msgid "Now playing"
 msgstr ""
 
 #: src/gui/now_playing_window.rs:112
-msgid "No artwork available"
+msgid "Listening..."
 msgstr ""
 
 #: src/gui/now_playing_window.rs:260 src/gui/interface.blp:447

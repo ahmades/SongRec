@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-18 04:28+0200\n"
+"POT-Creation-Date: 2026-08-19 12:23+0200\n"
 "PO-Revision-Date: 2026-03-09 12:56+0000\n"
 "Last-Translator: Mu7ammed Basha "
 "<mu7basha@users.noreply.weblate.fossplant.re>\n"
@@ -261,7 +261,7 @@ msgid "Now playing"
 msgstr ""
 
 #: src/gui/now_playing_window.rs:112
-msgid "No artwork available"
+msgid "Listening..."
 msgstr ""
 
 #: src/gui/now_playing_window.rs:260 src/gui/interface.blp:447

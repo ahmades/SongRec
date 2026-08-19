@@ -10,7 +10,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-18 04:28+0200\n"
+"POT-Creation-Date: 2026-08-19 12:23+0200\n"
 "PO-Revision-Date: 2026-08-17 11:36+0000\n"
 "Last-Translator: marcelo cripe <marcelocripe@gmail.com>\n"
 "Language-Team: Portuguese (Brazil) <https://weblate.fossplant.re/projects/"
@@ -298,7 +298,7 @@ msgid "Now playing"
 msgstr ""
 
 #: src/gui/now_playing_window.rs:112
-msgid "No artwork available"
+msgid "Listening..."
 msgstr ""
 
 #: src/gui/now_playing_window.rs:260 src/gui/interface.blp:447
