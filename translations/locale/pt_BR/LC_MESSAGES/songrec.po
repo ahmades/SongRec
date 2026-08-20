@@ -10,7 +10,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-19 14:02+0200\n"
+"POT-Creation-Date: 2026-08-20 23:02+0200\n"
 "PO-Revision-Date: 2026-08-17 11:36+0000\n"
 "Last-Translator: marcelo cripe <marcelocripe@gmail.com>\n"
 "Language-Team: Portuguese (Brazil) <https://weblate.fossplant.re/projects/"
@@ -232,7 +232,7 @@ msgstr ""
 
 #: src/core/preferences.rs:64 src/core/preferences.rs:86
 #: src/gui/main_window.rs:307 src/gui/interface.blp:129
-#: src/gui/interface.blp:613 src/gui/interface.blp:663
+#: src/gui/interface.blp:616 src/gui/interface.blp:666
 msgid "Search on YouTube"
 msgstr "Pesquisar no YouTube"
 
@@ -301,24 +301,24 @@ msgstr ""
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:255 src/gui/interface.blp:447
-msgid "Hide track info"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:268
-msgid "Lights off"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:277 src/gui/interface.blp:457
-msgid "Background style"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:292 src/gui/interface.blp:464
+#: src/gui/now_playing_window.rs:215 src/gui/interface.blp:467
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:304 src/gui/interface.blp:469
+#: src/gui/now_playing_window.rs:216 src/gui/interface.blp:472
 msgid "Solid"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:256 src/gui/interface.blp:447
+msgid "Hide track info"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:270
+msgid "Lights off"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:284 src/gui/interface.blp:457
+msgid "Background style"
 msgstr ""
 
 #: src/gui/song_history_interface.rs:95
@@ -444,7 +444,7 @@ msgstr "Exibir os favoritos"
 msgid "Application menu"
 msgstr "Menu do programa"
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:565
+#: src/gui/interface.blp:369 src/gui/interface.blp:568
 msgid "Export to CSV"
 msgstr "Exportar para o formato ‘CSV’"
 
@@ -462,7 +462,7 @@ msgstr ""
 "Notificar quando uma nova música for reconhecida ou quando ocorrer um erro "
 "na conexão com a internet"
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:520
+#: src/gui/interface.blp:388 src/gui/interface.blp:523
 msgid "Show notifications"
 msgstr "Exibir as notificações"
 
@@ -541,67 +541,67 @@ msgstr ""
 msgid "Choose how the window's background is rendered"
 msgstr ""
 
-#: src/gui/interface.blp:476
+#: src/gui/interface.blp:479
 msgid "Search preferences"
 msgstr "Preferências da pesquisa"
 
-#: src/gui/interface.blp:479
+#: src/gui/interface.blp:482
 msgid "Custom search engine action"
 msgstr "Ações do mecanismo da pesquisa personalizada"
 
-#: src/gui/interface.blp:484
+#: src/gui/interface.blp:487
 msgid "Custom search engine URL"
 msgstr "Endereço do URL do mecanismo da pesquisa personalizada"
 
-#: src/gui/interface.blp:495
+#: src/gui/interface.blp:498
 msgid "Settings"
 msgstr "Configurações"
 
-#: src/gui/interface.blp:525
+#: src/gui/interface.blp:528
 msgid "_Preferences..."
 msgstr "_Preferências..."
 
-#: src/gui/interface.blp:532
+#: src/gui/interface.blp:535
 msgid "_Keyboard Shortcuts"
 msgstr "_Atalhos do teclado"
 
-#: src/gui/interface.blp:537
+#: src/gui/interface.blp:540
 msgid "About..."
 msgstr "Sobre..."
 
-#: src/gui/interface.blp:570
+#: src/gui/interface.blp:573
 msgid "Delete history"
 msgstr "Excluir o histórico"
 
-#: src/gui/interface.blp:575
+#: src/gui/interface.blp:578
 msgid "Select a file to recognize"
 msgstr "Escolha um arquivo de áudio que você quer identificar"
 
-#: src/gui/interface.blp:587 src/gui/interface.blp:637
+#: src/gui/interface.blp:590 src/gui/interface.blp:640
 msgid "Copy artist and track"
 msgstr "Copiar o nome do artista e o título da música"
 
-#: src/gui/interface.blp:593 src/gui/interface.blp:643
+#: src/gui/interface.blp:596 src/gui/interface.blp:646
 msgid "Copy artist"
 msgstr "Copiar o nome do artista"
 
-#: src/gui/interface.blp:599 src/gui/interface.blp:649
+#: src/gui/interface.blp:602 src/gui/interface.blp:652
 msgid "Copy track name"
 msgstr "Copiar o título da música"
 
-#: src/gui/interface.blp:605 src/gui/interface.blp:655
+#: src/gui/interface.blp:608 src/gui/interface.blp:658
 msgid "Copy album"
 msgstr "Copiar o nome do álbum"
 
-#: src/gui/interface.blp:621
+#: src/gui/interface.blp:624
 msgid "Delete from History"
 msgstr "Excluir do histórico"
 
-#: src/gui/interface.blp:627
+#: src/gui/interface.blp:630
 msgid "Add to Favorites"
 msgstr "Adicionar aos favoritos"
 
-#: src/gui/interface.blp:671
+#: src/gui/interface.blp:674
 msgid "Remove from Favorites"
 msgstr "Remover dos favoritos"
 

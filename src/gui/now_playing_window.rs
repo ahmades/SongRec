@@ -45,10 +45,10 @@ pub struct NowPlayingWindow {
     background_style: Cell<BackgroundStyle>,
     current_background: Cell<Background>,
     lights_off: Cell<bool>,
-    hide_track_info: gtk::CheckButton,
-    lights_off_menu: gtk::CheckButton,
-    background_style_gradient: gtk::CheckButton,
-    background_style_solid: gtk::CheckButton,
+    hide_track_info: gtk::Switch,
+    lights_off_menu: gtk::Switch,
+    background_style_gradient: gtk::ToggleButton,
+    background_style_solid: gtk::ToggleButton,
     gui_tx: Option<async_channel::Sender<GUIMessage>>,
 }
 
@@ -210,10 +210,11 @@ impl NowPlayingWindow {
 
         let current_background = Background::fallback();
 
-        let hide_track_info = gtk::CheckButton::new();
-        let lights_off_menu = gtk::CheckButton::new();
-        let background_style_gradient = gtk::CheckButton::new();
-        let background_style_solid = gtk::CheckButton::new();
+        let hide_track_info = gtk::Switch::new();
+        let lights_off_menu = gtk::Switch::new();
+        let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
+        let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
+        background_style_solid.set_group(Some(&background_style_gradient));
 
         let prefs = preferences_interface
             .as_ref()
@@ -253,9 +254,10 @@ impl NowPlayingWindow {
             .hexpand(true)
             .build();
         let hide_track_info_label = gtk::Label::new(Some(&gettext("Hide track info")));
+        hide_track_info_label.set_hexpand(true);
+        hide_track_info_label.set_halign(gtk::Align::Start);
         hide_track_info_row.append(&hide_track_info_label);
         hide_track_info.set_halign(gtk::Align::End);
-        hide_track_info.set_hexpand(true);
         hide_track_info_row.append(&hide_track_info);
         hide_track_info.set_active(prefs.hide_now_playing_info.unwrap_or(false));
         menu_box.append(&hide_track_info_row);
@@ -266,55 +268,36 @@ impl NowPlayingWindow {
             .hexpand(true)
             .build();
         let lights_off_label = gtk::Label::new(Some(&gettext("Lights off")));
+        lights_off_label.set_hexpand(true);
+        lights_off_label.set_halign(gtk::Align::Start);
         lights_off_row.append(&lights_off_label);
         lights_off_menu.set_halign(gtk::Align::End);
-        lights_off_menu.set_hexpand(true);
         lights_off_row.append(&lights_off_menu);
         lights_off_menu.set_active(prefs.lights_off_enabled.unwrap_or(false));
         menu_box.append(&lights_off_row);
 
-        let background_style_button = gtk::MenuButton::builder()
-            .label(&gettext("Background style"))
-            .halign(gtk::Align::Start)
-            .build();
-        let background_style_popover = gtk::Popover::new();
-        background_style_popover.set_has_arrow(false);
-        let background_style_box = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(6)
-            .build();
-
-        let gradient_row = gtk::Box::builder()
+        let background_style_row = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(12)
             .hexpand(true)
             .build();
-        let gradient_label = gtk::Label::new(Some(&gettext("Gradient")));
-        gradient_row.append(&gradient_label);
-        background_style_gradient.set_halign(gtk::Align::End);
-        background_style_gradient.set_hexpand(true);
-        gradient_row.append(&background_style_gradient);
-        background_style_box.append(&gradient_row);
+        let background_style_label = gtk::Label::new(Some(&gettext("Background style")));
+        background_style_row.append(&background_style_label);
 
-        let solid_row = gtk::Box::builder()
+        let background_style_buttons = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
-            .spacing(12)
-            .hexpand(true)
+            .spacing(0)
+            .css_classes(["linked"])
+            .hexpand(false)
             .build();
-        let solid_label = gtk::Label::new(Some(&gettext("Solid")));
-        solid_row.append(&solid_label);
-        background_style_solid.set_halign(gtk::Align::End);
-        background_style_solid.set_hexpand(true);
-        solid_row.append(&background_style_solid);
-        background_style_box.append(&solid_row);
-
-        background_style_popover.set_child(Some(&background_style_box));
-        background_style_button.set_popover(Some(&background_style_popover));
+        background_style_buttons.append(&background_style_gradient);
+        background_style_buttons.append(&background_style_solid);
+        background_style_row.append(&background_style_buttons);
         match BackgroundStyle::from_preference(prefs.now_playing_background_style.as_deref()) {
             BackgroundStyle::Gradient => background_style_gradient.set_active(true),
             BackgroundStyle::Solid => background_style_solid.set_active(true),
         }
-        menu_box.append(&background_style_button);
+        menu_box.append(&background_style_row);
         popover.set_child(Some(&menu_box));
 
         let popover_for_click = popover.clone();
@@ -331,21 +314,25 @@ impl NowPlayingWindow {
         now_playing.window.add_controller(gesture);
 
         let gui_tx_for_hide = now_playing.gui_tx.clone();
-        now_playing.hide_track_info.connect_toggled(move |button| {
-            Self::send_preference_update(&gui_tx_for_hide, |preference| {
-                preference.hide_now_playing_info = Some(button.is_active());
+        now_playing
+            .hide_track_info
+            .connect_active_notify(move |button| {
+                Self::send_preference_update(&gui_tx_for_hide, |preference| {
+                    preference.hide_now_playing_info = Some(button.is_active());
+                });
             });
-        });
 
         let gui_tx_for_lights = now_playing.gui_tx.clone();
-        now_playing.lights_off_menu.connect_toggled(move |button| {
-            Self::send_preference_update(&gui_tx_for_lights, |preference| {
-                preference.lights_off_enabled = Some(button.is_active());
-                if button.is_active() {
-                    preference.hide_now_playing_info = Some(false);
-                }
+        now_playing
+            .lights_off_menu
+            .connect_active_notify(move |button| {
+                Self::send_preference_update(&gui_tx_for_lights, |preference| {
+                    preference.lights_off_enabled = Some(button.is_active());
+                    if button.is_active() {
+                        preference.hide_now_playing_info = Some(false);
+                    }
+                });
             });
-        });
 
         let gui_tx_for_bg = now_playing.gui_tx.clone();
         now_playing

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-19 14:02+0200\n"
+"POT-Creation-Date: 2026-08-20 23:02+0200\n"
 "PO-Revision-Date: 2022-07-24 13:29+0200\n"
 "Last-Translator: Ismael Ferreras Morezuelas <swyterzone+songrec@gmail.com>\n"
 "Language-Team: Swyter <swyterzone@gmail.com>\n"
@@ -198,7 +198,7 @@ msgstr ""
 
 #: src/core/preferences.rs:64 src/core/preferences.rs:86
 #: src/gui/main_window.rs:307 src/gui/interface.blp:129
-#: src/gui/interface.blp:613 src/gui/interface.blp:663
+#: src/gui/interface.blp:616 src/gui/interface.blp:666
 msgid "Search on YouTube"
 msgstr "Buscar en YouTube"
 
@@ -272,24 +272,24 @@ msgstr ""
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:255 src/gui/interface.blp:447
-msgid "Hide track info"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:268
-msgid "Lights off"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:277 src/gui/interface.blp:457
-msgid "Background style"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:292 src/gui/interface.blp:464
+#: src/gui/now_playing_window.rs:215 src/gui/interface.blp:467
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:304 src/gui/interface.blp:469
+#: src/gui/now_playing_window.rs:216 src/gui/interface.blp:472
 msgid "Solid"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:256 src/gui/interface.blp:447
+msgid "Hide track info"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:270
+msgid "Lights off"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:284 src/gui/interface.blp:457
+msgid "Background style"
 msgstr ""
 
 #: src/gui/song_history_interface.rs:95
@@ -404,7 +404,7 @@ msgstr "Ver favoritos"
 msgid "Application menu"
 msgstr ""
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:565
+#: src/gui/interface.blp:369 src/gui/interface.blp:568
 msgid "Export to CSV"
 msgstr "Exportar a CSV"
 
@@ -420,7 +420,7 @@ msgstr ""
 msgid "Notify when a new song is recognized or network error is encountered"
 msgstr ""
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:520
+#: src/gui/interface.blp:388 src/gui/interface.blp:523
 msgid "Show notifications"
 msgstr "Mostrar notificaciones"
 
@@ -488,67 +488,67 @@ msgstr ""
 msgid "Choose how the window's background is rendered"
 msgstr ""
 
-#: src/gui/interface.blp:476
+#: src/gui/interface.blp:479
 msgid "Search preferences"
 msgstr ""
 
-#: src/gui/interface.blp:479
+#: src/gui/interface.blp:482
 msgid "Custom search engine action"
 msgstr ""
 
-#: src/gui/interface.blp:484
+#: src/gui/interface.blp:487
 msgid "Custom search engine URL"
 msgstr ""
 
-#: src/gui/interface.blp:495
+#: src/gui/interface.blp:498
 msgid "Settings"
 msgstr ""
 
-#: src/gui/interface.blp:525
+#: src/gui/interface.blp:528
 msgid "_Preferences..."
 msgstr ""
 
-#: src/gui/interface.blp:532
+#: src/gui/interface.blp:535
 msgid "_Keyboard Shortcuts"
 msgstr ""
 
-#: src/gui/interface.blp:537
+#: src/gui/interface.blp:540
 msgid "About..."
 msgstr "Acerca de..."
 
-#: src/gui/interface.blp:570
+#: src/gui/interface.blp:573
 msgid "Delete history"
 msgstr "Eliminar historial"
 
-#: src/gui/interface.blp:575
+#: src/gui/interface.blp:578
 msgid "Select a file to recognize"
 msgstr "Elige el archivo que quieres reconocer"
 
-#: src/gui/interface.blp:587 src/gui/interface.blp:637
+#: src/gui/interface.blp:590 src/gui/interface.blp:640
 msgid "Copy artist and track"
 msgstr "Copiar el artista y el título de canción"
 
-#: src/gui/interface.blp:593 src/gui/interface.blp:643
+#: src/gui/interface.blp:596 src/gui/interface.blp:646
 msgid "Copy artist"
 msgstr "Copiar el artista"
 
-#: src/gui/interface.blp:599 src/gui/interface.blp:649
+#: src/gui/interface.blp:602 src/gui/interface.blp:652
 msgid "Copy track name"
 msgstr "Copiar el título de canción"
 
-#: src/gui/interface.blp:605 src/gui/interface.blp:655
+#: src/gui/interface.blp:608 src/gui/interface.blp:658
 msgid "Copy album"
 msgstr "Copiar el álbum"
 
-#: src/gui/interface.blp:621
+#: src/gui/interface.blp:624
 msgid "Delete from History"
 msgstr ""
 
-#: src/gui/interface.blp:627
+#: src/gui/interface.blp:630
 msgid "Add to Favorites"
 msgstr ""
 
-#: src/gui/interface.blp:671
+#: src/gui/interface.blp:674
 msgid "Remove from Favorites"
 msgstr "Quitar de favoritos"
 

@@ -457,14 +457,17 @@ Adw.ApplicationWindow main_window {
               title: _("Background style");
 
               Box {
-                spacing: 15;
+                spacing: 0;
+                css-classes: [
+                  "linked",
+                ];
 
-                CheckButton background_style_gradient {
+                ToggleButton background_style_gradient {
                   active: true;
                   label: _("Gradient");
                 }
 
-                CheckButton background_style_solid {
+                ToggleButton background_style_solid {
                   group: background_style_gradient;
                   label: _("Solid");
                 }

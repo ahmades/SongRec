@@ -532,15 +532,16 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             <property name="title" translatable="yes">Background style</property>
                             <child>
                               <object class="GtkBox">
-                                <property name="spacing">15</property>
+                                <property name="spacing">0</property>
+                                <property name="css-classes">linked</property>
                                 <child>
-                                  <object class="GtkCheckButton" id="background_style_gradient">
+                                  <object class="GtkToggleButton" id="background_style_gradient">
                                     <property name="active">true</property>
                                     <property name="label" translatable="yes">Gradient</property>
                                   </object>
                                 </child>
                                 <child>
-                                  <object class="GtkCheckButton" id="background_style_solid">
+                                  <object class="GtkToggleButton" id="background_style_solid">
                                     <property name="group">background_style_gradient</property>
                                     <property name="label" translatable="yes">Solid</property>
                                   </object>

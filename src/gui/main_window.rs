@@ -775,9 +775,9 @@ impl App {
         let hide_track_info_setting: adw::SwitchRow =
             self.builder.object("hide_track_info_setting").unwrap();
         let lights_off_setting: adw::SwitchRow = self.builder.object("lights_off_setting").unwrap();
-        let background_style_gradient: gtk::CheckButton =
+        let background_style_gradient: gtk::ToggleButton =
             self.builder.object("background_style_gradient").unwrap();
-        let background_style_solid: gtk::CheckButton =
+        let background_style_solid: gtk::ToggleButton =
             self.builder.object("background_style_solid").unwrap();
         let results_section: adw::PreferencesGroup =
             self.builder.object("results_section").unwrap();
