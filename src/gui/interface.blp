@@ -439,6 +439,19 @@ Adw.ApplicationWindow main_window {
             }
           }
 
+          Adw.PreferencesGroup search_preferences {
+            title: _("Search preferences");
+
+            Adw.EntryRow search_engine_name {
+              title: _("Custom search engine action");
+              changed => $search_engine_action_changed();
+            }
+
+            Adw.EntryRow search_engine_url {
+              title: _("Custom search engine URL");
+              changed => $search_engine_url_changed();
+            }
+          }
           Adw.PreferencesGroup now_playing_preferences {
             title: _("Now Playing preferences");
 
@@ -475,19 +488,6 @@ Adw.ApplicationWindow main_window {
             }
           }
 
-          Adw.PreferencesGroup search_preferences {
-            title: _("Search preferences");
-
-            Adw.EntryRow search_engine_name {
-              title: _("Custom search engine action");
-              changed => $search_engine_action_changed();
-            }
-
-            Adw.EntryRow search_engine_url {
-              title: _("Custom search engine URL");
-              changed => $search_engine_url_changed();
-            }
-          }
         };
 
         [top]

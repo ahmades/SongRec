@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-20 23:02+0200\n"
+"POT-Creation-Date: 2026-08-21 09:32+0200\n"
 "PO-Revision-Date: 2026-07-09 20:02+0000\n"
 "Last-Translator: Fjuro <fjuro@users.noreply.weblate.fossplant.re>\n"
 "Language-Team: Czech <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -46,7 +46,7 @@ msgstr "Varování: síť není dostupná"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1054 src/gui/main_window.rs:1066
+#: src/gui/main_window.rs:1067 src/gui/main_window.rs:1079
 msgid "No match for this song"
 msgstr "Nenalezena žádná shoda s touto skladbou"
 
@@ -58,11 +58,11 @@ msgstr "Chyba:"
 msgid "Recording started!"
 msgstr "Nahrávání spuštěno!"
 
-#: src/main.rs:75
+#: src/main.rs:76
 msgid "An open-source Shazam client for Linux, written in Rust."
 msgstr "Otevřený Shazam klient pro Linux, napsaný v Rustu."
 
-#: src/main.rs:95
+#: src/main.rs:96
 msgid ""
 "-v: Set the log level to DEBUG instead of INFO for SongRec-related messages\n"
 "-vv: Set the log level to DEBUG for SongRec-related messages and INFO for "
@@ -75,7 +75,7 @@ msgstr ""
 "SongRec a INFO pro zprávy týkající se knihoven\n"
 "-vvv: Nastavit úroveň protokolování na TRACE (nejpodrobnější)"
 
-#: src/main.rs:101
+#: src/main.rs:102
 msgid ""
 "Run as a command-line program listening the microphone and printing "
 "recognized songs to stdout, exposing current song info via MPRIS"
@@ -84,42 +84,42 @@ msgstr ""
 "vypisující rozpoznané skladby do stdout, při zobrazení informací o skladbě "
 "přes MPRIS"
 
-#: src/main.rs:107 src/main.rs:153 src/main.rs:208
+#: src/main.rs:108 src/main.rs:154 src/main.rs:209
 msgid "List available audio devices and quit"
 msgstr "Vypsat dostupná zvuková zařízení a ukončit aplikaci"
 
-#: src/main.rs:113 src/main.rs:160 src/main.rs:214
+#: src/main.rs:114 src/main.rs:161 src/main.rs:215
 msgid "Specify the audio device to use"
 msgstr "Určete, které zvukové zařízení použít"
 
-#: src/main.rs:121 src/main.rs:168 src/main.rs:222
+#: src/main.rs:122 src/main.rs:169 src/main.rs:223
 msgid ""
 "Shazam interval between requests in seconds (increase if you are rate-"
 "limited)"
 msgstr ""
 "Interval Shazamu mezi žádostmi v sekundách (zvyšte, pokud jste byli omezeni)"
 
-#: src/main.rs:129 src/main.rs:176
+#: src/main.rs:130 src/main.rs:177
 msgid "Enable printing full song info in JSON"
 msgstr "Povolit výpis všech informací o skladbě jako JSON"
 
-#: src/main.rs:136 src/main.rs:183
+#: src/main.rs:137 src/main.rs:184
 msgid "Enable printing full song info in the CSV format"
 msgstr "Povolit výpis všech informací o skladbě ve formátu CSV"
 
-#: src/main.rs:142 src/main.rs:262 src/main.rs:283
+#: src/main.rs:143 src/main.rs:263 src/main.rs:284
 msgid "Disable MPRIS support"
 msgstr "Zakázat podporu MPRIS"
 
-#: src/main.rs:147
+#: src/main.rs:148
 msgid "Recognize one song from a sound file or microphone and print its info."
 msgstr "Rozpoznat jednu skladbu ze zvukového souboru a vypsat informace o ní."
 
-#: src/main.rs:188
+#: src/main.rs:189
 msgid "Recognize a file instead of using mic input"
 msgstr "Rozpoznat soubor namísto použití vstupu z mikrofonu"
 
-#: src/main.rs:193
+#: src/main.rs:194
 msgid ""
 "Generate a Shazam fingerprint from a sound file, perform song recognition "
 "towards Shazam's servers and print obtained information to the standard "
@@ -128,11 +128,11 @@ msgstr ""
 "Vygenerovat otisk Shazam ze zvukového souboru, provést rozpoznání skladby "
 "pomocí serverů Shazam a vypsat získané informace na standardní výstup."
 
-#: src/main.rs:197
+#: src/main.rs:198
 msgid "The audio file to recognize."
 msgstr "Zvukový soubor k rozpoznání."
 
-#: src/main.rs:202
+#: src/main.rs:203
 msgid ""
 "Recognize a currently playing song using the microphone and print obtained "
 "information to the standard output"
@@ -140,7 +140,7 @@ msgstr ""
 "Rozpoznat aktuálně hrající skladbu pomocí mikrofonu a vypsat získané "
 "informace na standardní výstup"
 
-#: src/main.rs:227
+#: src/main.rs:228
 msgid ""
 "Generate a Shazam fingerprint from a sound file, and print it to the "
 "standard output."
@@ -148,11 +148,11 @@ msgstr ""
 "Vygenerovat otisk Shazam ze zvukového souboru, provést rozpoznání skladby a "
 "vypsat ji na standardní výstup."
 
-#: src/main.rs:231
+#: src/main.rs:232
 msgid "The .WAV or .MP3 file to generate an audio fingerprint for."
 msgstr "Soubor .WAV nebo .MP3, pro který vygenerovat zvukový otisk."
 
-#: src/main.rs:236
+#: src/main.rs:237
 msgid ""
 "Take a data-URI Shazam fingerprint, perform song recognition towards "
 "Shazam's servers and print obtained information to the standard output."
@@ -160,23 +160,23 @@ msgstr ""
 "Pořídit data-URI otisk Shazam, provést rozpoznání skladby pomocí serverů "
 "Shazam a vypsat získané informace na standardní výstup."
 
-#: src/main.rs:240
+#: src/main.rs:241
 msgid "The data-URI Shazam fingerprint to recognize."
 msgstr "Otisk data-URI Shazam k rozpoznání."
 
-#: src/main.rs:252
+#: src/main.rs:253
 msgid "The default action. Display a GUI."
 msgstr "Výchozí akce. Zobrazit grafické rozhraní."
 
-#: src/main.rs:256 src/main.rs:277
+#: src/main.rs:257 src/main.rs:278
 msgid "An optional audio file to recognize on the launch of the application."
 msgstr "Volitelný zvukový soubor, který rozpoznat při spuštění aplikace."
 
-#: src/main.rs:268 src/main.rs:289
+#: src/main.rs:269 src/main.rs:290
 msgid "Disable PipeWire native support"
 msgstr "Zakázat nativní podporu PipeWire"
 
-#: src/main.rs:273
+#: src/main.rs:274
 msgid ""
 "Launch the GUI, but don't recognize audio through the microphone as soon as "
 "it is launched (rather than expecting the user to click on a button)."
@@ -197,7 +197,7 @@ msgid "Audio error: No input device available"
 msgstr "Chyba zvuku: Není dostupné žádné vstupní zařízení"
 
 #: src/core/preferences.rs:64 src/core/preferences.rs:86
-#: src/gui/main_window.rs:307 src/gui/interface.blp:129
+#: src/gui/main_window.rs:335 src/gui/interface.blp:129
 #: src/gui/interface.blp:616 src/gui/interface.blp:666
 msgid "Search on YouTube"
 msgstr "Vyhledat na YouTube"
@@ -222,67 +222,67 @@ msgstr "Neplatný rozsah pásem v dekódovaném paketu Shazamu"
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "Předána neplatná vzorkovací frekvence při kódování paketu Shazamu"
 
-#: src/gui/main_window.rs:265
+#: src/gui/main_window.rs:293
 msgid "Application error"
 msgstr "Chyba aplikace"
 
-#: src/gui/main_window.rs:286
+#: src/gui/main_window.rs:314
 msgid "Network error"
 msgstr "Chyba sítě"
 
-#: src/gui/main_window.rs:362
+#: src/gui/main_window.rs:390
 msgid "Unable to enable notification icon"
 msgstr "Nepodařilo se povolit ikonu oznámení"
 
-#: src/gui/main_window.rs:930 src/gui/main_window.rs:1041
+#: src/gui/main_window.rs:943 src/gui/main_window.rs:1054
 msgid "Unable to enable MPRIS support"
 msgstr "Nepodařilo se povolit podporu MPRIS"
 
-#: src/gui/main_window.rs:1063
+#: src/gui/main_window.rs:1076
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:1144
+#: src/gui/main_window.rs:1157
 msgid "Song recognized"
 msgstr "Skladba rozpoznána"
 
-#: src/gui/main_window.rs:1281
+#: src/gui/main_window.rs:1294
 msgid "Are you sure you want to wipe history?"
 msgstr "Opravdu chcete vymazat historii?"
 
-#: src/gui/main_window.rs:1287
+#: src/gui/main_window.rs:1300
 msgid "_Yes"
 msgstr "_Ano"
 
-#: src/gui/main_window.rs:1288
+#: src/gui/main_window.rs:1301
 msgid "_Cancel"
 msgstr "_Zrušit"
 
-#: src/gui/now_playing_window.rs:83
+#: src/gui/now_playing_window.rs:84
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:107
+#: src/gui/now_playing_window.rs:108
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:215 src/gui/interface.blp:467
+#: src/gui/now_playing_window.rs:216 src/gui/interface.blp:480
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:216 src/gui/interface.blp:472
+#: src/gui/now_playing_window.rs:217 src/gui/interface.blp:485
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:256 src/gui/interface.blp:447
+#: src/gui/now_playing_window.rs:257 src/gui/interface.blp:460
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:270
+#: src/gui/now_playing_window.rs:271
 msgid "Lights off"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:284 src/gui/interface.blp:457
+#: src/gui/now_playing_window.rs:285 src/gui/interface.blp:470
 msgid "Background style"
 msgstr ""
 
@@ -471,36 +471,36 @@ msgid "Enable MPRIS"
 msgstr "Povolit MPRIS"
 
 #: src/gui/interface.blp:443
-msgid "Now Playing preferences"
-msgstr ""
-
-#: src/gui/interface.blp:446
-msgid "Show only the album artwork"
-msgstr ""
-
-#: src/gui/interface.blp:451
-msgid "Show only the track on a black background"
-msgstr ""
-
-#: src/gui/interface.blp:452
-msgid "Lights Off"
-msgstr ""
-
-#: src/gui/interface.blp:456
-msgid "Choose how the window's background is rendered"
-msgstr ""
-
-#: src/gui/interface.blp:479
 msgid "Search preferences"
 msgstr "Předvolby vyhledávání"
 
-#: src/gui/interface.blp:482
+#: src/gui/interface.blp:446
 msgid "Custom search engine action"
 msgstr "Vlastní akce tlačítka vyhledávání"
 
-#: src/gui/interface.blp:487
+#: src/gui/interface.blp:451
 msgid "Custom search engine URL"
 msgstr "Vlastní adresa vyhledávače"
+
+#: src/gui/interface.blp:456
+msgid "Now Playing preferences"
+msgstr ""
+
+#: src/gui/interface.blp:459
+msgid "Show only the album artwork"
+msgstr ""
+
+#: src/gui/interface.blp:464
+msgid "Show only the track on a black background"
+msgstr ""
+
+#: src/gui/interface.blp:465
+msgid "Lights Off"
+msgstr ""
+
+#: src/gui/interface.blp:469
+msgid "Choose how the window's background is rendered"
+msgstr ""
 
 #: src/gui/interface.blp:498
 msgid "Settings"

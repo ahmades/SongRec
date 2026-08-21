@@ -512,6 +512,23 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                       </object>
                     </child>
                     <child>
+                      <object class="AdwPreferencesGroup" id="search_preferences">
+                        <property name="title" translatable="yes">Search preferences</property>
+                        <child>
+                          <object class="AdwEntryRow" id="search_engine_name">
+                            <property name="title" translatable="yes">Custom search engine action</property>
+                            <signal name="changed" handler="search_engine_action_changed"/>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwEntryRow" id="search_engine_url">
+                            <property name="title" translatable="yes">Custom search engine URL</property>
+                            <signal name="changed" handler="search_engine_url_changed"/>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
                       <object class="AdwPreferencesGroup" id="now_playing_preferences">
                         <property name="title" translatable="yes">Now Playing preferences</property>
                         <child>
@@ -548,23 +565,6 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                 </child>
                               </object>
                             </child>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="AdwPreferencesGroup" id="search_preferences">
-                        <property name="title" translatable="yes">Search preferences</property>
-                        <child>
-                          <object class="AdwEntryRow" id="search_engine_name">
-                            <property name="title" translatable="yes">Custom search engine action</property>
-                            <signal name="changed" handler="search_engine_action_changed"/>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="AdwEntryRow" id="search_engine_url">
-                            <property name="title" translatable="yes">Custom search engine URL</property>
-                            <signal name="changed" handler="search_engine_url_changed"/>
                           </object>
                         </child>
                       </object>

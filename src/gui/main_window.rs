@@ -79,6 +79,34 @@ struct App {
     last_recognized_song: Rc<RefCell<Option<SongRecognizedMessage>>>,
 }
 
+fn open_now_playing_window(
+    now_playing_window: &Rc<RefCell<Option<NowPlayingWindow>>>,
+    last_recognized_song: &Rc<RefCell<Option<SongRecognizedMessage>>>,
+    preferences_interface: &Arc<Mutex<PreferencesInterface>>,
+    gui_tx: &async_channel::Sender<GUIMessage>,
+) {
+    if now_playing_window.borrow().is_none() {
+        let window = NowPlayingWindow::new_with_settings(
+            Some(gui_tx.clone()),
+            Some(preferences_interface.clone()),
+        );
+        let preferences = preferences_interface.lock().unwrap().preferences.clone();
+        window.set_show_track_info(!preferences.hide_now_playing_info.unwrap_or(false));
+        window.set_background_style(BackgroundStyle::from_preference(
+            preferences.now_playing_background_style.as_deref(),
+        ));
+        window.set_lights(preferences.lights_off_enabled.unwrap_or(false));
+        if let Some(ref message) = *last_recognized_song.borrow() {
+            window.update(message);
+        }
+        *now_playing_window.borrow_mut() = Some(window);
+    }
+
+    if let Some(window) = now_playing_window.borrow().as_ref() {
+        window.present();
+    }
+}
+
 // #[gtk::template_callbacks(functions)]
 impl App {
     fn new(log_object: Logging) -> App {
@@ -852,27 +880,12 @@ impl App {
         results_click.set_button(1);
         results_click.connect_pressed(move |_, n_press, _, _| {
             if n_press == 2 {
-                if now_playing_window_for_results.borrow().is_none() {
-                    let now_playing_window = NowPlayingWindow::new_with_settings(
-                        Some(gui_tx_for_results.clone()),
-                        Some(preferences_for_results.clone()),
-                    );
-                    let preferences = preferences_for_results.lock().unwrap().preferences.clone();
-                    now_playing_window
-                        .set_show_track_info(!preferences.hide_now_playing_info.unwrap_or(false));
-                    now_playing_window.set_background_style(BackgroundStyle::from_preference(
-                        preferences.now_playing_background_style.as_deref(),
-                    ));
-                    now_playing_window.set_lights(preferences.lights_off_enabled.unwrap_or(false));
-                    if let Some(ref message) = *last_recognized_song_for_results.borrow() {
-                        now_playing_window.update(message);
-                    }
-                    *now_playing_window_for_results.borrow_mut() = Some(now_playing_window);
-                }
-
-                if let Some(ref now_playing_window) = *now_playing_window_for_results.borrow() {
-                    now_playing_window.present();
-                }
+                open_now_playing_window(
+                    &now_playing_window_for_results,
+                    &last_recognized_song_for_results,
+                    &preferences_for_results,
+                    &gui_tx_for_results,
+                );
             }
         });
         results_image.add_controller(results_click);
@@ -1653,47 +1666,14 @@ impl App {
         let preferences_for_action = self.preferences_interface.clone();
         let gui_tx_for_action = self.gui_tx.clone();
 
-        let open_now_playing = {
-            let now_playing_window_for_action = now_playing_window_for_action.clone();
-            let last_recognized_song_for_action = last_recognized_song_for_action.clone();
-            let preferences_for_action = preferences_for_action.clone();
-            let gui_tx_for_action = gui_tx_for_action.clone();
-            move |window: &adw::ApplicationWindow| {
-                let _ = window;
-                if now_playing_window_for_action.borrow().is_none() {
-                    let now_playing_window = NowPlayingWindow::new_with_settings(
-                        Some(gui_tx_for_action.clone()),
-                        Some(preferences_for_action.clone()),
-                    );
-                    let preferences = preferences_for_action.lock().unwrap().preferences.clone();
-                    now_playing_window
-                        .set_show_track_info(!preferences.hide_now_playing_info.unwrap_or(false));
-                    now_playing_window.set_background_style(BackgroundStyle::from_preference(
-                        preferences.now_playing_background_style.as_deref(),
-                    ));
-                    now_playing_window.set_lights(preferences.lights_off_enabled.unwrap_or(false));
-                    if let Some(ref message) = *last_recognized_song_for_action.borrow() {
-                        now_playing_window.update(message);
-                    }
-                    *now_playing_window_for_action.borrow_mut() = Some(now_playing_window);
-                }
-
-                if let Some(ref now_playing_window) = *now_playing_window_for_action.borrow() {
-                    now_playing_window.present();
-                }
-            }
-        };
-
-        let open_now_playing_for_action = open_now_playing.clone();
         let action_show_now_playing = gio::ActionEntry::builder("show-now-playing")
-            .activate(move |window: &adw::ApplicationWindow, _, _| {
-                open_now_playing(window);
-            })
-            .build();
-
-        let action_show_artwork = gio::ActionEntry::builder("show-artwork")
-            .activate(move |window: &adw::ApplicationWindow, _, _| {
-                open_now_playing_for_action(window);
+            .activate(move |_, _, _| {
+                open_now_playing_window(
+                    &now_playing_window_for_action,
+                    &last_recognized_song_for_action,
+                    &preferences_for_action,
+                    &gui_tx_for_action,
+                );
             })
             .build();
 
@@ -1718,7 +1698,6 @@ impl App {
             action_refresh_devices,
             action_close,
             action_show_now_playing,
-            action_show_artwork,
             action_show_menu,
         ]);
 
@@ -1732,7 +1711,6 @@ impl App {
 
         application.set_accels_for_action("win.close", &["<Primary>Q", "<Primary>W"]);
         application.set_accels_for_action("win.recognize-file", &["<Primary>O"]);
-        application.set_accels_for_action("win.show-artwork", &["<Primary>n", "<Primary>N"]);
         application.set_accels_for_action("win.show-now-playing", &["<Primary>n", "<Primary>N"]);
         application
             .set_accels_for_action("win.show-preferences", &["<Primary>comma", "<Primary>P"]);
