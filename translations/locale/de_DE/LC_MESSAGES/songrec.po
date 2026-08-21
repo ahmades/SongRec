@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-21 15:01+0200\n"
+"POT-Creation-Date: 2026-08-21 15:20+0200\n"
 "PO-Revision-Date: 2022-10-09 13:27+0200\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -257,31 +257,31 @@ msgstr ""
 msgid "_Cancel"
 msgstr "_Abbrechen"
 
-#: src/gui/now_playing_window.rs:86
+#: src/gui/now_playing_window.rs:90
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:112
+#: src/gui/now_playing_window.rs:117
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:248 src/gui/interface.blp:480
+#: src/gui/now_playing_window.rs:257 src/gui/interface.blp:480
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:249 src/gui/interface.blp:485
+#: src/gui/now_playing_window.rs:258 src/gui/interface.blp:485
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:290 src/gui/interface.blp:460
+#: src/gui/now_playing_window.rs:299 src/gui/interface.blp:460
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:304
+#: src/gui/now_playing_window.rs:313
 msgid "Lights off"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:318 src/gui/interface.blp:470
+#: src/gui/now_playing_window.rs:327 src/gui/interface.blp:470
 msgid "Background style"
 msgstr ""
 

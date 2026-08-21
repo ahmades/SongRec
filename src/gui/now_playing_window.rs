@@ -17,6 +17,9 @@ use std::sync::{Arc, Mutex};
 
 const WINDOW_WIDTH: i32 = 720;
 const WINDOW_HEIGHT: i32 = 820;
+const MIN_WINDOW_WIDTH: i32 = 360;
+const MIN_WINDOW_HEIGHT: i32 = 410;
+const MIN_ARTWORK_SIZE: i32 = 135;
 const ROOT_SPACING: i32 = 18;
 const INFO_BOX_SPACING: i32 = 2;
 const BACKGROUND_PADDING_PX: i32 = 96;
@@ -81,6 +84,7 @@ impl NowPlayingWindow {
             .resizable(true)
             .hide_on_close(true)
             .build();
+        window.set_size_request(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
 
         let header = gtk::HeaderBar::new();
         header.set_title_widget(Some(&gtk::Label::new(Some(&gettext("Now playing")))));
@@ -100,6 +104,7 @@ impl NowPlayingWindow {
             .hexpand(true)
             .vexpand(true)
             .build();
+        cover_frame.set_size_request(MIN_ARTWORK_SIZE, MIN_ARTWORK_SIZE);
 
         let cover_picture = gtk::Picture::builder()
             .content_fit(gtk::ContentFit::Contain)
@@ -121,22 +126,26 @@ impl NowPlayingWindow {
 
         let title_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
-            .wrap(true)
+            .wrap(false)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
             .css_classes([TITLE_CSS_CLASS])
             .build();
         let artist_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
-            .wrap(true)
+            .wrap(false)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
             .css_classes([ARTIST_CSS_CLASS])
             .build();
         let album_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
-            .wrap(true)
+            .wrap(false)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
             .css_classes([ALBUM_CSS_CLASS])
             .build();
         let details_label = gtk::Label::builder()
             .halign(gtk::Align::Center)
-            .wrap(true)
+            .wrap(false)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
             .css_classes([DETAILS_CSS_CLASS])
             .build();
 
@@ -541,38 +550,31 @@ impl NowPlayingWindow {
         }
     }
 
-    fn set_gradient_background(&self, background: Background) {
+    fn set_background_css(&self) {
         let css = format!(
-            r#".now-playing-background {{
+            r#".{BACKGROUND_CSS_CLASS} {{
                 background-color: transparent;
                 color: #ffffff;
-                padding: 96px;
+                padding: {}px;
             }}
-            .now-playing-background > label {{ color: #ffffff; }}
-            .now-playing-background .now-playing-title,
-            .now-playing-background .now-playing-artist,
-            .now-playing-background .now-playing-album,
-            .now-playing-background .now-playing-details {{ color: #ffffff; }}"#,
+            .{BACKGROUND_CSS_CLASS} > label {{ color: #ffffff; }}
+            .{BACKGROUND_CSS_CLASS} .{TITLE_CSS_CLASS},
+            .{BACKGROUND_CSS_CLASS} .{ARTIST_CSS_CLASS},
+            .{BACKGROUND_CSS_CLASS} .{ALBUM_CSS_CLASS},
+            .{BACKGROUND_CSS_CLASS} .{DETAILS_CSS_CLASS} {{ color: #ffffff; }}"#,
+            BACKGROUND_PADDING_PX,
         );
         self.background_css.load_from_string(&css);
+    }
+
+    fn set_gradient_background(&self, background: Background) {
+        self.set_background_css();
         self.current_background.set(background);
         self.background_area.queue_draw();
     }
 
     fn set_solid_background(&self, color: (u8, u8, u8)) {
-        let css = format!(
-            r#".now-playing-background {{
-                background-color: transparent;
-                color: #ffffff;
-                padding: 96px;
-            }}
-            .now-playing-background > label {{ color: #ffffff; }}
-            .now-playing-background .now-playing-title,
-            .now-playing-background .now-playing-artist,
-            .now-playing-background .now-playing-album,
-            .now-playing-background .now-playing-details {{ color: #ffffff; }}"#,
-        );
-        self.background_css.load_from_string(&css);
+        self.set_background_css();
         self.current_background.set(Background {
             top: color,
             bottom: color,
