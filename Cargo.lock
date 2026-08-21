@@ -2392,6 +2392,7 @@ dependencies = [
  "async-channel",
  "base64",
  "byteorder",
+ "cairo-rs",
  "chrono",
  "clap",
  "clap_mangen",

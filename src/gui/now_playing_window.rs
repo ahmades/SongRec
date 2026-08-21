@@ -9,6 +9,7 @@ use crate::core::preferences::{Preferences, PreferencesInterface};
 use crate::core::thread_messages::{GUIMessage, SongRecognizedMessage};
 use crate::gui::now_playing_background::{Background, from_cover_image};
 use adw::prelude::*;
+use cairo::Context;
 use gettextrs::gettext;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -43,9 +44,10 @@ pub struct NowPlayingWindow {
     details_label: gtk::Label,
     info_box: gtk::Box,
     background_css: gtk::CssProvider,
-    background_style: Cell<BackgroundStyle>,
-    current_background: Cell<Background>,
-    lights_off: Cell<bool>,
+    background_area: gtk::DrawingArea,
+    background_style: Rc<Cell<BackgroundStyle>>,
+    current_background: Rc<Cell<Background>>,
+    lights_off: Rc<Cell<bool>>,
     hide_track_info: gtk::Switch,
     lights_off_menu: gtk::Switch,
     background_style_gradient: gtk::ToggleButton,
@@ -86,6 +88,8 @@ impl NowPlayingWindow {
 
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
+            .hexpand(true)
+            .vexpand(true)
             .spacing(ROOT_SPACING)
             .build();
         root.add_css_class(BACKGROUND_CSS_CLASS);
@@ -148,10 +152,23 @@ impl NowPlayingWindow {
 
         root.append(&cover_frame);
         root.append(&info_box);
-        window.set_child(Some(&root));
+
+        // Render the artwork-derived background directly in one DrawingArea.
+        // Using a single Cairo gradient avoids the visible rectangular zones that
+        // occurred when multiple background renderers were composited.
+        let background_area = gtk::DrawingArea::new();
+        background_area.set_hexpand(true);
+        background_area.set_vexpand(true);
+        background_area.set_can_target(false);
+
+        let overlay = gtk::Overlay::new();
+        overlay.set_child(Some(&background_area));
+        overlay.add_overlay(&root);
+        window.set_child(Some(&overlay));
 
         // The Now Playing background deliberately uses its own CSS provider so
-        // the window does not follow the application's system theme.
+        // the window does not follow the application's system theme. The actual
+        // gradient is painted by background_area; CSS is kept for padding/text.
         let background_css = gtk::CssProvider::new();
         if let Some(display) = gdk::Display::default() {
             gtk::style_context_add_provider_for_display(
@@ -160,11 +177,9 @@ impl NowPlayingWindow {
                 gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
             );
         }
-        background_css.load_from_string(
-            &format!(
-                ".{BACKGROUND_CSS_CLASS} {{ background-color: #181818; color: #ffffff; padding: {BACKGROUND_PADDING_PX}px; }}\n                 .{BACKGROUND_CSS_CLASS} > label {{ color: #ffffff; }}"
-            ),
-        );
+        background_css.load_from_string(&format!(
+            ".{BACKGROUND_CSS_CLASS} {{ background-color: transparent; color: #ffffff; padding: {BACKGROUND_PADDING_PX}px; }}\n             .{BACKGROUND_CSS_CLASS} > label {{ color: #ffffff; }}"
+        ));
 
         // Typography follows the actual allocated content size. GTK4 does not
         // expose a reliable size-allocation signal on GtkWidget, so we sample
@@ -210,6 +225,23 @@ impl NowPlayingWindow {
         window.add_controller(key_controller);
 
         let current_background = Background::fallback();
+        let background_state = Rc::new(Cell::new(current_background));
+        let background_style_state = Rc::new(Cell::new(BackgroundStyle::Gradient));
+        let lights_off_state = Rc::new(Cell::new(false));
+
+        let background_state_for_draw = background_state.clone();
+        let background_style_state_for_draw = background_style_state.clone();
+        let lights_off_state_for_draw = lights_off_state.clone();
+        background_area.set_draw_func(move |_, context, width, height| {
+            draw_background(
+                context,
+                width,
+                height,
+                background_state_for_draw.get(),
+                background_style_state_for_draw.get(),
+                lights_off_state_for_draw.get(),
+            );
+        });
 
         let hide_track_info = gtk::Switch::new();
         let lights_off_menu = gtk::Switch::new();
@@ -232,9 +264,10 @@ impl NowPlayingWindow {
             details_label,
             info_box,
             background_css,
-            background_style: Cell::new(BackgroundStyle::Gradient),
-            current_background: Cell::new(current_background),
-            lights_off: Cell::new(false),
+            background_area: background_area.clone(),
+            background_style: background_style_state.clone(),
+            current_background: background_state.clone(),
+            lights_off: lights_off_state.clone(),
             hide_track_info: hide_track_info.clone(),
             lights_off_menu: lights_off_menu.clone(),
             background_style_gradient: background_style_gradient.clone(),
@@ -511,10 +544,7 @@ impl NowPlayingWindow {
     fn set_gradient_background(&self, background: Background) {
         let css = format!(
             r#".now-playing-background {{
-                background: linear-gradient(to bottom,
-                    rgb({}, {}, {}),
-                    20%,
-                    rgb({}, {}, {}));
+                background-color: transparent;
                 color: #ffffff;
                 padding: 96px;
             }}
@@ -523,20 +553,16 @@ impl NowPlayingWindow {
             .now-playing-background .now-playing-artist,
             .now-playing-background .now-playing-album,
             .now-playing-background .now-playing-details {{ color: #ffffff; }}"#,
-            background.top.0,
-            background.top.1,
-            background.top.2,
-            background.bottom.0,
-            background.bottom.1,
-            background.bottom.2,
         );
         self.background_css.load_from_string(&css);
+        self.current_background.set(background);
+        self.background_area.queue_draw();
     }
 
     fn set_solid_background(&self, color: (u8, u8, u8)) {
         let css = format!(
-            ".now-playing-background {{
-                background-color: rgb({}, {}, {});
+            r#".now-playing-background {{
+                background-color: transparent;
                 color: #ffffff;
                 padding: 96px;
             }}
@@ -544,10 +570,14 @@ impl NowPlayingWindow {
             .now-playing-background .now-playing-title,
             .now-playing-background .now-playing-artist,
             .now-playing-background .now-playing-album,
-            .now-playing-background .now-playing-details {{ color: #ffffff; }}",
-            color.0, color.1, color.2,
+            .now-playing-background .now-playing-details {{ color: #ffffff; }}"#,
         );
         self.background_css.load_from_string(&css);
+        self.current_background.set(Background {
+            top: color,
+            bottom: color,
+        });
+        self.background_area.queue_draw();
     }
 
     /// Shows or hides the metadata box for the active track.
@@ -607,6 +637,97 @@ impl BackgroundStyle {
  * The size is derived from a base font size and scaled to a width/height ratio
  * that keeps the typography readable across both standard and fullscreen layouts.
  */
+fn draw_background(
+    context: &Context,
+    width: i32,
+    height: i32,
+    background: Background,
+    style: BackgroundStyle,
+    lights_off: bool,
+) {
+    if width <= 0 || height <= 0 {
+        return;
+    }
+
+    let background = if lights_off {
+        match style {
+            BackgroundStyle::Gradient => Background {
+                top: (38, 38, 38),
+                bottom: (0, 0, 0),
+            },
+            BackgroundStyle::Solid => Background {
+                top: (0, 0, 0),
+                bottom: (0, 0, 0),
+            },
+        }
+    } else {
+        background
+    };
+
+    if matches!(style, BackgroundStyle::Solid) {
+        context.set_source_rgb(
+            f64::from(background.top.0) / 255.0,
+            f64::from(background.top.1) / 255.0,
+            f64::from(background.top.2) / 255.0,
+        );
+        let _ = context.paint();
+        return;
+    }
+
+    // Cairo's built-in gradient interpolation can expose 8-bit banding on large
+    // displays, especially in the dark lower part of the gradient. Render one
+    // horizontal row at a time instead. This is still O(height), rather than
+    // O(width * height), and lets us apply a tiny ordered dither per row.
+    const TRANSITION_START: f64 = 0.20;
+    const BAYER_4X4: [[f64; 4]; 4] = [
+        [0.0, 0.5, 0.125, 0.625],
+        [0.75, 0.25, 0.875, 0.375],
+        [0.1875, 0.6875, 0.0625, 0.5625],
+        [0.9375, 0.4375, 0.8125, 0.3125],
+    ];
+
+    let top = (
+        f64::from(background.top.0) / 255.0,
+        f64::from(background.top.1) / 255.0,
+        f64::from(background.top.2) / 255.0,
+    );
+    let bottom = (
+        f64::from(background.bottom.0) / 255.0,
+        f64::from(background.bottom.1) / 255.0,
+        f64::from(background.bottom.2) / 255.0,
+    );
+
+    for y in 0..height {
+        let position = if height <= 1 {
+            1.0
+        } else {
+            f64::from(y) / f64::from(height - 1)
+        };
+
+        // Keep the requested 20% top-color plateau, then use a smoothstep
+        // curve for a more gradual and natural interpolation to the bottom.
+        let t = ((position - TRANSITION_START) / (1.0 - TRANSITION_START)).clamp(0.0, 1.0);
+        let t = t * t * (3.0 - 2.0 * t);
+
+        let mut color = (
+            top.0 + (bottom.0 - top.0) * t,
+            top.1 + (bottom.1 - top.1) * t,
+            top.2 + (bottom.2 - top.2) * t,
+        );
+
+        // ±0.5/255 ordered dithering is enough to break visible 8-bit bands
+        // while remaining imperceptible at normal viewing distance.
+        let dither = (BAYER_4X4[(y as usize) & 3][(y as usize) & 3] - 0.5) / 255.0;
+        color.0 = (color.0 + dither).clamp(0.0, 1.0);
+        color.1 = (color.1 + dither).clamp(0.0, 1.0);
+        color.2 = (color.2 + dither).clamp(0.0, 1.0);
+
+        context.set_source_rgb(color.0, color.1, color.2);
+        context.rectangle(0.0, f64::from(y), f64::from(width), 1.0);
+        let _ = context.fill();
+    }
+}
+
 fn font_css_for_size(size: (i32, i32)) -> String {
     let width_scale = size.0 as f64 / BASE_SCALE_WIDTH;
     let height_scale = size.1 as f64 / BASE_SCALE_HEIGHT;

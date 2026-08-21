@@ -3,7 +3,7 @@
 type RGB = (u8, u8, u8);
 type HSL = (f32, f32, f32);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Background {
     pub(crate) top: RGB,
     pub(crate) bottom: RGB,

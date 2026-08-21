@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-21 09:32+0200\n"
+"POT-Creation-Date: 2026-08-21 15:01+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -237,31 +237,31 @@ msgstr ""
 msgid "_Cancel"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:84
+#: src/gui/now_playing_window.rs:86
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:108
+#: src/gui/now_playing_window.rs:112
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:216 src/gui/interface.blp:480
+#: src/gui/now_playing_window.rs:248 src/gui/interface.blp:480
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:217 src/gui/interface.blp:485
+#: src/gui/now_playing_window.rs:249 src/gui/interface.blp:485
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:257 src/gui/interface.blp:460
+#: src/gui/now_playing_window.rs:290 src/gui/interface.blp:460
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:271
+#: src/gui/now_playing_window.rs:304
 msgid "Lights off"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:285 src/gui/interface.blp:470
+#: src/gui/now_playing_window.rs:318 src/gui/interface.blp:470
 msgid "Background style"
 msgstr ""
 
