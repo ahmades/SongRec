@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-21 15:20+0200\n"
+"POT-Creation-Date: 2026-08-22 13:55+0200\n"
 "PO-Revision-Date: 2026-04-19 16:15+0000\n"
 "Last-Translator: Mejans <farga@mejans.fr>\n"
 "Language-Team: Occitan <https://weblate.fossplant.re/projects/songrec/"
@@ -238,31 +238,31 @@ msgstr ""
 msgid "_Cancel"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:90
+#: src/gui/now_playing_window.rs:92
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:117
+#: src/gui/now_playing_window.rs:119
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:257 src/gui/interface.blp:480
+#: src/gui/now_playing_window.rs:284 src/gui/interface.blp:480
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:258 src/gui/interface.blp:485
+#: src/gui/now_playing_window.rs:285 src/gui/interface.blp:485
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:299 src/gui/interface.blp:460
+#: src/gui/now_playing_window.rs:326 src/gui/interface.blp:460
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:313
+#: src/gui/now_playing_window.rs:340
 msgid "Lights off"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:327 src/gui/interface.blp:470
+#: src/gui/now_playing_window.rs:354 src/gui/interface.blp:470
 msgid "Background style"
 msgstr ""
 

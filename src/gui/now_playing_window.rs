@@ -9,9 +9,9 @@ use crate::core::preferences::{Preferences, PreferencesInterface};
 use crate::core::thread_messages::{GUIMessage, SongRecognizedMessage};
 use crate::gui::now_playing_background::{Background, from_cover_image};
 use adw::prelude::*;
-use cairo::Context;
+use cairo::{Context, Format, ImageSurface};
 use gettextrs::gettext;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -36,6 +36,8 @@ const ARTIST_CSS_CLASS: &str = "now-playing-artist";
 const ALBUM_CSS_CLASS: &str = "now-playing-album";
 const DETAILS_CSS_CLASS: &str = "now-playing-details";
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
+const GRADIENT_SURFACE_WIDTH: i32 = 256;
+const TRANSITION_START: f64 = 0.20;
 
 pub struct NowPlayingWindow {
     window: gtk::Window,
@@ -46,8 +48,8 @@ pub struct NowPlayingWindow {
     album_label: gtk::Label,
     details_label: gtk::Label,
     info_box: gtk::Box,
-    background_css: gtk::CssProvider,
     background_area: gtk::DrawingArea,
+    gradient_surface: Rc<RefCell<Option<CachedGradient>>>,
     background_style: Rc<Cell<BackgroundStyle>>,
     current_background: Rc<Cell<Background>>,
     lights_off: Rc<Cell<bool>>,
@@ -176,8 +178,9 @@ impl NowPlayingWindow {
         window.set_child(Some(&overlay));
 
         // The Now Playing background deliberately uses its own CSS provider so
-        // the window does not follow the application's system theme. The actual
-        // gradient is painted by background_area; CSS is kept for padding/text.
+        // the window does not follow the application's system theme. The background
+        // itself is painted by background_area; CSS is static and only handles
+        // padding and foreground colors.
         let background_css = gtk::CssProvider::new();
         if let Some(display) = gdk::Display::default() {
             gtk::style_context_add_provider_for_display(
@@ -204,19 +207,6 @@ impl NowPlayingWindow {
         }
         text_css.load_from_string(&font_css_for_size((WINDOW_WIDTH, WINDOW_HEIGHT)));
 
-        let last_size = Rc::new(Cell::new((0, 0)));
-        let text_css_for_resize = text_css.clone();
-        let last_size_for_resize = last_size.clone();
-        let root_for_resize = root.clone();
-        root.add_tick_callback(move |_, _| {
-            let size = (root_for_resize.width(), root_for_resize.height());
-            if size.0 > 0 && size.1 > 0 && size != last_size_for_resize.get() {
-                last_size_for_resize.set(size);
-                text_css_for_resize.load_from_string(&font_css_for_size(size));
-            }
-            glib::ControlFlow::Continue
-        });
-
         let key_controller = gtk::EventControllerKey::new();
         let window_for_key = window.clone();
         key_controller.connect_key_pressed(move |_, key, _, _| {
@@ -237,10 +227,12 @@ impl NowPlayingWindow {
         let background_state = Rc::new(Cell::new(current_background));
         let background_style_state = Rc::new(Cell::new(BackgroundStyle::Gradient));
         let lights_off_state = Rc::new(Cell::new(false));
+        let gradient_surface = Rc::new(RefCell::new(None));
 
         let background_state_for_draw = background_state.clone();
         let background_style_state_for_draw = background_style_state.clone();
         let lights_off_state_for_draw = lights_off_state.clone();
+        let gradient_surface_for_draw = gradient_surface.clone();
         background_area.set_draw_func(move |_, context, width, height| {
             draw_background(
                 context,
@@ -249,7 +241,42 @@ impl NowPlayingWindow {
                 background_state_for_draw.get(),
                 background_style_state_for_draw.get(),
                 lights_off_state_for_draw.get(),
+                &gradient_surface_for_draw,
             );
+        });
+
+        let last_size = Rc::new(Cell::new((0, 0)));
+        let text_css_for_resize = text_css.clone();
+        let last_size_for_resize = last_size.clone();
+        let root_for_resize = root.clone();
+        let background_area_for_resize = background_area.clone();
+        let gradient_surface_for_resize = gradient_surface.clone();
+        let background_state_for_resize = background_state.clone();
+        let background_style_state_for_resize = background_style_state.clone();
+        let lights_off_state_for_resize = lights_off_state.clone();
+        root.add_tick_callback(move |_, _| {
+            let size = (root_for_resize.width(), root_for_resize.height());
+            if size.0 > 0 && size.1 > 0 && size != last_size_for_resize.get() {
+                last_size_for_resize.set(size);
+                text_css_for_resize.load_from_string(&font_css_for_size(size));
+
+                if matches!(
+                    background_style_state_for_resize.get(),
+                    BackgroundStyle::Gradient
+                ) {
+                    rebuild_gradient_surface(
+                        &gradient_surface_for_resize,
+                        effective_background(
+                            background_state_for_resize.get(),
+                            background_style_state_for_resize.get(),
+                            lights_off_state_for_resize.get(),
+                        ),
+                        background_area_for_resize.height(),
+                    );
+                    background_area_for_resize.queue_draw();
+                }
+            }
+            glib::ControlFlow::Continue
         });
 
         let hide_track_info = gtk::Switch::new();
@@ -272,8 +299,8 @@ impl NowPlayingWindow {
             album_label,
             details_label,
             info_box,
-            background_css,
             background_area: background_area.clone(),
+            gradient_surface: gradient_surface.clone(),
             background_style: background_style_state.clone(),
             current_background: background_state.clone(),
             lights_off: lights_off_state.clone(),
@@ -550,35 +577,13 @@ impl NowPlayingWindow {
         }
     }
 
-    fn set_background_css(&self) {
-        let css = format!(
-            r#".{BACKGROUND_CSS_CLASS} {{
-                background-color: transparent;
-                color: #ffffff;
-                padding: {}px;
-            }}
-            .{BACKGROUND_CSS_CLASS} > label {{ color: #ffffff; }}
-            .{BACKGROUND_CSS_CLASS} .{TITLE_CSS_CLASS},
-            .{BACKGROUND_CSS_CLASS} .{ARTIST_CSS_CLASS},
-            .{BACKGROUND_CSS_CLASS} .{ALBUM_CSS_CLASS},
-            .{BACKGROUND_CSS_CLASS} .{DETAILS_CSS_CLASS} {{ color: #ffffff; }}"#,
-            BACKGROUND_PADDING_PX,
-        );
-        self.background_css.load_from_string(&css);
-    }
-
     fn set_gradient_background(&self, background: Background) {
-        self.set_background_css();
-        self.current_background.set(background);
+        let height = self.background_area.height();
+        rebuild_gradient_surface(&self.gradient_surface, background, height);
         self.background_area.queue_draw();
     }
 
-    fn set_solid_background(&self, color: (u8, u8, u8)) {
-        self.set_background_css();
-        self.current_background.set(Background {
-            top: color,
-            bottom: color,
-        });
+    fn set_solid_background(&self, _color: (u8, u8, u8)) {
         self.background_area.queue_draw();
     }
 
@@ -639,19 +644,19 @@ impl BackgroundStyle {
  * The size is derived from a base font size and scaled to a width/height ratio
  * that keeps the typography readable across both standard and fullscreen layouts.
  */
-fn draw_background(
-    context: &Context,
-    width: i32,
+#[derive(Debug, Clone)]
+struct CachedGradient {
+    background: Background,
     height: i32,
+    surface: ImageSurface,
+}
+
+fn effective_background(
     background: Background,
     style: BackgroundStyle,
     lights_off: bool,
-) {
-    if width <= 0 || height <= 0 {
-        return;
-    }
-
-    let background = if lights_off {
+) -> Background {
+    if lights_off {
         match style {
             BackgroundStyle::Gradient => Background {
                 top: (38, 38, 38),
@@ -664,7 +669,23 @@ fn draw_background(
         }
     } else {
         background
-    };
+    }
+}
+
+fn draw_background(
+    context: &Context,
+    width: i32,
+    height: i32,
+    background: Background,
+    style: BackgroundStyle,
+    lights_off: bool,
+    cache: &RefCell<Option<CachedGradient>>,
+) {
+    if width <= 0 || height <= 0 {
+        return;
+    }
+
+    let background = effective_background(background, style, lights_off);
 
     if matches!(style, BackgroundStyle::Solid) {
         context.set_source_rgb(
@@ -676,58 +697,154 @@ fn draw_background(
         return;
     }
 
-    // Cairo's built-in gradient interpolation can expose 8-bit banding on large
-    // displays, especially in the dark lower part of the gradient. Render one
-    // horizontal row at a time instead. This is still O(height), rather than
-    // O(width * height), and lets us apply a tiny ordered dither per row.
-    const TRANSITION_START: f64 = 0.20;
-    const BAYER_4X4: [[f64; 4]; 4] = [
-        [0.0, 0.5, 0.125, 0.625],
-        [0.75, 0.25, 0.875, 0.375],
-        [0.1875, 0.6875, 0.0625, 0.5625],
-        [0.9375, 0.4375, 0.8125, 0.3125],
-    ];
+    let needs_rebuild = cache
+        .borrow()
+        .as_ref()
+        .map(|cached| cached.background != background || cached.height != height)
+        .unwrap_or(true);
 
-    let top = (
-        f64::from(background.top.0) / 255.0,
-        f64::from(background.top.1) / 255.0,
-        f64::from(background.top.2) / 255.0,
-    );
-    let bottom = (
-        f64::from(background.bottom.0) / 255.0,
-        f64::from(background.bottom.1) / 255.0,
-        f64::from(background.bottom.2) / 255.0,
-    );
+    if needs_rebuild {
+        rebuild_gradient_surface(cache, background, height);
+    }
 
-    for y in 0..height {
+    let guard = cache.borrow();
+    let Some(cached) = guard.as_ref() else {
+        return;
+    };
+
+    if let Err(error) = context.save() {
+        log::warn!("Failed to save Cairo state for gradient: {error}");
+        return;
+    }
+
+    context.scale(f64::from(width) / f64::from(GRADIENT_SURFACE_WIDTH), 1.0);
+
+    if let Err(error) = context.set_source_surface(&cached.surface, 0.0, 0.0) {
+        log::warn!("Failed to set cached gradient surface: {error}");
+        let _ = context.restore();
+        return;
+    }
+
+    if let Err(error) = context.paint() {
+        log::warn!("Failed to paint cached gradient surface: {error}");
+    }
+    let _ = context.restore();
+}
+
+fn rebuild_gradient_surface(
+    cache: &RefCell<Option<CachedGradient>>,
+    background: Background,
+    height: i32,
+) {
+    if height <= 0 {
+        return;
+    }
+
+    if cache
+        .borrow()
+        .as_ref()
+        .map(|cached| cached.background == background && cached.height == height)
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    let Ok(mut surface) = ImageSurface::create(Format::ARgb32, GRADIENT_SURFACE_WIDTH, height)
+    else {
+        log::warn!("Failed to create cached gradient surface");
+        return;
+    };
+
+    let stride = surface.stride() as usize;
+    let width = GRADIENT_SURFACE_WIDTH as usize;
+    let top = srgb_triplet_to_linear(background.top);
+    let bottom = srgb_triplet_to_linear(background.bottom);
+
+    let Ok(mut data) = surface.data() else {
+        log::warn!("Failed to access cached gradient surface data");
+        return;
+    };
+
+    for y in 0..height as usize {
         let position = if height <= 1 {
             1.0
         } else {
-            f64::from(y) / f64::from(height - 1)
+            y as f64 / f64::from(height - 1)
         };
-
-        // Keep the requested 20% top-color plateau, then use a smoothstep
-        // curve for a more gradual and natural interpolation to the bottom.
         let t = ((position - TRANSITION_START) / (1.0 - TRANSITION_START)).clamp(0.0, 1.0);
         let t = t * t * (3.0 - 2.0 * t);
 
-        let mut color = (
-            top.0 + (bottom.0 - top.0) * t,
-            top.1 + (bottom.1 - top.1) * t,
-            top.2 + (bottom.2 - top.2) * t,
-        );
+        let red = linear_to_srgb(top.0 + (bottom.0 - top.0) * t) * 255.0;
+        let green = linear_to_srgb(top.1 + (bottom.1 - top.1) * t) * 255.0;
+        let blue = linear_to_srgb(top.2 + (bottom.2 - top.2) * t) * 255.0;
 
-        // ±0.5/255 ordered dithering is enough to break visible 8-bit bands
-        // while remaining imperceptible at normal viewing distance.
-        let dither = (BAYER_4X4[(y as usize) & 3][(y as usize) & 3] - 0.5) / 255.0;
-        color.0 = (color.0 + dither).clamp(0.0, 1.0);
-        color.1 = (color.1 + dither).clamp(0.0, 1.0);
-        color.2 = (color.2 + dither).clamp(0.0, 1.0);
-
-        context.set_source_rgb(color.0, color.1, color.2);
-        context.rectangle(0.0, f64::from(y), f64::from(width), 1.0);
-        let _ = context.fill();
+        for x in 0..width {
+            // Unbiased stochastic rounding removes visible 8-bit steps without
+            // introducing a repeating Bayer/diamond pattern. The cached surface
+            // is tiny compared with the actual window and is generated only when
+            // the background or window height changes.
+            let noise = hash_noise(x as u32, y as u32);
+            let r = stochastic_round(red, noise);
+            let g = stochastic_round(green, noise);
+            let b = stochastic_round(blue, noise);
+            let pixel = u32::from_ne_bytes([b, g, r, 255]);
+            let offset = y * stride + x * 4;
+            data[offset..offset + 4].copy_from_slice(&pixel.to_ne_bytes());
+        }
     }
+    drop(data);
+    surface.flush();
+
+    *cache.borrow_mut() = Some(CachedGradient {
+        background,
+        height,
+        surface,
+    });
+}
+
+fn srgb_triplet_to_linear(rgb: (u8, u8, u8)) -> (f64, f64, f64) {
+    (
+        srgb_to_linear(f64::from(rgb.0) / 255.0),
+        srgb_to_linear(f64::from(rgb.1) / 255.0),
+        srgb_to_linear(f64::from(rgb.2) / 255.0),
+    )
+}
+
+fn srgb_to_linear(channel: f64) -> f64 {
+    if channel <= 0.04045 {
+        channel / 12.92
+    } else {
+        ((channel + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb(channel: f64) -> f64 {
+    let channel = channel.clamp(0.0, 1.0);
+    if channel <= 0.0031308 {
+        channel * 12.92
+    } else {
+        1.055 * channel.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+fn stochastic_round(value: f64, noise: f64) -> u8 {
+    let value = value.clamp(0.0, 255.0);
+    let floor = value.floor();
+    let fraction = value - floor;
+    let rounded = if noise < fraction { floor + 1.0 } else { floor };
+    rounded.clamp(0.0, 255.0) as u8
+}
+
+fn hash_noise(x: u32, y: u32) -> f64 {
+    let mut value = x
+        .wrapping_mul(0x9E37_79B9)
+        .wrapping_add(y.wrapping_mul(0x85EB_CA6B));
+    value ^= value >> 16;
+    value = value.wrapping_mul(0x7FEB_352D);
+    value ^= value >> 15;
+    value = value.wrapping_mul(0x846C_A68B);
+    value ^= value >> 16;
+    f64::from(value) / f64::from(u32::MAX)
 }
 
 fn font_css_for_size(size: (i32, i32)) -> String {
