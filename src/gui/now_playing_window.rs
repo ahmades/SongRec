@@ -20,6 +20,8 @@ const WINDOW_HEIGHT: i32 = 820;
 const MIN_WINDOW_WIDTH: i32 = 360;
 const MIN_WINDOW_HEIGHT: i32 = 410;
 const MIN_ARTWORK_SIZE: i32 = 135;
+const ARTWORK_MARGIN_PX: i32 = 24;
+const ARTWORK_CORNER_RADIUS_PX: i32 = 18;
 const ROOT_SPACING: i32 = 18;
 const INFO_BOX_SPACING: i32 = 2;
 const BACKGROUND_PADDING_PX: i32 = 96;
@@ -42,6 +44,7 @@ const TRANSITION_START: f64 = 0.20;
 pub struct NowPlayingWindow {
     window: gtk::Window,
     artwork: gtk::Picture,
+    artwork_overlay: gtk::Overlay,
     artwork_placeholder: gtk::Label,
     title_label: gtk::Label,
     artist_label: gtk::Label,
@@ -52,11 +55,14 @@ pub struct NowPlayingWindow {
     gradient_surface: Rc<RefCell<Option<CachedGradient>>>,
     background_style: Rc<Cell<BackgroundStyle>>,
     current_background: Rc<Cell<Background>>,
-    lights_off: Rc<Cell<bool>>,
+    round_corners: gtk::Switch,
     hide_track_info: gtk::Switch,
-    lights_off_menu: gtk::Switch,
     background_style_gradient: gtk::ToggleButton,
     background_style_solid: gtk::ToggleButton,
+    track_info_alignment_left: gtk::ToggleButton,
+    track_info_alignment_center: gtk::ToggleButton,
+    lights_off_menu: gtk::Switch,
+    lights_off: Rc<Cell<bool>>,
     gui_tx: Option<async_channel::Sender<GUIMessage>>,
 }
 
@@ -106,6 +112,10 @@ impl NowPlayingWindow {
             .hexpand(true)
             .vexpand(true)
             .build();
+        cover_frame.set_margin_top(ARTWORK_MARGIN_PX);
+        cover_frame.set_margin_bottom(ARTWORK_MARGIN_PX);
+        cover_frame.set_margin_start(ARTWORK_MARGIN_PX);
+        cover_frame.set_margin_end(ARTWORK_MARGIN_PX);
         cover_frame.set_size_request(MIN_ARTWORK_SIZE, MIN_ARTWORK_SIZE);
 
         let cover_picture = gtk::Picture::builder()
@@ -124,6 +134,11 @@ impl NowPlayingWindow {
         let cover_overlay = gtk::Overlay::new();
         cover_overlay.set_child(Some(&cover_picture));
         cover_overlay.add_overlay(&artwork_placeholder);
+        // GtkOverflow::Hidden clips child content to the widget bounds. Combined
+        // with the CSS border radius this makes the rounding affect the actual
+        // album artwork rather than only painting a rounded frame.
+        cover_overlay.set_overflow(gtk::Overflow::Hidden);
+        cover_overlay.add_css_class("now-playing-artwork-rounded");
         cover_frame.set_child(Some(&cover_overlay));
 
         let title_label = gtk::Label::builder()
@@ -190,7 +205,7 @@ impl NowPlayingWindow {
             );
         }
         background_css.load_from_string(&format!(
-            ".{BACKGROUND_CSS_CLASS} {{ background-color: transparent; color: #ffffff; padding: {BACKGROUND_PADDING_PX}px; }}\n             .{BACKGROUND_CSS_CLASS} > label {{ color: #ffffff; }}"
+            ".{BACKGROUND_CSS_CLASS} {{ background-color: transparent; color: #ffffff; padding: {BACKGROUND_PADDING_PX}px; }}\n             .{BACKGROUND_CSS_CLASS} > label {{ color: #ffffff; }}\n             .now-playing-artwork-rounded {{ border-radius: {ARTWORK_CORNER_RADIUS_PX}px; }}"
         ));
 
         // Typography follows the actual allocated content size. GTK4 does not
@@ -279,11 +294,15 @@ impl NowPlayingWindow {
             glib::ControlFlow::Continue
         });
 
+        let round_corners = gtk::Switch::new();
         let hide_track_info = gtk::Switch::new();
         let lights_off_menu = gtk::Switch::new();
         let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
         let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
         background_style_solid.set_group(Some(&background_style_gradient));
+        let track_info_alignment_left = gtk::ToggleButton::with_label(&gettext("Left"));
+        let track_info_alignment_center = gtk::ToggleButton::with_label(&gettext("Center"));
+        track_info_alignment_center.set_group(Some(&track_info_alignment_left));
 
         let prefs = preferences_interface
             .as_ref()
@@ -293,6 +312,7 @@ impl NowPlayingWindow {
         let now_playing = Self {
             window,
             artwork: cover_picture,
+            artwork_overlay: cover_overlay.clone(),
             artwork_placeholder,
             title_label,
             artist_label,
@@ -304,12 +324,20 @@ impl NowPlayingWindow {
             background_style: background_style_state.clone(),
             current_background: background_state.clone(),
             lights_off: lights_off_state.clone(),
+            round_corners: round_corners.clone(),
             hide_track_info: hide_track_info.clone(),
             lights_off_menu: lights_off_menu.clone(),
             background_style_gradient: background_style_gradient.clone(),
             background_style_solid: background_style_solid.clone(),
+            track_info_alignment_left: track_info_alignment_left.clone(),
+            track_info_alignment_center: track_info_alignment_center.clone(),
             gui_tx,
         };
+
+        now_playing.set_round_corners(prefs.now_playing_round_corners.unwrap_or(true));
+        now_playing.set_track_info_alignment(TrackInfoAlignment::from_preference(
+            prefs.now_playing_track_info_alignment.as_deref(),
+        ));
 
         let popover = gtk::Popover::new();
         popover.set_has_arrow(false);
@@ -317,6 +345,21 @@ impl NowPlayingWindow {
             .orientation(gtk::Orientation::Vertical)
             .spacing(6)
             .build();
+
+        let round_corners_row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let round_corners_label = gtk::Label::new(Some(&gettext("Round corners of album cover")));
+        round_corners_label.set_hexpand(true);
+        round_corners_label.set_halign(gtk::Align::Start);
+        round_corners_row.append(&round_corners_label);
+        round_corners.set_halign(gtk::Align::End);
+        round_corners.set_active(prefs.now_playing_round_corners.unwrap_or(true));
+        round_corners.set_sensitive(!prefs.lights_off_enabled.unwrap_or(false));
+        round_corners_row.append(&round_corners);
+        menu_box.append(&round_corners_row);
 
         let hide_track_info_row = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -330,21 +373,32 @@ impl NowPlayingWindow {
         hide_track_info.set_halign(gtk::Align::End);
         hide_track_info_row.append(&hide_track_info);
         hide_track_info.set_active(prefs.hide_now_playing_info.unwrap_or(false));
+        hide_track_info.set_sensitive(!prefs.lights_off_enabled.unwrap_or(false));
         menu_box.append(&hide_track_info_row);
 
-        let lights_off_row = gtk::Box::builder()
+        let track_info_alignment_row = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(12)
             .hexpand(true)
             .build();
-        let lights_off_label = gtk::Label::new(Some(&gettext("Lights off")));
-        lights_off_label.set_hexpand(true);
-        lights_off_label.set_halign(gtk::Align::Start);
-        lights_off_row.append(&lights_off_label);
-        lights_off_menu.set_halign(gtk::Align::End);
-        lights_off_row.append(&lights_off_menu);
-        lights_off_menu.set_active(prefs.lights_off_enabled.unwrap_or(false));
-        menu_box.append(&lights_off_row);
+        let track_info_alignment_label = gtk::Label::new(Some(&gettext("Track info alignment")));
+        track_info_alignment_label.set_hexpand(true);
+        track_info_alignment_label.set_halign(gtk::Align::Start);
+        track_info_alignment_row.append(&track_info_alignment_label);
+        let track_info_alignment_buttons = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(0)
+            .css_classes(["linked"])
+            .build();
+        track_info_alignment_buttons.append(&track_info_alignment_left);
+        track_info_alignment_buttons.append(&track_info_alignment_center);
+        match TrackInfoAlignment::from_preference(prefs.now_playing_track_info_alignment.as_deref())
+        {
+            TrackInfoAlignment::Left => track_info_alignment_left.set_active(true),
+            TrackInfoAlignment::Center => track_info_alignment_center.set_active(true),
+        }
+        track_info_alignment_row.append(&track_info_alignment_buttons);
+        menu_box.append(&track_info_alignment_row);
 
         let background_style_row = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -368,6 +422,20 @@ impl NowPlayingWindow {
             BackgroundStyle::Solid => background_style_solid.set_active(true),
         }
         menu_box.append(&background_style_row);
+        let lights_off_row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let lights_off_label = gtk::Label::new(Some(&gettext("Lights off")));
+        lights_off_label.set_hexpand(true);
+        lights_off_label.set_halign(gtk::Align::Start);
+        lights_off_row.append(&lights_off_label);
+        lights_off_menu.set_halign(gtk::Align::End);
+        lights_off_row.append(&lights_off_menu);
+        lights_off_menu.set_active(prefs.lights_off_enabled.unwrap_or(false));
+        menu_box.append(&lights_off_row);
+
         popover.set_child(Some(&menu_box));
 
         let popover_for_click = popover.clone();
@@ -383,6 +451,23 @@ impl NowPlayingWindow {
         });
         now_playing.window.add_controller(gesture);
 
+        let gui_tx_for_round_corners = now_playing.gui_tx.clone();
+        let artwork_overlay_for_round_corners = now_playing.artwork_overlay.clone();
+        now_playing
+            .round_corners
+            .connect_active_notify(move |switch| {
+                let active = switch.is_active();
+                if active {
+                    artwork_overlay_for_round_corners.add_css_class("now-playing-artwork-rounded");
+                } else {
+                    artwork_overlay_for_round_corners
+                        .remove_css_class("now-playing-artwork-rounded");
+                }
+                Self::send_preference_update(&gui_tx_for_round_corners, |preference| {
+                    preference.now_playing_round_corners = Some(active);
+                });
+            });
+
         let gui_tx_for_hide = now_playing.gui_tx.clone();
         now_playing
             .hide_track_info
@@ -392,13 +477,42 @@ impl NowPlayingWindow {
                 });
             });
 
+        let gui_tx_for_alignment_left = now_playing.gui_tx.clone();
+        now_playing
+            .track_info_alignment_left
+            .connect_toggled(move |button| {
+                if button.is_active() {
+                    Self::send_preference_update(&gui_tx_for_alignment_left, |preference| {
+                        preference.now_playing_track_info_alignment =
+                            Some(TrackInfoAlignment::Left.as_preference_value().to_string());
+                    });
+                }
+            });
+
+        let gui_tx_for_alignment_center = now_playing.gui_tx.clone();
+        now_playing
+            .track_info_alignment_center
+            .connect_toggled(move |button| {
+                if button.is_active() {
+                    Self::send_preference_update(&gui_tx_for_alignment_center, |preference| {
+                        preference.now_playing_track_info_alignment =
+                            Some(TrackInfoAlignment::Center.as_preference_value().to_string());
+                    });
+                }
+            });
+
         let gui_tx_for_lights = now_playing.gui_tx.clone();
+        let round_for_lights_menu = now_playing.round_corners.clone();
+        let hide_for_lights_menu = now_playing.hide_track_info.clone();
         now_playing
             .lights_off_menu
             .connect_active_notify(move |button| {
+                let active = button.is_active();
+                round_for_lights_menu.set_sensitive(!active);
+                hide_for_lights_menu.set_sensitive(!active);
                 Self::send_preference_update(&gui_tx_for_lights, |preference| {
-                    preference.lights_off_enabled = Some(button.is_active());
-                    if button.is_active() {
+                    preference.lights_off_enabled = Some(active);
+                    if active {
                         preference.hide_now_playing_info = Some(false);
                     }
                 });
@@ -437,16 +551,20 @@ impl NowPlayingWindow {
         let desired_style =
             BackgroundStyle::from_preference(preferences.now_playing_background_style.as_deref());
 
+        let round_corners = preferences.now_playing_round_corners.unwrap_or(true);
+        if self.round_corners.is_active() != round_corners {
+            self.round_corners.set_active(round_corners);
+        }
+        self.set_round_corners(round_corners);
+
         if self.hide_track_info.is_active() != hide_info {
             self.hide_track_info.set_active(hide_info);
         }
         self.set_show_track_info(!hide_info);
 
-        if self.lights_off_menu.is_active() != lights_off {
-            self.lights_off_menu.set_active(lights_off);
-        }
-        self.hide_track_info.set_sensitive(!lights_off);
-        self.set_lights(lights_off);
+        self.set_track_info_alignment(TrackInfoAlignment::from_preference(
+            preferences.now_playing_track_info_alignment.as_deref(),
+        ));
 
         match desired_style {
             BackgroundStyle::Gradient => {
@@ -466,6 +584,13 @@ impl NowPlayingWindow {
                 }
             }
         }
+
+        if self.lights_off_menu.is_active() != lights_off {
+            self.lights_off_menu.set_active(lights_off);
+        }
+        self.hide_track_info.set_sensitive(!lights_off);
+        self.round_corners.set_sensitive(!lights_off);
+        self.set_lights(lights_off);
         self.set_background_style(desired_style);
     }
 
@@ -474,6 +599,8 @@ impl NowPlayingWindow {
     /// (either solid or gradient black depending on preference).
     pub fn set_lights_off(&self, enabled: bool) {
         self.lights_off.set(enabled);
+        self.hide_track_info.set_sensitive(!enabled);
+        self.round_corners.set_sensitive(!enabled);
         self.apply_background();
         self.sync_artwork_visibility();
     }
@@ -587,6 +714,44 @@ impl NowPlayingWindow {
         self.background_area.queue_draw();
     }
 
+    pub fn set_round_corners(&self, enabled: bool) {
+        if enabled {
+            self.artwork_overlay
+                .add_css_class("now-playing-artwork-rounded");
+        } else {
+            self.artwork_overlay
+                .remove_css_class("now-playing-artwork-rounded");
+        }
+        if self.round_corners.is_active() != enabled {
+            self.round_corners.set_active(enabled);
+        }
+    }
+
+    pub fn set_track_info_alignment(&self, alignment: TrackInfoAlignment) {
+        match alignment {
+            TrackInfoAlignment::Left => {
+                self.info_box.set_halign(gtk::Align::Start);
+                self.title_label.set_halign(gtk::Align::Start);
+                self.artist_label.set_halign(gtk::Align::Start);
+                self.album_label.set_halign(gtk::Align::Start);
+                self.details_label.set_halign(gtk::Align::Start);
+                if !self.track_info_alignment_left.is_active() {
+                    self.track_info_alignment_left.set_active(true);
+                }
+            }
+            TrackInfoAlignment::Center => {
+                self.info_box.set_halign(gtk::Align::Center);
+                self.title_label.set_halign(gtk::Align::Center);
+                self.artist_label.set_halign(gtk::Align::Center);
+                self.album_label.set_halign(gtk::Align::Center);
+                self.details_label.set_halign(gtk::Align::Center);
+                if !self.track_info_alignment_center.is_active() {
+                    self.track_info_alignment_center.set_active(true);
+                }
+            }
+        }
+    }
+
     /// Shows or hides the metadata box for the active track.
     pub fn set_show_track_info(&self, show: bool) {
         self.info_box.set_visible(show);
@@ -609,6 +774,28 @@ impl NowPlayingWindow {
     /// Closes the window without destroying its internal state.
     pub fn close(&self) {
         self.window.close();
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackInfoAlignment {
+    Left,
+    Center,
+}
+
+impl TrackInfoAlignment {
+    pub fn as_preference_value(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Center => "center",
+        }
+    }
+
+    pub fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("left") => Self::Left,
+            _ => Self::Center,
+        }
     }
 }
 

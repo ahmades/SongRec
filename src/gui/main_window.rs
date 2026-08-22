@@ -34,7 +34,7 @@ use crate::core::preferences::{Preferences, PreferencesInterface};
 use crate::gui::context_menu::ContextMenuUtil;
 use crate::gui::history_entry::HistoryEntry;
 use crate::gui::listed_device::ListedDevice;
-use crate::gui::now_playing_window::{BackgroundStyle, NowPlayingWindow};
+use crate::gui::now_playing_window::{BackgroundStyle, NowPlayingWindow, TrackInfoAlignment};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -91,7 +91,11 @@ fn open_now_playing_window(
             Some(preferences_interface.clone()),
         );
         let preferences = preferences_interface.lock().unwrap().preferences.clone();
+        window.set_round_corners(preferences.now_playing_round_corners.unwrap_or(true));
         window.set_show_track_info(!preferences.hide_now_playing_info.unwrap_or(false));
+        window.set_track_info_alignment(TrackInfoAlignment::from_preference(
+            preferences.now_playing_track_info_alignment.as_deref(),
+        ));
         window.set_background_style(BackgroundStyle::from_preference(
             preferences.now_playing_background_style.as_deref(),
         ));
@@ -800,13 +804,19 @@ impl App {
         let spinner_row: adw::PreferencesRow = self.builder.object("spinner_row").unwrap();
         let volume_row: adw::PreferencesRow = self.builder.object("volume_row").unwrap();
         let volume_gauge: gtk::ProgressBar = self.builder.object("volume_gauge").unwrap();
+        let round_corners_setting: adw::SwitchRow =
+            self.builder.object("round_corners_setting").unwrap();
         let hide_track_info_setting: adw::SwitchRow =
             self.builder.object("hide_track_info_setting").unwrap();
-        let lights_off_setting: adw::SwitchRow = self.builder.object("lights_off_setting").unwrap();
+        let track_info_alignment_left: gtk::ToggleButton =
+            self.builder.object("track_info_alignment_left").unwrap();
+        let track_info_alignment_center: gtk::ToggleButton =
+            self.builder.object("track_info_alignment_center").unwrap();
         let background_style_gradient: gtk::ToggleButton =
             self.builder.object("background_style_gradient").unwrap();
         let background_style_solid: gtk::ToggleButton =
             self.builder.object("background_style_solid").unwrap();
+        let lights_off_setting: adw::SwitchRow = self.builder.object("lights_off_setting").unwrap();
         let results_section: adw::PreferencesGroup =
             self.builder.object("results_section").unwrap();
         let no_network_message: gtk::Label = self.builder.object("no_network_message").unwrap();
@@ -819,18 +829,65 @@ impl App {
             .unwrap()
             .preferences
             .clone();
-        let lights_off_initial = initial_preferences.lights_off_enabled.unwrap_or(false);
+        round_corners_setting.set_active(
+            initial_preferences
+                .now_playing_round_corners
+                .unwrap_or(true),
+        );
         hide_track_info_setting
             .set_active(initial_preferences.hide_now_playing_info.unwrap_or(false));
-        lights_off_setting.set_active(lights_off_initial);
-        // When Lights Off is enabled, the "Hide track info" control is not applicable.
-        hide_track_info_setting.set_sensitive(!lights_off_initial);
+        match TrackInfoAlignment::from_preference(
+            initial_preferences
+                .now_playing_track_info_alignment
+                .as_deref(),
+        ) {
+            TrackInfoAlignment::Left => {
+                track_info_alignment_left.set_active(true);
+                track_info_alignment_center.set_active(false);
+            }
+            TrackInfoAlignment::Center => {
+                track_info_alignment_left.set_active(false);
+                track_info_alignment_center.set_active(true);
+            }
+        }
         match BackgroundStyle::from_preference(
             initial_preferences.now_playing_background_style.as_deref(),
         ) {
             BackgroundStyle::Gradient => background_style_gradient.set_active(true),
             BackgroundStyle::Solid => background_style_solid.set_active(true),
         }
+        let lights_off_initial = initial_preferences.lights_off_enabled.unwrap_or(false);
+        lights_off_setting.set_active(lights_off_initial);
+        // When Lights Off is enabled, the artwork rounding and track-info controls are not applicable.
+        hide_track_info_setting.set_sensitive(!lights_off_initial);
+        round_corners_setting.set_sensitive(!lights_off_initial);
+
+        let gui_tx_for_round_corners = self.gui_tx.clone();
+        round_corners_setting.connect_active_notify(move |switch_row| {
+            send_preference_update(&gui_tx_for_round_corners, |preference| {
+                preference.now_playing_round_corners = Some(switch_row.is_active());
+            });
+        });
+
+        let gui_tx_for_alignment_left = self.gui_tx.clone();
+        track_info_alignment_left.connect_toggled(move |button| {
+            if button.is_active() {
+                send_preference_update(&gui_tx_for_alignment_left, |preference| {
+                    preference.now_playing_track_info_alignment =
+                        Some(TrackInfoAlignment::Left.as_preference_value().to_string());
+                });
+            }
+        });
+
+        let gui_tx_for_alignment_center = self.gui_tx.clone();
+        track_info_alignment_center.connect_toggled(move |button| {
+            if button.is_active() {
+                send_preference_update(&gui_tx_for_alignment_center, |preference| {
+                    preference.now_playing_track_info_alignment =
+                        Some(TrackInfoAlignment::Center.as_preference_value().to_string());
+                });
+            }
+        });
 
         let gui_tx_for_hide_info = self.gui_tx.clone();
         hide_track_info_setting.connect_active_notify(move |switch_row| {
@@ -841,6 +898,7 @@ impl App {
 
         let gui_tx_for_lights_off = self.gui_tx.clone();
         let hide_for_lights = hide_track_info_setting.clone();
+        let round_for_lights = round_corners_setting.clone();
         lights_off_setting.connect_active_notify(move |switch_row| {
             send_preference_update(&gui_tx_for_lights_off, |preference| {
                 preference.lights_off_enabled = Some(switch_row.is_active());
@@ -849,6 +907,7 @@ impl App {
                 }
             });
             hide_for_lights.set_sensitive(!switch_row.is_active());
+            round_for_lights.set_sensitive(!switch_row.is_active());
         });
 
         let gui_tx_for_gradient = self.gui_tx.clone();
@@ -1004,9 +1063,23 @@ impl App {
                                 .preferences
                                 .clone();
 
+                            round_corners_setting
+                                .set_active(preferences.now_playing_round_corners.unwrap_or(true));
                             hide_track_info_setting
                                 .set_active(preferences.hide_now_playing_info.unwrap_or(false));
+                            match TrackInfoAlignment::from_preference(
+                                preferences.now_playing_track_info_alignment.as_deref(),
+                            ) {
+                                TrackInfoAlignment::Left => {
+                                    track_info_alignment_left.set_active(true);
+                                }
+                                TrackInfoAlignment::Center => {
+                                    track_info_alignment_center.set_active(true);
+                                }
+                            }
                             hide_track_info_setting
+                                .set_sensitive(!preferences.lights_off_enabled.unwrap_or(false));
+                            round_corners_setting
                                 .set_sensitive(!preferences.lights_off_enabled.unwrap_or(false));
                             lights_off_setting
                                 .set_active(preferences.lights_off_enabled.unwrap_or(false));

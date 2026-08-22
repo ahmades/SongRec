@@ -22,9 +22,11 @@ pub struct Preferences {
     pub current_device_name: Option<String>,
     pub website_search_url: Option<String>,
     pub website_search_text: Option<String>,
+    pub now_playing_round_corners: Option<bool>,
     pub hide_now_playing_info: Option<bool>,
-    pub lights_off_enabled: Option<bool>,
+    pub now_playing_track_info_alignment: Option<String>,
     pub now_playing_background_style: Option<String>,
+    pub lights_off_enabled: Option<bool>,
 }
 
 impl Preferences {
@@ -42,9 +44,11 @@ impl Preferences {
             current_device_name: None,
             website_search_url: None,
             website_search_text: None,
+            now_playing_round_corners: None,
             hide_now_playing_info: None,
-            lights_off_enabled: None,
+            now_playing_track_info_alignment: None,
             now_playing_background_style: None,
+            lights_off_enabled: None,
         }
     }
 
@@ -62,9 +66,11 @@ impl Preferences {
             current_device_name: None,
             website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
             website_search_text: Some(gettext("Search on YouTube".to_string())),
+            now_playing_round_corners: Some(true),
             hide_now_playing_info: Some(false),
-            lights_off_enabled: Some(false),
+            now_playing_track_info_alignment: Some("center".to_string()),
             now_playing_background_style: Some("gradient".to_string()),
+            lights_off_enabled: Some(false),
         }
     }
 }
@@ -84,9 +90,11 @@ impl Default for Preferences {
             current_device_name: None,
             website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
             website_search_text: Some(gettext("Search on YouTube".to_string())),
+            now_playing_round_corners: Some(true),
             hide_now_playing_info: Some(false),
-            lights_off_enabled: Some(false),
+            now_playing_track_info_alignment: Some("center".to_string()),
             now_playing_background_style: Some("gradient".to_string()),
+            lights_off_enabled: Some(false),
         }
     }
 }
@@ -168,15 +176,21 @@ impl PreferencesInterface {
             website_search_text: update_preferences
                 .website_search_text
                 .or_else(|| current_preferences.website_search_text.clone()),
+            now_playing_round_corners: update_preferences
+                .now_playing_round_corners
+                .or(current_preferences.now_playing_round_corners),
             hide_now_playing_info: update_preferences
                 .hide_now_playing_info
                 .or(current_preferences.hide_now_playing_info),
-            lights_off_enabled: update_preferences
-                .lights_off_enabled
-                .or(current_preferences.lights_off_enabled),
+            now_playing_track_info_alignment: update_preferences
+                .now_playing_track_info_alignment
+                .or_else(|| current_preferences.now_playing_track_info_alignment.clone()),
             now_playing_background_style: update_preferences
                 .now_playing_background_style
                 .or_else(|| current_preferences.now_playing_background_style.clone()),
+            lights_off_enabled: update_preferences
+                .lights_off_enabled
+                .or(current_preferences.lights_off_enabled),
         };
         if let Err(error) = self.write() {
             error!("{} {}", gettext("When saving the preferences file:"), error);

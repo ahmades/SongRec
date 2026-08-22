@@ -455,14 +455,36 @@ Adw.ApplicationWindow main_window {
           Adw.PreferencesGroup now_playing_preferences {
             title: _("Now Playing preferences");
 
+            Adw.SwitchRow round_corners_setting {
+              subtitle: _("Round the corners of the album artwork");
+              title: _("Round corners of album cover");
+            }
+
             Adw.SwitchRow hide_track_info_setting {
               subtitle: _("Show only the album artwork");
               title: _("Hide track info");
             }
 
-            Adw.SwitchRow lights_off_setting {
-              subtitle: _("Show only the track on a black background");
-              title: _("Lights Off");
+            Adw.ActionRow track_info_alignment_setting {
+              subtitle: _("Choose how the track information is positioned");
+              title: _("Track info alignment");
+
+              Box {
+                spacing: 0;
+                css-classes: [
+                  "linked",
+                ];
+
+                ToggleButton track_info_alignment_left {
+                  label: _("Left");
+                }
+
+                ToggleButton track_info_alignment_center {
+                  group: track_info_alignment_left;
+                  active: true;
+                  label: _("Center");
+                }
+              }
             }
 
             Adw.ActionRow background_style_setting {
@@ -485,6 +507,11 @@ Adw.ApplicationWindow main_window {
                   label: _("Solid");
                 }
               }
+            }
+
+            Adw.SwitchRow lights_off_setting {
+              subtitle: _("Show only the track on a black background");
+              title: _("Lights Off");
             }
           }
 

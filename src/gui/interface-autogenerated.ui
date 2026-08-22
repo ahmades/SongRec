@@ -532,15 +532,39 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                       <object class="AdwPreferencesGroup" id="now_playing_preferences">
                         <property name="title" translatable="yes">Now Playing preferences</property>
                         <child>
+                          <object class="AdwSwitchRow" id="round_corners_setting">
+                            <property name="subtitle" translatable="yes">Round the corners of the album artwork</property>
+                            <property name="title" translatable="yes">Round corners of album cover</property>
+                          </object>
+                        </child>
+                        <child>
                           <object class="AdwSwitchRow" id="hide_track_info_setting">
                             <property name="subtitle" translatable="yes">Show only the album artwork</property>
                             <property name="title" translatable="yes">Hide track info</property>
                           </object>
                         </child>
                         <child>
-                          <object class="AdwSwitchRow" id="lights_off_setting">
-                            <property name="subtitle" translatable="yes">Show only the track on a black background</property>
-                            <property name="title" translatable="yes">Lights Off</property>
+                          <object class="AdwActionRow" id="track_info_alignment_setting">
+                            <property name="subtitle" translatable="yes">Choose how the track information is positioned</property>
+                            <property name="title" translatable="yes">Track info alignment</property>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="spacing">0</property>
+                                <property name="css-classes">linked</property>
+                                <child>
+                                  <object class="GtkToggleButton" id="track_info_alignment_left">
+                                    <property name="label" translatable="yes">Left</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkToggleButton" id="track_info_alignment_center">
+                                    <property name="group">track_info_alignment_left</property>
+                                    <property name="active">true</property>
+                                    <property name="label" translatable="yes">Center</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                           </object>
                         </child>
                         <child>
@@ -565,6 +589,12 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                 </child>
                               </object>
                             </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSwitchRow" id="lights_off_setting">
+                            <property name="subtitle" translatable="yes">Show only the track on a black background</property>
+                            <property name="title" translatable="yes">Lights Off</property>
                           </object>
                         </child>
                       </object>
