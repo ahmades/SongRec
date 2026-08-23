@@ -34,7 +34,9 @@ use crate::core::preferences::{Preferences, PreferencesInterface};
 use crate::gui::context_menu::ContextMenuUtil;
 use crate::gui::history_entry::HistoryEntry;
 use crate::gui::listed_device::ListedDevice;
-use crate::gui::now_playing_window::{BackgroundStyle, NowPlayingWindow, TrackInfoAlignment};
+use crate::gui::now_playing_window::{
+    BackgroundStyle, NowPlayingWindow, TrackInfoAlignment, TransitionEffect,
+};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -820,6 +822,7 @@ impl App {
             .builder
             .object("always_display_last_recognized_song_setting")
             .unwrap();
+        let transition_setting: adw::ComboRow = self.builder.object("transition_setting").unwrap();
         let lights_off_setting: adw::SwitchRow = self.builder.object("lights_off_setting").unwrap();
         let results_section: adw::PreferencesGroup =
             self.builder.object("results_section").unwrap();
@@ -865,6 +868,15 @@ impl App {
                 .always_display_last_recognized_song
                 .unwrap_or(true),
         );
+        let transition_model =
+            gtk::StringList::new(&[&gettext("None"), &gettext("Fade"), &gettext("Slide up")]);
+        transition_setting.set_model(Some(&transition_model));
+        transition_setting.set_selected(
+            TransitionEffect::from_preference(
+                initial_preferences.now_playing_transition.as_deref(),
+            )
+            .index(),
+        );
         let lights_off_initial = initial_preferences.lights_off_enabled.unwrap_or(false);
         lights_off_setting.set_active(lights_off_initial);
         // When Lights Off is enabled, the artwork rounding and track-info controls are not applicable.
@@ -909,6 +921,14 @@ impl App {
         always_display_last_recognized_song_setting.connect_active_notify(move |switch_row| {
             send_preference_update(&gui_tx_for_always_display_last, |preference| {
                 preference.always_display_last_recognized_song = Some(switch_row.is_active());
+            });
+        });
+
+        let gui_tx_for_transition = self.gui_tx.clone();
+        transition_setting.connect_selected_notify(move |combo| {
+            let effect = TransitionEffect::from_index(combo.selected());
+            send_preference_update(&gui_tx_for_transition, |preference| {
+                preference.now_playing_transition = Some(effect.as_preference_value().to_string());
             });
         });
 
@@ -1101,6 +1121,12 @@ impl App {
                                 preferences
                                     .always_display_last_recognized_song
                                     .unwrap_or(true),
+                            );
+                            transition_setting.set_selected(
+                                TransitionEffect::from_preference(
+                                    preferences.now_playing_transition.as_deref(),
+                                )
+                                .index(),
                             );
                             lights_off_setting
                                 .set_active(preferences.lights_off_enabled.unwrap_or(false));

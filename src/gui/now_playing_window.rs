@@ -14,6 +14,7 @@ use gettextrs::gettext;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 const WINDOW_WIDTH: i32 = 720;
 const WINDOW_HEIGHT: i32 = 820;
@@ -40,6 +41,7 @@ const DETAILS_CSS_CLASS: &str = "now-playing-details";
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
 const GRADIENT_SURFACE_WIDTH: i32 = 256;
 const TRANSITION_START: f64 = 0.20;
+const TRANSITION_DURATION_MS: u64 = 2000;
 
 struct NowPlayingWidgets {
     window: gtk::Window,
@@ -52,6 +54,7 @@ struct NowPlayingWidgets {
     details_label: gtk::Label,
     info_box: gtk::Box,
     background_area: gtk::DrawingArea,
+    content_revealer: gtk::Revealer,
 }
 
 struct NowPlayingControls {
@@ -62,6 +65,7 @@ struct NowPlayingControls {
     track_info_alignment_left: gtk::ToggleButton,
     track_info_alignment_center: gtk::ToggleButton,
     always_display_last_recognized_song: gtk::Switch,
+    transition_menu: gtk::DropDown,
     lights_off_menu: gtk::Switch,
 }
 
@@ -71,6 +75,9 @@ struct NowPlayingState {
     current_background: Rc<Cell<Background>>,
     lights_off: Rc<Cell<bool>>,
     showing_listening: Rc<Cell<bool>>,
+    transition: Rc<Cell<TransitionEffect>>,
+    transition_generation: Rc<Cell<u64>>,
+    last_track_key: Rc<RefCell<Option<String>>>,
 }
 
 pub struct NowPlayingWindow {
@@ -225,6 +232,15 @@ impl NowPlayingWindow {
         root.append(&cover_frame);
         root.append(&info_box);
 
+        let content_revealer = gtk::Revealer::builder()
+            .reveal_child(true)
+            .transition_duration(TRANSITION_DURATION_MS as u32)
+            .transition_type(gtk::RevealerTransitionType::Crossfade)
+            .hexpand(true)
+            .vexpand(true)
+            .build();
+        content_revealer.set_child(Some(&root));
+
         let background_area = gtk::DrawingArea::new();
         background_area.set_hexpand(true);
         background_area.set_vexpand(true);
@@ -232,11 +248,11 @@ impl NowPlayingWindow {
 
         let overlay = gtk::Overlay::new();
         overlay.set_child(Some(&background_area));
-        overlay.add_overlay(&root);
+        overlay.add_overlay(&content_revealer);
         overlay.add_overlay(&artwork_placeholder);
         artwork_placeholder.set_halign(gtk::Align::Center);
         artwork_placeholder.set_valign(gtk::Align::Center);
-        artwork_placeholder.set_css_classes([TITLE_CSS_CLASS]);
+        artwork_placeholder.set_css_classes(&[TITLE_CSS_CLASS]);
         window.set_child(Some(&overlay));
 
         let background_css = gtk::CssProvider::new();
@@ -289,6 +305,7 @@ impl NowPlayingWindow {
                 details_label,
                 info_box,
                 background_area,
+                content_revealer,
             },
             text_css,
         )
@@ -299,6 +316,11 @@ impl NowPlayingWindow {
         let round_corners = gtk::Switch::new();
         let hide_track_info = gtk::Switch::new();
         let always_display_last_recognized_song = gtk::Switch::new();
+        let transition_menu = gtk::DropDown::from_strings(&[
+            &gettext("None"),
+            &gettext("Fade"),
+            &gettext("Slide up"),
+        ]);
         let lights_off_menu = gtk::Switch::new();
         let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
         let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
@@ -315,6 +337,7 @@ impl NowPlayingWindow {
             track_info_alignment_left,
             track_info_alignment_center,
             always_display_last_recognized_song,
+            transition_menu,
             lights_off_menu,
         }
     }
@@ -327,6 +350,9 @@ impl NowPlayingWindow {
             current_background: Rc::new(Cell::new(Background::fallback())),
             lights_off: Rc::new(Cell::new(false)),
             showing_listening: Rc::new(Cell::new(true)),
+            transition: Rc::new(Cell::new(TransitionEffect::None)),
+            transition_generation: Rc::new(Cell::new(0)),
+            last_track_key: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -395,6 +421,9 @@ impl NowPlayingWindow {
                 .always_display_last_recognized_song
                 .unwrap_or(true),
         );
+        self.set_transition(TransitionEffect::from_preference(
+            preferences.now_playing_transition.as_deref(),
+        ));
         self.set_listening_state();
     }
 
@@ -431,6 +460,11 @@ impl NowPlayingWindow {
                 .always_display_last_recognized_song
                 .unwrap_or(true),
             true,
+        );
+        self.add_transition_menu_row(
+            &menu_box,
+            &self.controls.transition_menu,
+            TransitionEffect::from_preference(preferences.now_playing_transition.as_deref()),
         );
         self.add_switch_menu_row(
             &menu_box,
@@ -477,6 +511,27 @@ impl NowPlayingWindow {
         switch.set_active(active);
         switch.set_sensitive(sensitive);
         row.append(switch);
+        menu_box.append(&row);
+    }
+
+    /// Adds the transition effect drop-down to the context menu and selects the saved effect.
+    fn add_transition_menu_row(
+        &self,
+        menu_box: &gtk::Box,
+        dropdown: &gtk::DropDown,
+        effect: TransitionEffect,
+    ) {
+        let row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let label = gtk::Label::new(Some(&gettext("Transition")));
+        label.set_hexpand(true);
+        label.set_halign(gtk::Align::Start);
+        row.append(&label);
+        dropdown.set_selected(effect.index());
+        row.append(dropdown);
         menu_box.append(&row);
     }
 
@@ -597,6 +652,19 @@ impl NowPlayingWindow {
                 });
             });
 
+        let gui_tx_for_transition = self.gui_tx.clone();
+        let transition_state = self.state.transition.clone();
+        self.controls
+            .transition_menu
+            .connect_selected_notify(move |dropdown| {
+                let effect = TransitionEffect::from_index(dropdown.selected());
+                transition_state.set(effect);
+                Self::send_preference_update(&gui_tx_for_transition, |preference| {
+                    preference.now_playing_transition =
+                        Some(effect.as_preference_value().to_string());
+                });
+            });
+
         let gui_tx_for_lights = self.gui_tx.clone();
         let round_for_lights_menu = self.controls.round_corners.clone();
         let hide_for_lights_menu = self.controls.hide_track_info.clone();
@@ -673,6 +741,15 @@ impl NowPlayingWindow {
                 .always_display_last_recognized_song
                 .set_active(always_display_last);
         }
+
+        let desired_transition =
+            TransitionEffect::from_preference(preferences.now_playing_transition.as_deref());
+        if self.controls.transition_menu.selected() != desired_transition.index() {
+            self.controls
+                .transition_menu
+                .set_selected(desired_transition.index());
+        }
+        self.state.transition.set(desired_transition);
 
         match desired_style {
             BackgroundStyle::Gradient => {
@@ -756,6 +833,25 @@ impl NowPlayingWindow {
             return;
         }
 
+        let should_transition = self
+            .state
+            .last_track_key
+            .borrow()
+            .as_deref()
+            .is_some_and(|previous| previous != message.track_key)
+            && !message.track_key.is_empty();
+
+        *self.state.last_track_key.borrow_mut() = Some(message.track_key.clone());
+
+        if should_transition {
+            self.transition_to_track(message.clone());
+        } else {
+            self.apply_track_update(message);
+        }
+    }
+
+    /// Applies a recognized track immediately without running a visual transition.
+    fn apply_track_update(&self, message: &SongRecognizedMessage) {
         self.state.showing_listening.set(false);
         self.set_metadata(message);
 
@@ -766,8 +862,116 @@ impl NowPlayingWindow {
         }
     }
 
+    /// Runs the configured lightweight transition before displaying a newly recognized track.
+    fn transition_to_track(&self, message: SongRecognizedMessage) {
+        let effect = self.state.transition.get();
+        if matches!(effect, TransitionEffect::None) {
+            self.apply_track_update(&message);
+            return;
+        }
+
+        let generation = self.state.transition_generation.get().wrapping_add(1);
+        self.state.transition_generation.set(generation);
+        self.ui
+            .content_revealer
+            .set_transition_type(effect.revealer_type());
+
+        // Keep the old track visible while it animates out. The new track is only
+        // written after that animation has finished, preventing it from flashing
+        // before the transition starts.
+        self.ui.content_revealer.set_reveal_child(false);
+
+        let revealer = self.ui.content_revealer.clone();
+        let generation_state = self.state.transition_generation.clone();
+        let title_label = self.ui.title_label.clone();
+        let artist_label = self.ui.artist_label.clone();
+        let album_label = self.ui.album_label.clone();
+        let details_label = self.ui.details_label.clone();
+        let artwork = self.ui.artwork.clone();
+        let artwork_placeholder = self.ui.artwork_placeholder.clone();
+        let artwork_overlay = self.ui.artwork_overlay.clone();
+        let background_area = self.ui.background_area.clone();
+        let current_background = self.state.current_background.clone();
+        let background_style = self.state.background_style.clone();
+        let lights_off = self.state.lights_off.clone();
+        let showing_listening = self.state.showing_listening.clone();
+        let gradient_surface = self.state.gradient_surface.clone();
+
+        glib::timeout_add_local_once(Duration::from_millis(TRANSITION_DURATION_MS), move || {
+            if generation_state.get() != generation {
+                return;
+            }
+
+            showing_listening.set(false);
+            title_label.set_label(&message.song_name);
+            artist_label.set_label(&message.artist_name);
+            album_label.set_label(
+                message
+                    .album_name
+                    .as_deref()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(""),
+            );
+            details_label.set_label(
+                message
+                    .release_year
+                    .as_deref()
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(""),
+            );
+
+            if let Some(bytes) = message.cover_image.as_ref() {
+                if let Ok(texture) = gdk::Texture::from_bytes(&glib::Bytes::from(bytes)) {
+                    artwork.set_paintable(Some(&texture));
+                    current_background.set(from_cover_image(bytes));
+                    if lights_off.get() {
+                        match background_style.get() {
+                            BackgroundStyle::Gradient => rebuild_gradient_surface(
+                                &gradient_surface,
+                                Background {
+                                    top: (38, 38, 38),
+                                    bottom: (0, 0, 0),
+                                },
+                                background_area.height(),
+                            ),
+                            BackgroundStyle::Solid => {}
+                        }
+                    } else if matches!(background_style.get(), BackgroundStyle::Gradient) {
+                        rebuild_gradient_surface(
+                            &gradient_surface,
+                            current_background.get(),
+                            background_area.height(),
+                        );
+                    }
+                } else {
+                    artwork.set_paintable(Option::<&gdk::Texture>::None);
+                    current_background.set(Background::fallback());
+                }
+            } else {
+                artwork.set_paintable(Option::<&gdk::Texture>::None);
+                current_background.set(Background::fallback());
+            }
+
+            artwork_overlay.set_visible(true);
+            artwork_placeholder.set_visible(false);
+            revealer.set_reveal_child(true);
+
+            if lights_off.get() {
+                // Keep the existing Lights Off background and only replace the content.
+            } else if matches!(background_style.get(), BackgroundStyle::Gradient) {
+                background_area.queue_draw();
+            } else {
+                background_area.queue_draw();
+            }
+        });
+    }
+
     /// Clears the current track and shows the listening placeholder while preserving the background.
     pub fn set_listening_state(&self) {
+        self.state
+            .transition_generation
+            .set(self.state.transition_generation.get().wrapping_add(1));
+        self.ui.content_revealer.set_reveal_child(true);
         self.state.showing_listening.set(true);
         self.ui.artwork.set_paintable(Option::<&gdk::Texture>::None);
         self.ui.title_label.set_label("");
@@ -786,6 +990,12 @@ impl NowPlayingWindow {
         {
             self.set_listening_state();
         }
+    }
+
+    /// Selects and applies the transition effect used when a new track replaces the current one.
+    pub fn set_transition(&self, effect: TransitionEffect) {
+        self.state.transition.set(effect);
+        self.controls.transition_menu.set_selected(effect.index());
     }
 
     /// Enables or disables keeping the last recognized song when no new match is available.
@@ -951,6 +1161,64 @@ impl NowPlayingWindow {
     /// Closes the window while keeping its internal state available for reuse.
     pub fn close(&self) {
         self.ui.window.close();
+    }
+}
+
+/// Defines the lightweight visual transition used when a new track is displayed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransitionEffect {
+    /// Replace the current track immediately without animation.
+    None,
+    /// Crossfade the current track information into the new track.
+    Fade,
+    /// Reveal the new track information by sliding it upward.
+    SlideUp,
+}
+
+impl TransitionEffect {
+    /// Returns the persisted string representation of this transition effect.
+    pub fn as_preference_value(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Fade => "fade",
+            Self::SlideUp => "slide-up",
+        }
+    }
+
+    /// Parses a persisted transition value, defaulting to no animation.
+    pub fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("fade") => Self::Fade,
+            Some("slide-up") => Self::SlideUp,
+            _ => Self::None,
+        }
+    }
+
+    /// Converts the effect into the GTK revealer animation used by the window.
+    pub fn revealer_type(self) -> gtk::RevealerTransitionType {
+        match self {
+            Self::None => gtk::RevealerTransitionType::None,
+            Self::Fade => gtk::RevealerTransitionType::Crossfade,
+            Self::SlideUp => gtk::RevealerTransitionType::SlideUp,
+        }
+    }
+
+    /// Returns the zero-based index used by the Transition dropdown.
+    pub fn index(self) -> u32 {
+        match self {
+            Self::None => 0,
+            Self::Fade => 1,
+            Self::SlideUp => 2,
+        }
+    }
+
+    /// Converts a Transition dropdown index into an effect, defaulting to None.
+    pub fn from_index(index: u32) -> Self {
+        match index {
+            1 => Self::Fade,
+            2 => Self::SlideUp,
+            _ => Self::None,
+        }
     }
 }
 

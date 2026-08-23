@@ -598,6 +598,12 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           </object>
                         </child>
                         <child>
+                          <object class="AdwComboRow" id="transition_setting">
+                            <property name="subtitle" translatable="yes">Choose the effect used when the recognized track changes</property>
+                            <property name="title" translatable="yes">Transition</property>
+                          </object>
+                        </child>
+                        <child>
                           <object class="AdwSwitchRow" id="lights_off_setting">
                             <property name="subtitle" translatable="yes">Show only the track on a black background</property>
                             <property name="title" translatable="yes">Lights Off</property>

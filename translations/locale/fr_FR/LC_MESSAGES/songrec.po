@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-23 21:44+0200\n"
+"POT-Creation-Date: 2026-08-23 22:05+0200\n"
 "PO-Revision-Date: 2026-06-27 17:34+0000\n"
 "Last-Translator: Marin <25437947+marin-m@users.noreply.github.com>\n"
 "Language-Team: French <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -48,8 +48,8 @@ msgstr "Avertissement : Pas de connexion réseau"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1161 src/gui/main_window.rs:1166
-#: src/gui/main_window.rs:1178
+#: src/gui/main_window.rs:1187 src/gui/main_window.rs:1192
+#: src/gui/main_window.rs:1204
 msgid "No match for this song"
 msgstr "Chanson non reconnue"
 
@@ -209,17 +209,17 @@ msgstr "Erreur audio :"
 msgid "Audio error: No input device available"
 msgstr "Erreur audio : pas de périphérique d'entrée disponible"
 
-#: src/core/preferences.rs:70 src/core/preferences.rs:95
-#: src/gui/main_window.rs:339 src/gui/interface.blp:129
-#: src/gui/interface.blp:648 src/gui/interface.blp:698
+#: src/core/preferences.rs:72 src/core/preferences.rs:98
+#: src/gui/main_window.rs:341 src/gui/interface.blp:129
+#: src/gui/interface.blp:653 src/gui/interface.blp:703
 msgid "Search on YouTube"
 msgstr "Rechercher sur YouTube"
 
-#: src/core/preferences.rs:117
+#: src/core/preferences.rs:121
 msgid "When parsing the preferences file:"
 msgstr "Lors de la lecture du fichier de préférences :"
 
-#: src/core/preferences.rs:203
+#: src/core/preferences.rs:210
 msgid "When saving the preferences file:"
 msgstr "Lors de la sauvegarde du fichier de préférences :"
 
@@ -237,87 +237,103 @@ msgstr ""
 "Fréquence d'échantillonnage invalide passée lors de l'encodage du paquet "
 "Shazam"
 
-#: src/gui/main_window.rs:297
+#: src/gui/main_window.rs:299
 msgid "Application error"
 msgstr "Erreur de l'application"
 
-#: src/gui/main_window.rs:318
+#: src/gui/main_window.rs:320
 msgid "Network error"
 msgstr "Erreur réseau"
 
-#: src/gui/main_window.rs:394
+#: src/gui/main_window.rs:396
 msgid "Unable to enable notification icon"
 msgstr "Impossible d'activer l'icône de notification"
 
-#: src/gui/main_window.rs:1018 src/gui/main_window.rs:1148
+#: src/gui/main_window.rs:872 src/gui/now_playing_window.rs:320
+msgid "None"
+msgstr ""
+
+#: src/gui/main_window.rs:872 src/gui/now_playing_window.rs:321
+msgid "Fade"
+msgstr ""
+
+#: src/gui/main_window.rs:872 src/gui/now_playing_window.rs:322
+msgid "Slide up"
+msgstr ""
+
+#: src/gui/main_window.rs:1038 src/gui/main_window.rs:1174
 msgid "Unable to enable MPRIS support"
 msgstr "Impossible d'activer le support de MRPIS"
 
-#: src/gui/main_window.rs:1175
+#: src/gui/main_window.rs:1201
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:1256
+#: src/gui/main_window.rs:1282
 msgid "Song recognized"
 msgstr "Chanson identifiée"
 
-#: src/gui/main_window.rs:1393
+#: src/gui/main_window.rs:1419
 msgid "Are you sure you want to wipe history?"
 msgstr "Êtes-vous sûr⋅e de vouloir supprimer l'historique ?"
 
-#: src/gui/main_window.rs:1399
+#: src/gui/main_window.rs:1425
 msgid "_Yes"
 msgstr "_Oui"
 
-#: src/gui/main_window.rs:1400
+#: src/gui/main_window.rs:1426
 msgid "_Cancel"
 msgstr "_Annuler"
 
-#: src/gui/now_playing_window.rs:148
+#: src/gui/now_playing_window.rs:155
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:179
+#: src/gui/now_playing_window.rs:186
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:303 src/gui/interface.blp:502
+#: src/gui/now_playing_window.rs:325 src/gui/interface.blp:502
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:304 src/gui/interface.blp:507
+#: src/gui/now_playing_window.rs:326 src/gui/interface.blp:507
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:306 src/gui/interface.blp:479
+#: src/gui/now_playing_window.rs:328 src/gui/interface.blp:479
 msgid "Left"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:307 src/gui/interface.blp:485
+#: src/gui/now_playing_window.rs:329 src/gui/interface.blp:485
 msgid "Center"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:412 src/gui/interface.blp:460
+#: src/gui/now_playing_window.rs:441 src/gui/interface.blp:460
 msgid "Round corners of album cover"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:419 src/gui/interface.blp:465
+#: src/gui/now_playing_window.rs:448 src/gui/interface.blp:465
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:428 src/gui/interface.blp:514
+#: src/gui/now_playing_window.rs:457 src/gui/interface.blp:514
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:437
+#: src/gui/now_playing_window.rs:471
 msgid "Lights off"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:490 src/gui/interface.blp:470
+#: src/gui/now_playing_window.rs:529 src/gui/interface.blp:519
+msgid "Transition"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:545 src/gui/interface.blp:470
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:520 src/gui/interface.blp:492
+#: src/gui/now_playing_window.rs:575 src/gui/interface.blp:492
 msgid "Background style"
 msgstr ""
 
@@ -435,7 +451,7 @@ msgstr "Voir les favoris"
 msgid "Application menu"
 msgstr "Menu de l'application"
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:600
+#: src/gui/interface.blp:369 src/gui/interface.blp:605
 msgid "Export to CSV"
 msgstr "Exporter au format CSV"
 
@@ -453,7 +469,7 @@ msgstr ""
 "Notifier lorsqu'une nouvelle chanson est reconnue ou une erreur réseau est "
 "rencontrée"
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:555
+#: src/gui/interface.blp:388 src/gui/interface.blp:560
 msgid "Show notifications"
 msgstr "Afficher les notifications"
 
@@ -547,62 +563,66 @@ msgid "Keep showing the last recognized song when there is no current match"
 msgstr ""
 
 #: src/gui/interface.blp:518
+msgid "Choose the effect used when the recognized track changes"
+msgstr ""
+
+#: src/gui/interface.blp:523
 msgid "Show only the track on a black background"
 msgstr ""
 
-#: src/gui/interface.blp:519
+#: src/gui/interface.blp:524
 msgid "Lights Off"
 msgstr ""
 
-#: src/gui/interface.blp:530
+#: src/gui/interface.blp:535
 msgid "Settings"
 msgstr "Paramètres"
 
-#: src/gui/interface.blp:560
+#: src/gui/interface.blp:565
 msgid "_Preferences..."
 msgstr "_Préférences..."
 
-#: src/gui/interface.blp:567
+#: src/gui/interface.blp:572
 msgid "_Keyboard Shortcuts"
 msgstr "_Raccourcis clavier"
 
-#: src/gui/interface.blp:572
+#: src/gui/interface.blp:577
 msgid "About..."
 msgstr "À propos..."
 
-#: src/gui/interface.blp:605
+#: src/gui/interface.blp:610
 msgid "Delete history"
 msgstr "Supprimer l'historique"
 
-#: src/gui/interface.blp:610
+#: src/gui/interface.blp:615
 msgid "Select a file to recognize"
 msgstr "Sélectionner un fichier à reconnaître"
 
-#: src/gui/interface.blp:622 src/gui/interface.blp:672
+#: src/gui/interface.blp:627 src/gui/interface.blp:677
 msgid "Copy artist and track"
 msgstr "Copier l'artiste et le morceau"
 
-#: src/gui/interface.blp:628 src/gui/interface.blp:678
+#: src/gui/interface.blp:633 src/gui/interface.blp:683
 msgid "Copy artist"
 msgstr "Copier l'artiste"
 
-#: src/gui/interface.blp:634 src/gui/interface.blp:684
+#: src/gui/interface.blp:639 src/gui/interface.blp:689
 msgid "Copy track name"
 msgstr "Copier le nom du morceau"
 
-#: src/gui/interface.blp:640 src/gui/interface.blp:690
+#: src/gui/interface.blp:645 src/gui/interface.blp:695
 msgid "Copy album"
 msgstr "Copier l'album"
 
-#: src/gui/interface.blp:656
+#: src/gui/interface.blp:661
 msgid "Delete from History"
 msgstr "Supprimer de l'historique"
 
-#: src/gui/interface.blp:662
+#: src/gui/interface.blp:667
 msgid "Add to Favorites"
 msgstr "Ajouter aux favoris"
 
-#: src/gui/interface.blp:706
+#: src/gui/interface.blp:711
 msgid "Remove from Favorites"
 msgstr "Supprimer des favoris"
 
