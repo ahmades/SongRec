@@ -26,6 +26,7 @@ pub struct Preferences {
     pub hide_now_playing_info: Option<bool>,
     pub now_playing_track_info_alignment: Option<String>,
     pub now_playing_background_style: Option<String>,
+    pub always_display_last_recognized_song: Option<bool>,
     pub lights_off_enabled: Option<bool>,
 }
 
@@ -48,6 +49,7 @@ impl Preferences {
             hide_now_playing_info: None,
             now_playing_track_info_alignment: None,
             now_playing_background_style: None,
+            always_display_last_recognized_song: None,
             lights_off_enabled: None,
         }
     }
@@ -70,6 +72,7 @@ impl Preferences {
             hide_now_playing_info: Some(false),
             now_playing_track_info_alignment: Some("center".to_string()),
             now_playing_background_style: Some("gradient".to_string()),
+            always_display_last_recognized_song: Some(true),
             lights_off_enabled: Some(false),
         }
     }
@@ -94,6 +97,7 @@ impl Default for Preferences {
             hide_now_playing_info: Some(false),
             now_playing_track_info_alignment: Some("center".to_string()),
             now_playing_background_style: Some("gradient".to_string()),
+            always_display_last_recognized_song: Some(true),
             lights_off_enabled: Some(false),
         }
     }
@@ -188,6 +192,9 @@ impl PreferencesInterface {
             now_playing_background_style: update_preferences
                 .now_playing_background_style
                 .or_else(|| current_preferences.now_playing_background_style.clone()),
+            always_display_last_recognized_song: update_preferences
+                .always_display_last_recognized_song
+                .or(current_preferences.always_display_last_recognized_song),
             lights_off_enabled: update_preferences
                 .lights_off_enabled
                 .or(current_preferences.lights_off_enabled),

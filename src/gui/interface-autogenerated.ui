@@ -592,6 +592,12 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           </object>
                         </child>
                         <child>
+                          <object class="AdwSwitchRow" id="always_display_last_recognized_song_setting">
+                            <property name="subtitle" translatable="yes">Keep showing the last recognized song when there is no current match</property>
+                            <property name="title" translatable="yes">Always display last recognized song</property>
+                          </object>
+                        </child>
+                        <child>
                           <object class="AdwSwitchRow" id="lights_off_setting">
                             <property name="subtitle" translatable="yes">Show only the track on a black background</property>
                             <property name="title" translatable="yes">Lights Off</property>

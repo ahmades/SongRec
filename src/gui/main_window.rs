@@ -816,6 +816,10 @@ impl App {
             self.builder.object("background_style_gradient").unwrap();
         let background_style_solid: gtk::ToggleButton =
             self.builder.object("background_style_solid").unwrap();
+        let always_display_last_recognized_song_setting: adw::SwitchRow = self
+            .builder
+            .object("always_display_last_recognized_song_setting")
+            .unwrap();
         let lights_off_setting: adw::SwitchRow = self.builder.object("lights_off_setting").unwrap();
         let results_section: adw::PreferencesGroup =
             self.builder.object("results_section").unwrap();
@@ -856,6 +860,11 @@ impl App {
             BackgroundStyle::Gradient => background_style_gradient.set_active(true),
             BackgroundStyle::Solid => background_style_solid.set_active(true),
         }
+        always_display_last_recognized_song_setting.set_active(
+            initial_preferences
+                .always_display_last_recognized_song
+                .unwrap_or(true),
+        );
         let lights_off_initial = initial_preferences.lights_off_enabled.unwrap_or(false);
         lights_off_setting.set_active(lights_off_initial);
         // When Lights Off is enabled, the artwork rounding and track-info controls are not applicable.
@@ -893,6 +902,13 @@ impl App {
         hide_track_info_setting.connect_active_notify(move |switch_row| {
             send_preference_update(&gui_tx_for_hide_info, |preference| {
                 preference.hide_now_playing_info = Some(switch_row.is_active());
+            });
+        });
+
+        let gui_tx_for_always_display_last = self.gui_tx.clone();
+        always_display_last_recognized_song_setting.connect_active_notify(move |switch_row| {
+            send_preference_update(&gui_tx_for_always_display_last, |preference| {
+                preference.always_display_last_recognized_song = Some(switch_row.is_active());
             });
         });
 
@@ -1081,6 +1097,11 @@ impl App {
                                 .set_sensitive(!preferences.lights_off_enabled.unwrap_or(false));
                             round_corners_setting
                                 .set_sensitive(!preferences.lights_off_enabled.unwrap_or(false));
+                            always_display_last_recognized_song_setting.set_active(
+                                preferences
+                                    .always_display_last_recognized_song
+                                    .unwrap_or(true),
+                            );
                             lights_off_setting
                                 .set_active(preferences.lights_off_enabled.unwrap_or(false));
                             match BackgroundStyle::from_preference(
@@ -1137,6 +1158,11 @@ impl App {
                             }
                         }
                         ErrorMessage(string) => {
+                            if string == gettext("No match for this song") {
+                                if let Some(ref now_playing_window) = *now_playing_window.borrow() {
+                                    now_playing_window.handle_no_recognition();
+                                }
+                            }
                             if !(string == gettext("No match for this song")
                                 && (microphone_switch.is_active() || loopback_switch.is_active()))
                             {

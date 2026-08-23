@@ -61,6 +61,7 @@ struct NowPlayingControls {
     background_style_solid: gtk::ToggleButton,
     track_info_alignment_left: gtk::ToggleButton,
     track_info_alignment_center: gtk::ToggleButton,
+    always_display_last_recognized_song: gtk::Switch,
     lights_off_menu: gtk::Switch,
 }
 
@@ -69,6 +70,7 @@ struct NowPlayingState {
     background_style: Rc<Cell<BackgroundStyle>>,
     current_background: Rc<Cell<Background>>,
     lights_off: Rc<Cell<bool>>,
+    showing_listening: Rc<Cell<bool>>,
 }
 
 pub struct NowPlayingWindow {
@@ -181,7 +183,6 @@ impl NowPlayingWindow {
             .build();
         let cover_overlay = gtk::Overlay::new();
         cover_overlay.set_child(Some(&cover_picture));
-        cover_overlay.add_overlay(&artwork_placeholder);
         cover_overlay.set_overflow(gtk::Overflow::Hidden);
         cover_overlay.add_css_class("now-playing-artwork-rounded");
         cover_frame.set_child(Some(&cover_overlay));
@@ -232,6 +233,10 @@ impl NowPlayingWindow {
         let overlay = gtk::Overlay::new();
         overlay.set_child(Some(&background_area));
         overlay.add_overlay(&root);
+        overlay.add_overlay(&artwork_placeholder);
+        artwork_placeholder.set_halign(gtk::Align::Center);
+        artwork_placeholder.set_valign(gtk::Align::Center);
+        artwork_placeholder.set_css_classes([TITLE_CSS_CLASS]);
         window.set_child(Some(&overlay));
 
         let background_css = gtk::CssProvider::new();
@@ -293,6 +298,7 @@ impl NowPlayingWindow {
     fn build_controls() -> NowPlayingControls {
         let round_corners = gtk::Switch::new();
         let hide_track_info = gtk::Switch::new();
+        let always_display_last_recognized_song = gtk::Switch::new();
         let lights_off_menu = gtk::Switch::new();
         let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
         let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
@@ -308,6 +314,7 @@ impl NowPlayingWindow {
             background_style_solid,
             track_info_alignment_left,
             track_info_alignment_center,
+            always_display_last_recognized_song,
             lights_off_menu,
         }
     }
@@ -319,6 +326,7 @@ impl NowPlayingWindow {
             background_style: Rc::new(Cell::new(BackgroundStyle::Gradient)),
             current_background: Rc::new(Cell::new(Background::fallback())),
             lights_off: Rc::new(Cell::new(false)),
+            showing_listening: Rc::new(Cell::new(true)),
         }
     }
 
@@ -382,6 +390,12 @@ impl NowPlayingWindow {
         self.set_track_info_alignment(TrackInfoAlignment::from_preference(
             preferences.now_playing_track_info_alignment.as_deref(),
         ));
+        self.set_always_display_last_recognized_song(
+            preferences
+                .always_display_last_recognized_song
+                .unwrap_or(true),
+        );
+        self.set_listening_state();
     }
 
     /// Builds and installs the right-click context menu for the Now Playing window.
@@ -409,6 +423,15 @@ impl NowPlayingWindow {
         );
         self.add_alignment_menu_row(&menu_box, preferences);
         self.add_background_style_menu_row(&menu_box, preferences);
+        self.add_switch_menu_row(
+            &menu_box,
+            &gettext("Always display last recognized song"),
+            &self.controls.always_display_last_recognized_song,
+            preferences
+                .always_display_last_recognized_song
+                .unwrap_or(true),
+            true,
+        );
         self.add_switch_menu_row(
             &menu_box,
             &gettext("Lights off"),
@@ -565,6 +588,15 @@ impl NowPlayingWindow {
                 }
             });
 
+        let gui_tx_for_always_display_last = self.gui_tx.clone();
+        self.controls
+            .always_display_last_recognized_song
+            .connect_active_notify(move |button| {
+                Self::send_preference_update(&gui_tx_for_always_display_last, |preference| {
+                    preference.always_display_last_recognized_song = Some(button.is_active());
+                });
+            });
+
         let gui_tx_for_lights = self.gui_tx.clone();
         let round_for_lights_menu = self.controls.round_corners.clone();
         let hide_for_lights_menu = self.controls.hide_track_info.clone();
@@ -628,6 +660,20 @@ impl NowPlayingWindow {
             preferences.now_playing_track_info_alignment.as_deref(),
         ));
 
+        let always_display_last = preferences
+            .always_display_last_recognized_song
+            .unwrap_or(true);
+        if self
+            .controls
+            .always_display_last_recognized_song
+            .is_active()
+            != always_display_last
+        {
+            self.controls
+                .always_display_last_recognized_song
+                .set_active(always_display_last);
+        }
+
         match desired_style {
             BackgroundStyle::Gradient => {
                 if self.controls.background_style_gradient.is_active() != true {
@@ -674,7 +720,15 @@ impl NowPlayingWindow {
 
         if self.state.lights_off.get() {
             self.ui.artwork.set_visible(false);
-            self.ui.artwork_placeholder.set_visible(false);
+            self.ui
+                .artwork_placeholder
+                .set_visible(self.state.showing_listening.get());
+            return;
+        }
+
+        if self.state.showing_listening.get() {
+            self.ui.artwork.set_visible(false);
+            self.ui.artwork_placeholder.set_visible(true);
             return;
         }
 
@@ -693,12 +747,58 @@ impl NowPlayingWindow {
     /// used to derive the window background; otherwise the fallback state is used.
     /// Refreshes the displayed song metadata and artwork from a recognition result.
     pub fn update(&self, message: &SongRecognizedMessage) {
+        let has_track_info = !message.song_name.trim().is_empty()
+            || !message.artist_name.trim().is_empty()
+            || message.cover_image.is_some();
+
+        if !has_track_info {
+            self.handle_no_recognition();
+            return;
+        }
+
+        self.state.showing_listening.set(false);
         self.set_metadata(message);
 
         if let Some(bytes) = message.cover_image.as_ref() {
             self.apply_cover(bytes);
         } else {
             self.set_missing_cover_state();
+        }
+    }
+
+    /// Clears the current track and shows the listening placeholder while preserving the background.
+    pub fn set_listening_state(&self) {
+        self.state.showing_listening.set(true);
+        self.ui.artwork.set_paintable(Option::<&gdk::Texture>::None);
+        self.ui.title_label.set_label("");
+        self.ui.artist_label.set_label("");
+        self.ui.album_label.set_label("");
+        self.ui.details_label.set_label("");
+        self.sync_artwork_visibility();
+    }
+
+    /// Handles a recognition attempt that produced no track information according to the active preference.
+    pub fn handle_no_recognition(&self) {
+        if !self
+            .controls
+            .always_display_last_recognized_song
+            .is_active()
+        {
+            self.set_listening_state();
+        }
+    }
+
+    /// Enables or disables keeping the last recognized song when no new match is available.
+    pub fn set_always_display_last_recognized_song(&self, enabled: bool) {
+        if self
+            .controls
+            .always_display_last_recognized_song
+            .is_active()
+            != enabled
+        {
+            self.controls
+                .always_display_last_recognized_song
+                .set_active(enabled);
         }
     }
 
