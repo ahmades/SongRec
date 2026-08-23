@@ -99,7 +99,7 @@ fn open_now_playing_window(
         window.set_background_style(BackgroundStyle::from_preference(
             preferences.now_playing_background_style.as_deref(),
         ));
-        window.set_lights(preferences.lights_off_enabled.unwrap_or(false));
+        window.set_lights_off(preferences.lights_off_enabled.unwrap_or(false));
         if let Some(ref message) = *last_recognized_song.borrow() {
             window.update(message);
         }

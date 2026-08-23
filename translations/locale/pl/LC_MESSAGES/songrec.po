@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-23 00:44+0200\n"
+"POT-Creation-Date: 2026-08-23 13:31+0200\n"
 "PO-Revision-Date: 2021-12-26 11:36+0100\n"
 "Last-Translator: Rafał Mikrut <qarminkrut@gmail.com>\n"
 "Language-Team: \n"
@@ -253,48 +253,48 @@ msgstr ""
 msgid "_Cancel"
 msgstr "_Wyjdź"
 
-#: src/gui/now_playing_window.rs:98
+#: src/gui/now_playing_window.rs:146
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:129
+#: src/gui/now_playing_window.rs:177
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:300 src/gui/interface.blp:502
+#: src/gui/now_playing_window.rs:297 src/gui/interface.blp:502
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:301 src/gui/interface.blp:507
+#: src/gui/now_playing_window.rs:298 src/gui/interface.blp:507
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:303 src/gui/interface.blp:479
+#: src/gui/now_playing_window.rs:300 src/gui/interface.blp:479
 msgid "Left"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:304 src/gui/interface.blp:485
+#: src/gui/now_playing_window.rs:301 src/gui/interface.blp:485
 msgid "Center"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:354 src/gui/interface.blp:460
+#: src/gui/now_playing_window.rs:398 src/gui/interface.blp:460
 msgid "Round corners of album cover"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:369 src/gui/interface.blp:465
+#: src/gui/now_playing_window.rs:405 src/gui/interface.blp:465
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:384 src/gui/interface.blp:470
+#: src/gui/now_playing_window.rs:414
+msgid "Lights off"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:467 src/gui/interface.blp:470
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:408 src/gui/interface.blp:492
+#: src/gui/now_playing_window.rs:497 src/gui/interface.blp:492
 msgid "Background style"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:430
-msgid "Lights off"
 msgstr ""
 
 #: src/gui/song_history_interface.rs:95

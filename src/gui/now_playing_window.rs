@@ -41,7 +41,7 @@ const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
 const GRADIENT_SURFACE_WIDTH: i32 = 256;
 const TRANSITION_START: f64 = 0.20;
 
-pub struct NowPlayingWindow {
+struct NowPlayingWidgets {
     window: gtk::Window,
     artwork: gtk::Picture,
     artwork_overlay: gtk::Overlay,
@@ -52,9 +52,9 @@ pub struct NowPlayingWindow {
     details_label: gtk::Label,
     info_box: gtk::Box,
     background_area: gtk::DrawingArea,
-    gradient_surface: Rc<RefCell<Option<CachedGradient>>>,
-    background_style: Rc<Cell<BackgroundStyle>>,
-    current_background: Rc<Cell<Background>>,
+}
+
+struct NowPlayingControls {
     round_corners: gtk::Switch,
     hide_track_info: gtk::Switch,
     background_style_gradient: gtk::ToggleButton,
@@ -62,11 +62,27 @@ pub struct NowPlayingWindow {
     track_info_alignment_left: gtk::ToggleButton,
     track_info_alignment_center: gtk::ToggleButton,
     lights_off_menu: gtk::Switch,
+}
+
+struct NowPlayingState {
+    gradient_surface: Rc<RefCell<Option<CachedGradient>>>,
+    background_style: Rc<Cell<BackgroundStyle>>,
+    current_background: Rc<Cell<Background>>,
     lights_off: Rc<Cell<bool>>,
+}
+
+pub struct NowPlayingWindow {
+    ui: NowPlayingWidgets,
+    controls: NowPlayingControls,
+    state: NowPlayingState,
     gui_tx: Option<async_channel::Sender<GUIMessage>>,
 }
 
 impl NowPlayingWindow {
+    /// Builds and sends a preference update message to the main GUI task.
+    ///
+    /// The closure mutates a temporary `Preferences` value, which is sent through
+    /// the GUI channel when one is available.
     fn send_preference_update(
         gui_tx: &Option<async_channel::Sender<GUIMessage>>,
         configure: impl FnOnce(&mut Preferences),
@@ -81,10 +97,42 @@ impl NowPlayingWindow {
         }
     }
 
+    /// Constructs a Now Playing window initialized from the current preferences.
     pub fn new_with_settings(
         gui_tx: Option<async_channel::Sender<GUIMessage>>,
         preferences_interface: Option<Arc<Mutex<PreferencesInterface>>>,
     ) -> Self {
+        let preferences = Self::current_preferences(preferences_interface.as_ref());
+        let (ui, text_css) = Self::build_ui();
+        let controls = Self::build_controls();
+        let state = Self::build_state();
+
+        let now_playing = Self {
+            ui,
+            controls,
+            state,
+            gui_tx,
+        };
+
+        now_playing.setup_rendering(&text_css);
+        now_playing.apply_initial_preferences(&preferences);
+        now_playing.setup_context_menu(&preferences);
+        now_playing.connect_control_handlers();
+
+        now_playing
+    }
+
+    /// Reads the current preferences from the shared interface, if available.
+    fn current_preferences(
+        preferences_interface: Option<&Arc<Mutex<PreferencesInterface>>>,
+    ) -> Preferences {
+        preferences_interface
+            .map(|interface| interface.lock().unwrap().preferences.clone())
+            .unwrap_or_default()
+    }
+
+    /// Builds the window, artwork presentation, metadata widgets, and static CSS providers.
+    fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
         let window = gtk::Window::builder()
             .title("SongRec")
             .default_width(WINDOW_WIDTH)
@@ -134,9 +182,6 @@ impl NowPlayingWindow {
         let cover_overlay = gtk::Overlay::new();
         cover_overlay.set_child(Some(&cover_picture));
         cover_overlay.add_overlay(&artwork_placeholder);
-        // GtkOverflow::Hidden clips child content to the widget bounds. Combined
-        // with the CSS border radius this makes the rounding affect the actual
-        // album artwork rather than only painting a rounded frame.
         cover_overlay.set_overflow(gtk::Overflow::Hidden);
         cover_overlay.add_css_class("now-playing-artwork-rounded");
         cover_frame.set_child(Some(&cover_overlay));
@@ -179,9 +224,6 @@ impl NowPlayingWindow {
         root.append(&cover_frame);
         root.append(&info_box);
 
-        // Render the artwork-derived background directly in one DrawingArea.
-        // Using a single Cairo gradient avoids the visible rectangular zones that
-        // occurred when multiple background renderers were composited.
         let background_area = gtk::DrawingArea::new();
         background_area.set_hexpand(true);
         background_area.set_vexpand(true);
@@ -192,10 +234,6 @@ impl NowPlayingWindow {
         overlay.add_overlay(&root);
         window.set_child(Some(&overlay));
 
-        // The Now Playing background deliberately uses its own CSS provider so
-        // the window does not follow the application's system theme. The background
-        // itself is painted by background_area; CSS is static and only handles
-        // padding and foreground colors.
         let background_css = gtk::CssProvider::new();
         if let Some(display) = gdk::Display::default() {
             gtk::style_context_add_provider_for_display(
@@ -208,10 +246,6 @@ impl NowPlayingWindow {
             ".{BACKGROUND_CSS_CLASS} {{ background-color: transparent; color: #ffffff; padding: {BACKGROUND_PADDING_PX}px; }}\n             .{BACKGROUND_CSS_CLASS} > label {{ color: #ffffff; }}\n             .now-playing-artwork-rounded {{ border-radius: {ARTWORK_CORNER_RADIUS_PX}px; }}"
         ));
 
-        // Typography follows the actual allocated content size. GTK4 does not
-        // expose a reliable size-allocation signal on GtkWidget, so we sample
-        // the root allocation from a tick callback. The callback itself is very
-        // cheap: CSS is regenerated only when the allocation actually changes.
         let text_css = gtk::CssProvider::new();
         if let Some(display) = gdk::Display::default() {
             gtk::style_context_add_provider_for_display(
@@ -238,39 +272,86 @@ impl NowPlayingWindow {
         });
         window.add_controller(key_controller);
 
-        let current_background = Background::fallback();
-        let background_state = Rc::new(Cell::new(current_background));
-        let background_style_state = Rc::new(Cell::new(BackgroundStyle::Gradient));
-        let lights_off_state = Rc::new(Cell::new(false));
-        let gradient_surface = Rc::new(RefCell::new(None));
+        (
+            NowPlayingWidgets {
+                window,
+                artwork: cover_picture,
+                artwork_overlay: cover_overlay,
+                artwork_placeholder,
+                title_label,
+                artist_label,
+                album_label,
+                details_label,
+                info_box,
+                background_area,
+            },
+            text_css,
+        )
+    }
 
-        let background_state_for_draw = background_state.clone();
-        let background_style_state_for_draw = background_style_state.clone();
-        let lights_off_state_for_draw = lights_off_state.clone();
-        let gradient_surface_for_draw = gradient_surface.clone();
-        background_area.set_draw_func(move |_, context, width, height| {
-            draw_background(
-                context,
-                width,
-                height,
-                background_state_for_draw.get(),
-                background_style_state_for_draw.get(),
-                lights_off_state_for_draw.get(),
-                &gradient_surface_for_draw,
-            );
-        });
+    /// Creates the switches and segmented controls used by the Now Playing context menu.
+    fn build_controls() -> NowPlayingControls {
+        let round_corners = gtk::Switch::new();
+        let hide_track_info = gtk::Switch::new();
+        let lights_off_menu = gtk::Switch::new();
+        let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
+        let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
+        background_style_solid.set_group(Some(&background_style_gradient));
+        let track_info_alignment_left = gtk::ToggleButton::with_label(&gettext("Left"));
+        let track_info_alignment_center = gtk::ToggleButton::with_label(&gettext("Center"));
+        track_info_alignment_center.set_group(Some(&track_info_alignment_left));
+
+        NowPlayingControls {
+            round_corners,
+            hide_track_info,
+            background_style_gradient,
+            background_style_solid,
+            track_info_alignment_left,
+            track_info_alignment_center,
+            lights_off_menu,
+        }
+    }
+
+    /// Creates the mutable rendering and preference state used by the window.
+    fn build_state() -> NowPlayingState {
+        NowPlayingState {
+            gradient_surface: Rc::new(RefCell::new(None)),
+            background_style: Rc::new(Cell::new(BackgroundStyle::Gradient)),
+            current_background: Rc::new(Cell::new(Background::fallback())),
+            lights_off: Rc::new(Cell::new(false)),
+        }
+    }
+
+    /// Connects background drawing and resize handling for the window.
+    fn setup_rendering(&self, text_css: &gtk::CssProvider) {
+        let background_state_for_draw = self.state.current_background.clone();
+        let background_style_state_for_draw = self.state.background_style.clone();
+        let lights_off_state_for_draw = self.state.lights_off.clone();
+        let gradient_surface_for_draw = self.state.gradient_surface.clone();
+        self.ui
+            .background_area
+            .set_draw_func(move |_, context, width, height| {
+                draw_background(
+                    context,
+                    width,
+                    height,
+                    background_state_for_draw.get(),
+                    background_style_state_for_draw.get(),
+                    lights_off_state_for_draw.get(),
+                    &gradient_surface_for_draw,
+                );
+            });
 
         let last_size = Rc::new(Cell::new((0, 0)));
         let text_css_for_resize = text_css.clone();
         let last_size_for_resize = last_size.clone();
-        let root_for_resize = root.clone();
-        let background_area_for_resize = background_area.clone();
-        let gradient_surface_for_resize = gradient_surface.clone();
-        let background_state_for_resize = background_state.clone();
-        let background_style_state_for_resize = background_style_state.clone();
-        let lights_off_state_for_resize = lights_off_state.clone();
-        root.add_tick_callback(move |_, _| {
-            let size = (root_for_resize.width(), root_for_resize.height());
+        let root_for_resize = self.ui.background_area.clone();
+        let gradient_surface_for_resize = self.state.gradient_surface.clone();
+        let background_state_for_resize = self.state.current_background.clone();
+        let background_style_state_for_resize = self.state.background_style.clone();
+        let lights_off_state_for_resize = self.state.lights_off.clone();
+        self.ui.background_area.add_tick_callback(move |area, _| {
+            let size = (area.width(), area.height());
             if size.0 > 0 && size.1 > 0 && size != last_size_for_resize.get() {
                 last_size_for_resize.set(size);
                 text_css_for_resize.load_from_string(&font_css_for_size(size));
@@ -286,59 +367,25 @@ impl NowPlayingWindow {
                             background_style_state_for_resize.get(),
                             lights_off_state_for_resize.get(),
                         ),
-                        background_area_for_resize.height(),
+                        root_for_resize.height(),
                     );
-                    background_area_for_resize.queue_draw();
+                    area.queue_draw();
                 }
             }
             glib::ControlFlow::Continue
         });
+    }
 
-        let round_corners = gtk::Switch::new();
-        let hide_track_info = gtk::Switch::new();
-        let lights_off_menu = gtk::Switch::new();
-        let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
-        let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
-        background_style_solid.set_group(Some(&background_style_gradient));
-        let track_info_alignment_left = gtk::ToggleButton::with_label(&gettext("Left"));
-        let track_info_alignment_center = gtk::ToggleButton::with_label(&gettext("Center"));
-        track_info_alignment_center.set_group(Some(&track_info_alignment_left));
-
-        let prefs = preferences_interface
-            .as_ref()
-            .map(|preferences_interface| preferences_interface.lock().unwrap().preferences.clone())
-            .unwrap_or_default();
-
-        let now_playing = Self {
-            window,
-            artwork: cover_picture,
-            artwork_overlay: cover_overlay.clone(),
-            artwork_placeholder,
-            title_label,
-            artist_label,
-            album_label,
-            details_label,
-            info_box,
-            background_area: background_area.clone(),
-            gradient_surface: gradient_surface.clone(),
-            background_style: background_style_state.clone(),
-            current_background: background_state.clone(),
-            lights_off: lights_off_state.clone(),
-            round_corners: round_corners.clone(),
-            hide_track_info: hide_track_info.clone(),
-            lights_off_menu: lights_off_menu.clone(),
-            background_style_gradient: background_style_gradient.clone(),
-            background_style_solid: background_style_solid.clone(),
-            track_info_alignment_left: track_info_alignment_left.clone(),
-            track_info_alignment_center: track_info_alignment_center.clone(),
-            gui_tx,
-        };
-
-        now_playing.set_round_corners(prefs.now_playing_round_corners.unwrap_or(true));
-        now_playing.set_track_info_alignment(TrackInfoAlignment::from_preference(
-            prefs.now_playing_track_info_alignment.as_deref(),
+    /// Applies the initial Now Playing preferences to the newly created window.
+    fn apply_initial_preferences(&self, preferences: &Preferences) {
+        self.set_round_corners(preferences.now_playing_round_corners.unwrap_or(true));
+        self.set_track_info_alignment(TrackInfoAlignment::from_preference(
+            preferences.now_playing_track_info_alignment.as_deref(),
         ));
+    }
 
+    /// Builds and installs the right-click context menu for the Now Playing window.
+    fn setup_context_menu(&self, preferences: &Preferences) {
         let popover = gtk::Popover::new();
         popover.set_has_arrow(false);
         let menu_box = gtk::Box::builder()
@@ -346,100 +393,33 @@ impl NowPlayingWindow {
             .spacing(6)
             .build();
 
-        let round_corners_row = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(12)
-            .hexpand(true)
-            .build();
-        let round_corners_label = gtk::Label::new(Some(&gettext("Round corners of album cover")));
-        round_corners_label.set_hexpand(true);
-        round_corners_label.set_halign(gtk::Align::Start);
-        round_corners_row.append(&round_corners_label);
-        round_corners.set_halign(gtk::Align::End);
-        round_corners.set_active(prefs.now_playing_round_corners.unwrap_or(true));
-        round_corners.set_sensitive(!prefs.lights_off_enabled.unwrap_or(false));
-        round_corners_row.append(&round_corners);
-        menu_box.append(&round_corners_row);
-
-        let hide_track_info_row = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(12)
-            .hexpand(true)
-            .build();
-        let hide_track_info_label = gtk::Label::new(Some(&gettext("Hide track info")));
-        hide_track_info_label.set_hexpand(true);
-        hide_track_info_label.set_halign(gtk::Align::Start);
-        hide_track_info_row.append(&hide_track_info_label);
-        hide_track_info.set_halign(gtk::Align::End);
-        hide_track_info_row.append(&hide_track_info);
-        hide_track_info.set_active(prefs.hide_now_playing_info.unwrap_or(false));
-        hide_track_info.set_sensitive(!prefs.lights_off_enabled.unwrap_or(false));
-        menu_box.append(&hide_track_info_row);
-
-        let track_info_alignment_row = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(12)
-            .hexpand(true)
-            .build();
-        let track_info_alignment_label = gtk::Label::new(Some(&gettext("Track info alignment")));
-        track_info_alignment_label.set_hexpand(true);
-        track_info_alignment_label.set_halign(gtk::Align::Start);
-        track_info_alignment_row.append(&track_info_alignment_label);
-        let track_info_alignment_buttons = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(0)
-            .css_classes(["linked"])
-            .build();
-        track_info_alignment_buttons.append(&track_info_alignment_left);
-        track_info_alignment_buttons.append(&track_info_alignment_center);
-        match TrackInfoAlignment::from_preference(prefs.now_playing_track_info_alignment.as_deref())
-        {
-            TrackInfoAlignment::Left => track_info_alignment_left.set_active(true),
-            TrackInfoAlignment::Center => track_info_alignment_center.set_active(true),
-        }
-        track_info_alignment_row.append(&track_info_alignment_buttons);
-        menu_box.append(&track_info_alignment_row);
-
-        let background_style_row = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(12)
-            .hexpand(true)
-            .build();
-        let background_style_label = gtk::Label::new(Some(&gettext("Background style")));
-        background_style_row.append(&background_style_label);
-
-        let background_style_buttons = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(0)
-            .css_classes(["linked"])
-            .hexpand(false)
-            .build();
-        background_style_buttons.append(&background_style_gradient);
-        background_style_buttons.append(&background_style_solid);
-        background_style_row.append(&background_style_buttons);
-        match BackgroundStyle::from_preference(prefs.now_playing_background_style.as_deref()) {
-            BackgroundStyle::Gradient => background_style_gradient.set_active(true),
-            BackgroundStyle::Solid => background_style_solid.set_active(true),
-        }
-        menu_box.append(&background_style_row);
-        let lights_off_row = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(12)
-            .hexpand(true)
-            .build();
-        let lights_off_label = gtk::Label::new(Some(&gettext("Lights off")));
-        lights_off_label.set_hexpand(true);
-        lights_off_label.set_halign(gtk::Align::Start);
-        lights_off_row.append(&lights_off_label);
-        lights_off_menu.set_halign(gtk::Align::End);
-        lights_off_row.append(&lights_off_menu);
-        lights_off_menu.set_active(prefs.lights_off_enabled.unwrap_or(false));
-        menu_box.append(&lights_off_row);
+        self.add_switch_menu_row(
+            &menu_box,
+            &gettext("Round corners of album cover"),
+            &self.controls.round_corners,
+            preferences.now_playing_round_corners.unwrap_or(true),
+            !preferences.lights_off_enabled.unwrap_or(false),
+        );
+        self.add_switch_menu_row(
+            &menu_box,
+            &gettext("Hide track info"),
+            &self.controls.hide_track_info,
+            preferences.hide_now_playing_info.unwrap_or(false),
+            !preferences.lights_off_enabled.unwrap_or(false),
+        );
+        self.add_alignment_menu_row(&menu_box, preferences);
+        self.add_background_style_menu_row(&menu_box, preferences);
+        self.add_switch_menu_row(
+            &menu_box,
+            &gettext("Lights off"),
+            &self.controls.lights_off_menu,
+            preferences.lights_off_enabled.unwrap_or(false),
+            true,
+        );
 
         popover.set_child(Some(&menu_box));
-
         let popover_for_click = popover.clone();
-        let window_for_click = now_playing.window.clone();
+        let window_for_click = self.ui.window.clone();
         popover_for_click.set_parent(&window_for_click);
 
         let gesture = gtk::GestureClick::new();
@@ -449,11 +429,95 @@ impl NowPlayingWindow {
             popover_for_click.set_pointing_to(Some(&pointing_rect));
             popover_for_click.popup();
         });
-        now_playing.window.add_controller(gesture);
+        self.ui.window.add_controller(gesture);
+    }
 
-        let gui_tx_for_round_corners = now_playing.gui_tx.clone();
-        let artwork_overlay_for_round_corners = now_playing.artwork_overlay.clone();
-        now_playing
+    /// Adds a label-and-switch row to the context menu.
+    fn add_switch_menu_row(
+        &self,
+        menu_box: &gtk::Box,
+        title: &str,
+        switch: &gtk::Switch,
+        active: bool,
+        sensitive: bool,
+    ) {
+        let row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let label = gtk::Label::new(Some(title));
+        label.set_hexpand(true);
+        label.set_halign(gtk::Align::Start);
+        row.append(&label);
+        switch.set_halign(gtk::Align::End);
+        switch.set_active(active);
+        switch.set_sensitive(sensitive);
+        row.append(switch);
+        menu_box.append(&row);
+    }
+
+    /// Adds the track-info alignment segmented control to the context menu.
+    fn add_alignment_menu_row(&self, menu_box: &gtk::Box, preferences: &Preferences) {
+        let row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let label = gtk::Label::new(Some(&gettext("Track info alignment")));
+        label.set_hexpand(true);
+        label.set_halign(gtk::Align::Start);
+        row.append(&label);
+        let buttons = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(0)
+            .css_classes(["linked"])
+            .build();
+        buttons.append(&self.controls.track_info_alignment_left);
+        buttons.append(&self.controls.track_info_alignment_center);
+        match TrackInfoAlignment::from_preference(
+            preferences.now_playing_track_info_alignment.as_deref(),
+        ) {
+            TrackInfoAlignment::Left => self.controls.track_info_alignment_left.set_active(true),
+            TrackInfoAlignment::Center => {
+                self.controls.track_info_alignment_center.set_active(true)
+            }
+        }
+        row.append(&buttons);
+        menu_box.append(&row);
+    }
+
+    /// Adds the background-style segmented control to the context menu.
+    fn add_background_style_menu_row(&self, menu_box: &gtk::Box, preferences: &Preferences) {
+        let row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let label = gtk::Label::new(Some(&gettext("Background style")));
+        row.append(&label);
+        let buttons = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(0)
+            .css_classes(["linked"])
+            .hexpand(false)
+            .build();
+        buttons.append(&self.controls.background_style_gradient);
+        buttons.append(&self.controls.background_style_solid);
+        row.append(&buttons);
+        match BackgroundStyle::from_preference(preferences.now_playing_background_style.as_deref())
+        {
+            BackgroundStyle::Gradient => self.controls.background_style_gradient.set_active(true),
+            BackgroundStyle::Solid => self.controls.background_style_solid.set_active(true),
+        }
+        menu_box.append(&row);
+    }
+
+    /// Connects preference controls to GUI preference update messages.
+    fn connect_control_handlers(&self) {
+        let gui_tx_for_round_corners = self.gui_tx.clone();
+        let artwork_overlay_for_round_corners = self.ui.artwork_overlay.clone();
+        self.controls
             .round_corners
             .connect_active_notify(move |switch| {
                 let active = switch.is_active();
@@ -468,8 +532,8 @@ impl NowPlayingWindow {
                 });
             });
 
-        let gui_tx_for_hide = now_playing.gui_tx.clone();
-        now_playing
+        let gui_tx_for_hide = self.gui_tx.clone();
+        self.controls
             .hide_track_info
             .connect_active_notify(move |button| {
                 Self::send_preference_update(&gui_tx_for_hide, |preference| {
@@ -477,8 +541,8 @@ impl NowPlayingWindow {
                 });
             });
 
-        let gui_tx_for_alignment_left = now_playing.gui_tx.clone();
-        now_playing
+        let gui_tx_for_alignment_left = self.gui_tx.clone();
+        self.controls
             .track_info_alignment_left
             .connect_toggled(move |button| {
                 if button.is_active() {
@@ -489,8 +553,8 @@ impl NowPlayingWindow {
                 }
             });
 
-        let gui_tx_for_alignment_center = now_playing.gui_tx.clone();
-        now_playing
+        let gui_tx_for_alignment_center = self.gui_tx.clone();
+        self.controls
             .track_info_alignment_center
             .connect_toggled(move |button| {
                 if button.is_active() {
@@ -501,10 +565,10 @@ impl NowPlayingWindow {
                 }
             });
 
-        let gui_tx_for_lights = now_playing.gui_tx.clone();
-        let round_for_lights_menu = now_playing.round_corners.clone();
-        let hide_for_lights_menu = now_playing.hide_track_info.clone();
-        now_playing
+        let gui_tx_for_lights = self.gui_tx.clone();
+        let round_for_lights_menu = self.controls.round_corners.clone();
+        let hide_for_lights_menu = self.controls.hide_track_info.clone();
+        self.controls
             .lights_off_menu
             .connect_active_notify(move |button| {
                 let active = button.is_active();
@@ -518,8 +582,8 @@ impl NowPlayingWindow {
                 });
             });
 
-        let gui_tx_for_bg = now_playing.gui_tx.clone();
-        now_playing
+        let gui_tx_for_bg = self.gui_tx.clone();
+        self.controls
             .background_style_gradient
             .connect_toggled(move |button| {
                 if button.is_active() {
@@ -530,8 +594,8 @@ impl NowPlayingWindow {
                 }
             });
 
-        let gui_tx_for_bg_solid = now_playing.gui_tx.clone();
-        now_playing
+        let gui_tx_for_bg_solid = self.gui_tx.clone();
+        self.controls
             .background_style_solid
             .connect_toggled(move |button| {
                 if button.is_active() {
@@ -541,10 +605,8 @@ impl NowPlayingWindow {
                     });
                 }
             });
-
-        now_playing
     }
-
+    /// Refreshes all Now Playing controls and rendering state from persisted preferences.
     pub fn refresh_from_preferences(&self, preferences: &Preferences) {
         let hide_info = preferences.hide_now_playing_info.unwrap_or(false);
         let lights_off = preferences.lights_off_enabled.unwrap_or(false);
@@ -552,13 +614,13 @@ impl NowPlayingWindow {
             BackgroundStyle::from_preference(preferences.now_playing_background_style.as_deref());
 
         let round_corners = preferences.now_playing_round_corners.unwrap_or(true);
-        if self.round_corners.is_active() != round_corners {
-            self.round_corners.set_active(round_corners);
+        if self.controls.round_corners.is_active() != round_corners {
+            self.controls.round_corners.set_active(round_corners);
         }
         self.set_round_corners(round_corners);
 
-        if self.hide_track_info.is_active() != hide_info {
-            self.hide_track_info.set_active(hide_info);
+        if self.controls.hide_track_info.is_active() != hide_info {
+            self.controls.hide_track_info.set_active(hide_info);
         }
         self.set_show_track_info(!hide_info);
 
@@ -568,63 +630,60 @@ impl NowPlayingWindow {
 
         match desired_style {
             BackgroundStyle::Gradient => {
-                if self.background_style_gradient.is_active() != true {
-                    self.background_style_gradient.set_active(true);
+                if self.controls.background_style_gradient.is_active() != true {
+                    self.controls.background_style_gradient.set_active(true);
                 }
-                if self.background_style_solid.is_active() != false {
-                    self.background_style_solid.set_active(false);
+                if self.controls.background_style_solid.is_active() != false {
+                    self.controls.background_style_solid.set_active(false);
                 }
             }
             BackgroundStyle::Solid => {
-                if self.background_style_gradient.is_active() != false {
-                    self.background_style_gradient.set_active(false);
+                if self.controls.background_style_gradient.is_active() != false {
+                    self.controls.background_style_gradient.set_active(false);
                 }
-                if self.background_style_solid.is_active() != true {
-                    self.background_style_solid.set_active(true);
+                if self.controls.background_style_solid.is_active() != true {
+                    self.controls.background_style_solid.set_active(true);
                 }
             }
         }
 
-        if self.lights_off_menu.is_active() != lights_off {
-            self.lights_off_menu.set_active(lights_off);
+        if self.controls.lights_off_menu.is_active() != lights_off {
+            self.controls.lights_off_menu.set_active(lights_off);
         }
-        self.hide_track_info.set_sensitive(!lights_off);
-        self.round_corners.set_sensitive(!lights_off);
-        self.set_lights(lights_off);
+        self.controls.hide_track_info.set_sensitive(!lights_off);
+        self.controls.round_corners.set_sensitive(!lights_off);
+        self.set_lights_off(lights_off);
         self.set_background_style(desired_style);
     }
 
     /// Enable or disable Lights Off mode.
     /// When enabled the artwork is hidden and the background becomes pure black
     /// (either solid or gradient black depending on preference).
+    /// Enables or disables Lights Off mode and updates artwork/background visibility.
     pub fn set_lights_off(&self, enabled: bool) {
-        self.lights_off.set(enabled);
-        self.hide_track_info.set_sensitive(!enabled);
-        self.round_corners.set_sensitive(!enabled);
+        self.state.lights_off.set(enabled);
+        self.controls.hide_track_info.set_sensitive(!enabled);
+        self.controls.round_corners.set_sensitive(!enabled);
         self.apply_background();
         self.sync_artwork_visibility();
     }
 
-    /// Compatibility alias for the existing call sites.
-    pub fn set_lights(&self, enabled: bool) {
-        self.set_lights_off(enabled);
-    }
-
+    /// Synchronizes artwork and placeholder visibility with the current window state.
     fn sync_artwork_visibility(&self) {
-        let has_paintable = self.artwork.paintable().is_some();
+        let has_paintable = self.ui.artwork.paintable().is_some();
 
-        if self.lights_off.get() {
-            self.artwork.set_visible(false);
-            self.artwork_placeholder.set_visible(false);
+        if self.state.lights_off.get() {
+            self.ui.artwork.set_visible(false);
+            self.ui.artwork_placeholder.set_visible(false);
             return;
         }
 
         if has_paintable {
-            self.artwork.set_visible(true);
-            self.artwork_placeholder.set_visible(false);
+            self.ui.artwork.set_visible(true);
+            self.ui.artwork_placeholder.set_visible(false);
         } else {
-            self.artwork.set_visible(false);
-            self.artwork_placeholder.set_visible(true);
+            self.ui.artwork.set_visible(false);
+            self.ui.artwork_placeholder.set_visible(true);
         }
     }
 
@@ -632,6 +691,7 @@ impl NowPlayingWindow {
     ///
     /// If the message contains cover art, it is applied to the main image area and
     /// used to derive the window background; otherwise the fallback state is used.
+    /// Refreshes the displayed song metadata and artwork from a recognition result.
     pub fn update(&self, message: &SongRecognizedMessage) {
         self.set_metadata(message);
 
@@ -642,17 +702,18 @@ impl NowPlayingWindow {
         }
     }
 
+    /// Updates the title, artist, album, and release-year labels.
     fn set_metadata(&self, message: &SongRecognizedMessage) {
-        self.title_label.set_label(&message.song_name);
-        self.artist_label.set_label(&message.artist_name);
-        self.album_label.set_label(
+        self.ui.title_label.set_label(&message.song_name);
+        self.ui.artist_label.set_label(&message.artist_name);
+        self.ui.album_label.set_label(
             message
                 .album_name
                 .as_deref()
                 .filter(|value| !value.is_empty())
                 .unwrap_or(""),
         );
-        self.details_label.set_label(
+        self.ui.details_label.set_label(
             message
                 .release_year
                 .as_deref()
@@ -661,9 +722,10 @@ impl NowPlayingWindow {
         );
     }
 
+    /// Decodes cover-art bytes into a GTK texture and derives the matching background.
     fn apply_cover(&self, bytes: &[u8]) {
         if let Ok(texture) = gdk::Texture::from_bytes(&glib::Bytes::from(bytes)) {
-            self.artwork.set_paintable(Some(&texture));
+            self.ui.artwork.set_paintable(Some(&texture));
             self.set_background_from_cover(bytes);
             self.sync_artwork_visibility();
         } else {
@@ -671,109 +733,124 @@ impl NowPlayingWindow {
         }
     }
 
+    /// Clears the artwork and restores the fallback background used without cover art.
     fn set_missing_cover_state(&self) {
-        self.artwork.set_paintable(Option::<&gdk::Texture>::None);
-        self.current_background.set(Background::fallback());
+        self.ui.artwork.set_paintable(Option::<&gdk::Texture>::None);
+        self.state.current_background.set(Background::fallback());
         self.apply_background();
         self.sync_artwork_visibility();
     }
 
+    /// Derives the window background colors from the supplied cover-art bytes.
     fn set_background_from_cover(&self, bytes: &[u8]) {
         let background = from_cover_image(bytes);
-        self.current_background.set(background);
+        self.state.current_background.set(background);
         self.apply_background();
     }
 
+    /// Applies the active background style, including the Lights Off override.
     fn apply_background(&self) {
-        if self.lights_off.get() {
+        if self.state.lights_off.get() {
             // Force pure black background when lights off is active
-            match self.background_style.get() {
+            match self.state.background_style.get() {
                 BackgroundStyle::Gradient => self.set_gradient_background(Background {
                     top: (38, 38, 38),
                     bottom: (0, 0, 0),
                 }),
-                BackgroundStyle::Solid => self.set_solid_background((0, 0, 0)),
+                BackgroundStyle::Solid => self.set_solid_background(),
             }
             return;
         }
 
-        let background = self.current_background.get();
-        match self.background_style.get() {
+        let background = self.state.current_background.get();
+        match self.state.background_style.get() {
             BackgroundStyle::Gradient => self.set_gradient_background(background),
-            BackgroundStyle::Solid => self.set_solid_background(background.top),
+            BackgroundStyle::Solid => self.set_solid_background(),
         }
     }
 
+    /// Invalidates the cached gradient and requests a redraw using the given background.
     fn set_gradient_background(&self, background: Background) {
-        let height = self.background_area.height();
-        rebuild_gradient_surface(&self.gradient_surface, background, height);
-        self.background_area.queue_draw();
+        let height = self.ui.background_area.height();
+        rebuild_gradient_surface(&self.state.gradient_surface, background, height);
+        self.ui.background_area.queue_draw();
     }
 
-    fn set_solid_background(&self, _color: (u8, u8, u8)) {
-        self.background_area.queue_draw();
+    /// Requests a redraw of the background using the currently selected solid color.
+    ///
+    /// The actual color is read by `draw_background` from the current background state,
+    /// so this method only needs to invalidate the drawing area.
+    fn set_solid_background(&self) {
+        self.ui.background_area.queue_draw();
     }
 
+    /// Enables or disables rounded corners on the album-art overlay.
     pub fn set_round_corners(&self, enabled: bool) {
         if enabled {
-            self.artwork_overlay
+            self.ui
+                .artwork_overlay
                 .add_css_class("now-playing-artwork-rounded");
         } else {
-            self.artwork_overlay
+            self.ui
+                .artwork_overlay
                 .remove_css_class("now-playing-artwork-rounded");
         }
-        if self.round_corners.is_active() != enabled {
-            self.round_corners.set_active(enabled);
+        if self.controls.round_corners.is_active() != enabled {
+            self.controls.round_corners.set_active(enabled);
         }
     }
 
+    /// Applies the requested alignment to the metadata block and its labels.
     pub fn set_track_info_alignment(&self, alignment: TrackInfoAlignment) {
         match alignment {
             TrackInfoAlignment::Left => {
-                self.info_box.set_halign(gtk::Align::Start);
-                self.title_label.set_halign(gtk::Align::Start);
-                self.artist_label.set_halign(gtk::Align::Start);
-                self.album_label.set_halign(gtk::Align::Start);
-                self.details_label.set_halign(gtk::Align::Start);
-                if !self.track_info_alignment_left.is_active() {
-                    self.track_info_alignment_left.set_active(true);
+                self.ui.info_box.set_halign(gtk::Align::Start);
+                self.ui.title_label.set_halign(gtk::Align::Start);
+                self.ui.artist_label.set_halign(gtk::Align::Start);
+                self.ui.album_label.set_halign(gtk::Align::Start);
+                self.ui.details_label.set_halign(gtk::Align::Start);
+                if !self.controls.track_info_alignment_left.is_active() {
+                    self.controls.track_info_alignment_left.set_active(true);
                 }
             }
             TrackInfoAlignment::Center => {
-                self.info_box.set_halign(gtk::Align::Center);
-                self.title_label.set_halign(gtk::Align::Center);
-                self.artist_label.set_halign(gtk::Align::Center);
-                self.album_label.set_halign(gtk::Align::Center);
-                self.details_label.set_halign(gtk::Align::Center);
-                if !self.track_info_alignment_center.is_active() {
-                    self.track_info_alignment_center.set_active(true);
+                self.ui.info_box.set_halign(gtk::Align::Center);
+                self.ui.title_label.set_halign(gtk::Align::Center);
+                self.ui.artist_label.set_halign(gtk::Align::Center);
+                self.ui.album_label.set_halign(gtk::Align::Center);
+                self.ui.details_label.set_halign(gtk::Align::Center);
+                if !self.controls.track_info_alignment_center.is_active() {
+                    self.controls.track_info_alignment_center.set_active(true);
                 }
             }
         }
     }
 
     /// Shows or hides the metadata box for the active track.
+    /// Shows or hides the metadata block for the current track.
     pub fn set_show_track_info(&self, show: bool) {
-        self.info_box.set_visible(show);
+        self.ui.info_box.set_visible(show);
     }
 
     /// Sets the background rendering style for the window.
     ///
     /// `Gradient` derives the backdrop from the cover art, while `Solid` uses a
     /// single tone based on the artwork palette.
+    /// Selects the solid or gradient background rendering style.
     pub fn set_background_style(&self, style: BackgroundStyle) {
-        self.background_style.set(style);
+        self.state.background_style.set(style);
         self.apply_background();
     }
 
     /// Presents the window to the user.
+    /// Presents the Now Playing window to the user.
     pub fn present(&self) {
-        self.window.present();
+        self.ui.window.present();
     }
 
-    /// Closes the window without destroying its internal state.
+    /// Closes the window while keeping its internal state available for reuse.
     pub fn close(&self) {
-        self.window.close();
+        self.ui.window.close();
     }
 }
 
@@ -784,6 +861,7 @@ pub enum TrackInfoAlignment {
 }
 
 impl TrackInfoAlignment {
+    /// Returns the persisted string representation of this track-info alignment.
     pub fn as_preference_value(self) -> &'static str {
         match self {
             Self::Left => "left",
@@ -791,6 +869,7 @@ impl TrackInfoAlignment {
         }
     }
 
+    /// Parses a persisted track-info alignment value, defaulting to center.
     pub fn from_preference(value: Option<&str>) -> Self {
         match value {
             Some("left") => Self::Left,
@@ -810,6 +889,7 @@ pub enum BackgroundStyle {
 }
 
 impl BackgroundStyle {
+    /// Returns the persisted string representation of this background style.
     pub fn as_preference_value(self) -> &'static str {
         match self {
             Self::Gradient => "gradient",
@@ -817,6 +897,7 @@ impl BackgroundStyle {
         }
     }
 
+    /// Parses a persisted background style value, defaulting to gradient.
     pub fn from_preference(value: Option<&str>) -> Self {
         match value {
             Some("solid") => Self::Solid,
@@ -825,12 +906,6 @@ impl BackgroundStyle {
     }
 }
 
-/**
- * Computes a CSS rule for the label font sizes based on the current window dimensions.
- *
- * The size is derived from a base font size and scaled to a width/height ratio
- * that keeps the typography readable across both standard and fullscreen layouts.
- */
 #[derive(Debug, Clone)]
 struct CachedGradient {
     background: Background,
@@ -838,6 +913,7 @@ struct CachedGradient {
     surface: ImageSurface,
 }
 
+/// Resolves the background colors used for rendering, overriding them for Lights Off.
 fn effective_background(
     background: Background,
     style: BackgroundStyle,
@@ -859,6 +935,7 @@ fn effective_background(
     }
 }
 
+/// Paints the current background into the supplied Cairo context.
 fn draw_background(
     context: &Context,
     width: i32,
@@ -918,6 +995,7 @@ fn draw_background(
     let _ = context.restore();
 }
 
+/// Rebuilds and caches the vertical gradient surface when its inputs change.
 fn rebuild_gradient_surface(
     cache: &RefCell<Option<CachedGradient>>,
     background: Background,
@@ -989,6 +1067,7 @@ fn rebuild_gradient_surface(
     });
 }
 
+/// Converts an sRGB RGB triplet into linear-light RGB components.
 fn srgb_triplet_to_linear(rgb: (u8, u8, u8)) -> (f64, f64, f64) {
     (
         srgb_to_linear(f64::from(rgb.0) / 255.0),
@@ -997,6 +1076,7 @@ fn srgb_triplet_to_linear(rgb: (u8, u8, u8)) -> (f64, f64, f64) {
     )
 }
 
+/// Converts one normalized sRGB channel to linear-light space.
 fn srgb_to_linear(channel: f64) -> f64 {
     if channel <= 0.04045 {
         channel / 12.92
@@ -1005,6 +1085,7 @@ fn srgb_to_linear(channel: f64) -> f64 {
     }
 }
 
+/// Converts one normalized linear-light channel back to sRGB space.
 fn linear_to_srgb(channel: f64) -> f64 {
     let channel = channel.clamp(0.0, 1.0);
     if channel <= 0.0031308 {
@@ -1014,6 +1095,7 @@ fn linear_to_srgb(channel: f64) -> f64 {
     }
 }
 
+/// Applies unbiased stochastic rounding to an 8-bit channel value.
 fn stochastic_round(value: f64, noise: f64) -> u8 {
     let value = value.clamp(0.0, 255.0);
     let floor = value.floor();
@@ -1022,6 +1104,7 @@ fn stochastic_round(value: f64, noise: f64) -> u8 {
     rounded.clamp(0.0, 255.0) as u8
 }
 
+/// Produces deterministic pseudo-random noise in the range `[0, 1]` for dithering.
 fn hash_noise(x: u32, y: u32) -> f64 {
     let mut value = x
         .wrapping_mul(0x9E37_79B9)
@@ -1034,6 +1117,7 @@ fn hash_noise(x: u32, y: u32) -> f64 {
     f64::from(value) / f64::from(u32::MAX)
 }
 
+/// Generates CSS for metadata font sizes scaled to the supplied window dimensions.
 fn font_css_for_size(size: (i32, i32)) -> String {
     let width_scale = size.0 as f64 / BASE_SCALE_WIDTH;
     let height_scale = size.1 as f64 / BASE_SCALE_HEIGHT;
