@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-23 22:05+0200\n"
+"POT-Creation-Date: 2026-08-24 09:26+0200\n"
 "PO-Revision-Date: 2026-07-06 14:05+0000\n"
 "Last-Translator: Arda Aydın <arda.aydin@operationsilkscarf.com>\n"
 "Language-Team: Turkish <https://weblate.fossplant.re/projects/songrec/"
@@ -45,8 +45,8 @@ msgstr "Uyarı: Ağa ulaşılamıyor"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1187 src/gui/main_window.rs:1192
-#: src/gui/main_window.rs:1204
+#: src/gui/main_window.rs:1235 src/gui/main_window.rs:1240
+#: src/gui/main_window.rs:1252
 msgid "No match for this song"
 msgstr "Bu şarkı için eşleşme yok"
 
@@ -200,17 +200,17 @@ msgstr "Ses hatası:"
 msgid "Audio error: No input device available"
 msgstr "Ses hatası: Mevcut bir giriş cihazı yok"
 
-#: src/core/preferences.rs:72 src/core/preferences.rs:98
-#: src/gui/main_window.rs:341 src/gui/interface.blp:129
-#: src/gui/interface.blp:653 src/gui/interface.blp:703
+#: src/core/preferences.rs:74 src/core/preferences.rs:101
+#: src/gui/main_window.rs:342 src/gui/interface.blp:129
+#: src/gui/interface.blp:674 src/gui/interface.blp:724
 msgid "Search on YouTube"
 msgstr "YouTube'da ara"
 
-#: src/core/preferences.rs:121
+#: src/core/preferences.rs:125
 msgid "When parsing the preferences file:"
 msgstr "Seçenekler dosyası okunurken şu oldu:"
 
-#: src/core/preferences.rs:210
+#: src/core/preferences.rs:217
 msgid "When saving the preferences file:"
 msgstr "Seçenekler dosyasını kaydederken şu oldu:"
 
@@ -226,103 +226,135 @@ msgstr "Çözülen Shazam paketinde geçersiz frekans bandı"
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "Shazam paketin kodlanırken geçersiz örnekleme hızı verildi"
 
-#: src/gui/main_window.rs:299
+#: src/gui/main_window.rs:300
 msgid "Application error"
 msgstr "Uygulama hatası"
 
-#: src/gui/main_window.rs:320
+#: src/gui/main_window.rs:321
 msgid "Network error"
 msgstr "Ağ hatası"
 
-#: src/gui/main_window.rs:396
+#: src/gui/main_window.rs:397
 msgid "Unable to enable notification icon"
 msgstr "Bildirim ikonu etkinleştirilemedi"
 
-#: src/gui/main_window.rs:872 src/gui/now_playing_window.rs:320
+#: src/gui/main_window.rs:877 src/gui/now_playing_window.rs:354
 msgid "None"
 msgstr ""
 
-#: src/gui/main_window.rs:872 src/gui/now_playing_window.rs:321
+#: src/gui/main_window.rs:878 src/gui/now_playing_window.rs:355
 msgid "Fade"
 msgstr ""
 
-#: src/gui/main_window.rs:872 src/gui/now_playing_window.rs:322
+#: src/gui/main_window.rs:879 src/gui/now_playing_window.rs:356
+msgid "Slide right"
+msgstr ""
+
+#: src/gui/main_window.rs:880 src/gui/now_playing_window.rs:357
+msgid "Slide left"
+msgstr ""
+
+#: src/gui/main_window.rs:881 src/gui/now_playing_window.rs:358
 msgid "Slide up"
 msgstr ""
 
-#: src/gui/main_window.rs:1038 src/gui/main_window.rs:1174
+#: src/gui/main_window.rs:882 src/gui/now_playing_window.rs:359
+msgid "Slide down"
+msgstr ""
+
+#: src/gui/main_window.rs:883 src/gui/now_playing_window.rs:360
+msgid "Swing right"
+msgstr ""
+
+#: src/gui/main_window.rs:884 src/gui/now_playing_window.rs:361
+msgid "Swing left"
+msgstr ""
+
+#: src/gui/main_window.rs:885 src/gui/now_playing_window.rs:362
+msgid "Swing up"
+msgstr ""
+
+#: src/gui/main_window.rs:886 src/gui/now_playing_window.rs:363
+msgid "Swing down"
+msgstr ""
+
+#: src/gui/main_window.rs:1079 src/gui/main_window.rs:1222
 msgid "Unable to enable MPRIS support"
 msgstr "MPRIS desteği etkinleştirilemedi"
 
-#: src/gui/main_window.rs:1201
+#: src/gui/main_window.rs:1249
 msgid "_Ok"
 msgstr "_Tamam"
 
-#: src/gui/main_window.rs:1282
+#: src/gui/main_window.rs:1330
 msgid "Song recognized"
 msgstr "Şarkı tanındı"
 
-#: src/gui/main_window.rs:1419
+#: src/gui/main_window.rs:1467
 msgid "Are you sure you want to wipe history?"
 msgstr "Geçmişi temizlemek istediğinizden emin misiniz?"
 
-#: src/gui/main_window.rs:1425
+#: src/gui/main_window.rs:1473
 msgid "_Yes"
 msgstr "_Evet"
 
-#: src/gui/main_window.rs:1426
+#: src/gui/main_window.rs:1474
 msgid "_Cancel"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:155
+#: src/gui/now_playing_window.rs:189
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:186
+#: src/gui/now_playing_window.rs:220
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window.rs:325 src/gui/interface.blp:502
+#: src/gui/now_playing_window.rs:377 src/gui/interface.blp:502
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:326 src/gui/interface.blp:507
+#: src/gui/now_playing_window.rs:378 src/gui/interface.blp:507
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:328 src/gui/interface.blp:479
+#: src/gui/now_playing_window.rs:380 src/gui/interface.blp:479
 msgid "Left"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:329 src/gui/interface.blp:485
+#: src/gui/now_playing_window.rs:381 src/gui/interface.blp:485
 msgid "Center"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:441 src/gui/interface.blp:460
+#: src/gui/now_playing_window.rs:496 src/gui/interface.blp:460
 msgid "Round corners of album cover"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:448 src/gui/interface.blp:465
+#: src/gui/now_playing_window.rs:503 src/gui/interface.blp:465
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:457 src/gui/interface.blp:514
+#: src/gui/now_playing_window.rs:512 src/gui/interface.blp:514
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:471
+#: src/gui/now_playing_window.rs:532
 msgid "Lights off"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:529 src/gui/interface.blp:519
-msgid "Transition"
+#: src/gui/now_playing_window.rs:594 src/gui/interface.blp:519
+msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:545 src/gui/interface.blp:470
+#: src/gui/now_playing_window.rs:616 src/gui/interface.blp:524
+msgid "Transition duration"
+msgstr ""
+
+#: src/gui/now_playing_window.rs:632 src/gui/interface.blp:470
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window.rs:575 src/gui/interface.blp:492
+#: src/gui/now_playing_window.rs:662 src/gui/interface.blp:492
 msgid "Background style"
 msgstr ""
 
@@ -438,7 +470,7 @@ msgstr "Favorileri göster"
 msgid "Application menu"
 msgstr "Uygulama menüsü"
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:605
+#: src/gui/interface.blp:369 src/gui/interface.blp:626
 msgid "Export to CSV"
 msgstr "CSV halinde dışarı aktar"
 
@@ -454,7 +486,7 @@ msgstr "Genel seçenekler"
 msgid "Notify when a new song is recognized or network error is encountered"
 msgstr "Yeni bir şarkı tanındığında ya da ağ hatasıyla karşılaşınca bildir"
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:560
+#: src/gui/interface.blp:388 src/gui/interface.blp:581
 msgid "Show notifications"
 msgstr "Bildirimleri göster"
 
@@ -551,62 +583,66 @@ msgid "Choose the effect used when the recognized track changes"
 msgstr ""
 
 #: src/gui/interface.blp:523
+msgid "Duration of the selected transition effect (500–5000 ms)"
+msgstr ""
+
+#: src/gui/interface.blp:544
 msgid "Show only the track on a black background"
 msgstr ""
 
-#: src/gui/interface.blp:524
+#: src/gui/interface.blp:545
 msgid "Lights Off"
 msgstr ""
 
-#: src/gui/interface.blp:535
+#: src/gui/interface.blp:556
 msgid "Settings"
 msgstr "Ayarlar"
 
-#: src/gui/interface.blp:565
+#: src/gui/interface.blp:586
 msgid "_Preferences..."
 msgstr "_Tercihler..."
 
-#: src/gui/interface.blp:572
+#: src/gui/interface.blp:593
 msgid "_Keyboard Shortcuts"
 msgstr "_Klavye Kısayolları"
 
-#: src/gui/interface.blp:577
+#: src/gui/interface.blp:598
 msgid "About..."
 msgstr "Hakkında..."
 
-#: src/gui/interface.blp:610
+#: src/gui/interface.blp:631
 msgid "Delete history"
 msgstr "Geçmişi sil"
 
-#: src/gui/interface.blp:615
+#: src/gui/interface.blp:636
 msgid "Select a file to recognize"
 msgstr "Tanınacak bir dosya seç"
 
-#: src/gui/interface.blp:627 src/gui/interface.blp:677
+#: src/gui/interface.blp:648 src/gui/interface.blp:698
 msgid "Copy artist and track"
 msgstr "Sanatçı ve parça adını kopyala"
 
-#: src/gui/interface.blp:633 src/gui/interface.blp:683
+#: src/gui/interface.blp:654 src/gui/interface.blp:704
 msgid "Copy artist"
 msgstr "Sanatçı adını kopyala"
 
-#: src/gui/interface.blp:639 src/gui/interface.blp:689
+#: src/gui/interface.blp:660 src/gui/interface.blp:710
 msgid "Copy track name"
 msgstr "Şarkı adını kopyala"
 
-#: src/gui/interface.blp:645 src/gui/interface.blp:695
+#: src/gui/interface.blp:666 src/gui/interface.blp:716
 msgid "Copy album"
 msgstr "Albüm adını kopyala"
 
-#: src/gui/interface.blp:661
+#: src/gui/interface.blp:682
 msgid "Delete from History"
 msgstr "Geçmişten sil"
 
-#: src/gui/interface.blp:667
+#: src/gui/interface.blp:688
 msgid "Add to Favorites"
 msgstr "Favorilere ekle"
 
-#: src/gui/interface.blp:711
+#: src/gui/interface.blp:732
 msgid "Remove from Favorites"
 msgstr "Favorilerden çıkar"
 

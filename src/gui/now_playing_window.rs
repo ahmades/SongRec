@@ -41,7 +41,11 @@ const DETAILS_CSS_CLASS: &str = "now-playing-details";
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
 const GRADIENT_SURFACE_WIDTH: i32 = 256;
 const TRANSITION_START: f64 = 0.20;
-const TRANSITION_DURATION_MS: u64 = 2000;
+const TRANSITION_DURATION_MIN_MS: f64 = 500.0;
+const TRANSITION_DURATION_MAX_MS: f64 = 5000.0;
+const TRANSITION_DURATION_DEFAULT_MS: f64 = 2000.0;
+const TRANSITION_DURATION_STEP_MS: f64 = 100.0;
+const PREFERENCE_UPDATE_DEBOUNCE_MS: u64 = 150;
 
 struct NowPlayingWidgets {
     window: gtk::Window,
@@ -66,6 +70,7 @@ struct NowPlayingControls {
     track_info_alignment_center: gtk::ToggleButton,
     always_display_last_recognized_song: gtk::Switch,
     transition_menu: gtk::DropDown,
+    transition_duration: gtk::Scale,
     lights_off_menu: gtk::Switch,
 }
 
@@ -76,7 +81,9 @@ struct NowPlayingState {
     lights_off: Rc<Cell<bool>>,
     showing_listening: Rc<Cell<bool>>,
     transition: Rc<Cell<TransitionEffect>>,
+    transition_duration_ms: Rc<Cell<u64>>,
     transition_generation: Rc<Cell<u64>>,
+    transition_duration_update_generation: Rc<Cell<u64>>,
     last_track_key: Rc<RefCell<Option<String>>>,
 }
 
@@ -104,6 +111,33 @@ impl NowPlayingWindow {
                 eprintln!("failed to send preference update: {error}");
             }
         }
+    }
+
+    /// Debounces a preference update so dragging the transition-duration slider does not persist every intermediate value.
+    fn schedule_preference_update(
+        gui_tx: Option<async_channel::Sender<GUIMessage>>,
+        generation: Rc<Cell<u64>>,
+        mut configure: impl FnMut(&mut Preferences) + 'static,
+    ) {
+        let current_generation = generation.get().wrapping_add(1);
+        generation.set(current_generation);
+
+        glib::timeout_add_local_once(
+            Duration::from_millis(PREFERENCE_UPDATE_DEBOUNCE_MS),
+            move || {
+                if generation.get() != current_generation {
+                    return;
+                }
+
+                let mut preference = Preferences::new();
+                configure(&mut preference);
+                if let Some(gui_tx) = gui_tx.as_ref() {
+                    if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
+                        eprintln!("failed to send preference update: {error}");
+                    }
+                }
+            },
+        );
     }
 
     /// Constructs a Now Playing window initialized from the current preferences.
@@ -234,7 +268,7 @@ impl NowPlayingWindow {
 
         let content_revealer = gtk::Revealer::builder()
             .reveal_child(true)
-            .transition_duration(TRANSITION_DURATION_MS as u32)
+            .transition_duration(TRANSITION_DURATION_DEFAULT_MS as u32)
             .transition_type(gtk::RevealerTransitionType::Crossfade)
             .hexpand(true)
             .vexpand(true)
@@ -319,8 +353,26 @@ impl NowPlayingWindow {
         let transition_menu = gtk::DropDown::from_strings(&[
             &gettext("None"),
             &gettext("Fade"),
+            &gettext("Slide right"),
+            &gettext("Slide left"),
             &gettext("Slide up"),
+            &gettext("Slide down"),
+            &gettext("Swing right"),
+            &gettext("Swing left"),
+            &gettext("Swing up"),
+            &gettext("Swing down"),
         ]);
+        let transition_duration = gtk::Scale::with_range(
+            gtk::Orientation::Horizontal,
+            TRANSITION_DURATION_MIN_MS,
+            TRANSITION_DURATION_MAX_MS,
+            TRANSITION_DURATION_STEP_MS,
+        );
+        transition_duration.set_value(TRANSITION_DURATION_DEFAULT_MS);
+        transition_duration.set_digits(0);
+        transition_duration.set_draw_value(true);
+        transition_duration.set_hexpand(true);
+        transition_duration.set_width_request(190);
         let lights_off_menu = gtk::Switch::new();
         let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
         let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
@@ -338,6 +390,7 @@ impl NowPlayingWindow {
             track_info_alignment_center,
             always_display_last_recognized_song,
             transition_menu,
+            transition_duration,
             lights_off_menu,
         }
     }
@@ -351,7 +404,9 @@ impl NowPlayingWindow {
             lights_off: Rc::new(Cell::new(false)),
             showing_listening: Rc::new(Cell::new(true)),
             transition: Rc::new(Cell::new(TransitionEffect::None)),
+            transition_duration_ms: Rc::new(Cell::new(TRANSITION_DURATION_DEFAULT_MS as u64)),
             transition_generation: Rc::new(Cell::new(0)),
+            transition_duration_update_generation: Rc::new(Cell::new(0)),
             last_track_key: Rc::new(RefCell::new(None)),
         }
     }
@@ -461,10 +516,16 @@ impl NowPlayingWindow {
                 .unwrap_or(true),
             true,
         );
-        self.add_transition_menu_row(
+        let transition_effect =
+            TransitionEffect::from_preference(preferences.now_playing_transition.as_deref());
+        self.add_transition_menu_row(&menu_box, &self.controls.transition_menu, transition_effect);
+        self.add_transition_duration_menu_row(
             &menu_box,
-            &self.controls.transition_menu,
-            TransitionEffect::from_preference(preferences.now_playing_transition.as_deref()),
+            &self.controls.transition_duration,
+            preferences
+                .now_playing_transition_duration_ms
+                .unwrap_or(2000),
+            !matches!(transition_effect, TransitionEffect::None),
         );
         self.add_switch_menu_row(
             &menu_box,
@@ -482,6 +543,10 @@ impl NowPlayingWindow {
         let gesture = gtk::GestureClick::new();
         gesture.set_button(3);
         gesture.connect_pressed(move |_, _, x, y| {
+            if popover_for_click.is_visible() {
+                popover_for_click.popdown();
+                return;
+            }
             let pointing_rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
             popover_for_click.set_pointing_to(Some(&pointing_rect));
             popover_for_click.popup();
@@ -526,7 +591,7 @@ impl NowPlayingWindow {
             .spacing(12)
             .hexpand(true)
             .build();
-        let label = gtk::Label::new(Some(&gettext("Transition")));
+        let label = gtk::Label::new(Some(&gettext("Transition effect")));
         label.set_hexpand(true);
         label.set_halign(gtk::Align::Start);
         row.append(&label);
@@ -535,7 +600,29 @@ impl NowPlayingWindow {
         menu_box.append(&row);
     }
 
-    /// Adds the track-info alignment segmented control to the context menu.
+    /// Adds the transition-duration slider to the context menu.
+    fn add_transition_duration_menu_row(
+        &self,
+        menu_box: &gtk::Box,
+        scale: &gtk::Scale,
+        duration_ms: u64,
+        sensitive: bool,
+    ) {
+        let row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(12)
+            .hexpand(true)
+            .build();
+        let label = gtk::Label::new(Some(&gettext("Transition duration")));
+        label.set_hexpand(true);
+        label.set_halign(gtk::Align::Start);
+        row.append(&label);
+        scale.set_value(duration_ms.clamp(500, 5000) as f64);
+        scale.set_sensitive(sensitive);
+        row.append(scale);
+        menu_box.append(&row);
+    }
+
     fn add_alignment_menu_row(&self, menu_box: &gtk::Box, preferences: &Preferences) {
         let row = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -654,12 +741,37 @@ impl NowPlayingWindow {
 
         let gui_tx_for_transition = self.gui_tx.clone();
         let transition_state = self.state.transition.clone();
+        let transition_duration_state = self.state.transition_duration_ms.clone();
+        let transition_duration_control = self.controls.transition_duration.clone();
         self.controls
             .transition_menu
             .connect_selected_notify(move |dropdown| {
                 let effect = TransitionEffect::from_index(dropdown.selected());
                 transition_state.set(effect);
+                transition_duration_control
+                    .set_sensitive(!matches!(effect, TransitionEffect::None));
                 Self::send_preference_update(&gui_tx_for_transition, |preference| {
+                    preference.now_playing_transition =
+                        Some(effect.as_preference_value().to_string());
+                    preference.now_playing_transition_duration_ms =
+                        Some(transition_duration_state.get());
+                });
+            });
+
+        let transition_duration_state = self.state.transition_duration_ms.clone();
+        let transition_state_for_duration = self.state.transition.clone();
+        let gui_tx_for_transition_duration = self.gui_tx.clone();
+        let transition_duration_update = self.state.transition_duration_update_generation.clone();
+        self.controls
+            .transition_duration
+            .connect_value_changed(move |scale| {
+                let duration_ms = scale.value().round().clamp(500.0, 5000.0) as u64;
+                transition_duration_state.set(duration_ms);
+                let effect = transition_state_for_duration.get();
+                let gui_tx = gui_tx_for_transition_duration.clone();
+                let pending = transition_duration_update.clone();
+                Self::schedule_preference_update(gui_tx, pending, move |preference| {
+                    preference.now_playing_transition_duration_ms = Some(duration_ms);
                     preference.now_playing_transition =
                         Some(effect.as_preference_value().to_string());
                 });
@@ -750,6 +862,15 @@ impl NowPlayingWindow {
                 .set_selected(desired_transition.index());
         }
         self.state.transition.set(desired_transition);
+
+        let transition_duration = preferences
+            .now_playing_transition_duration_ms
+            .unwrap_or(2000)
+            .clamp(500, 5000);
+        self.set_transition_duration(transition_duration);
+        self.controls
+            .transition_duration
+            .set_sensitive(!matches!(desired_transition, TransitionEffect::None));
 
         match desired_style {
             BackgroundStyle::Gradient => {
@@ -865,6 +986,7 @@ impl NowPlayingWindow {
     /// Runs the configured lightweight transition before displaying a newly recognized track.
     fn transition_to_track(&self, message: SongRecognizedMessage) {
         let effect = self.state.transition.get();
+        let duration_ms = self.state.transition_duration_ms.get();
         if matches!(effect, TransitionEffect::None) {
             self.apply_track_update(&message);
             return;
@@ -872,6 +994,9 @@ impl NowPlayingWindow {
 
         let generation = self.state.transition_generation.get().wrapping_add(1);
         self.state.transition_generation.set(generation);
+        self.ui
+            .content_revealer
+            .set_transition_duration(duration_ms as u32);
         self.ui
             .content_revealer
             .set_transition_type(effect.revealer_type());
@@ -897,7 +1022,7 @@ impl NowPlayingWindow {
         let showing_listening = self.state.showing_listening.clone();
         let gradient_surface = self.state.gradient_surface.clone();
 
-        glib::timeout_add_local_once(Duration::from_millis(TRANSITION_DURATION_MS), move || {
+        glib::timeout_add_local_once(Duration::from_millis(duration_ms), move || {
             if generation_state.get() != generation {
                 return;
             }
@@ -996,6 +1121,18 @@ impl NowPlayingWindow {
     pub fn set_transition(&self, effect: TransitionEffect) {
         self.state.transition.set(effect);
         self.controls.transition_menu.set_selected(effect.index());
+        self.controls
+            .transition_duration
+            .set_sensitive(!matches!(effect, TransitionEffect::None));
+    }
+
+    /// Sets the transition duration in milliseconds and updates the duration control.
+    pub fn set_transition_duration(&self, duration_ms: u64) {
+        let duration_ms = duration_ms.clamp(500, 5000);
+        self.state.transition_duration_ms.set(duration_ms);
+        self.controls
+            .transition_duration
+            .set_value(duration_ms as f64);
     }
 
     /// Enables or disables keeping the last recognized song when no new match is available.
@@ -1169,10 +1306,24 @@ impl NowPlayingWindow {
 pub enum TransitionEffect {
     /// Replace the current track immediately without animation.
     None,
-    /// Crossfade the current track information into the new track.
+    /// Crossfade the current track into the new track.
     Fade,
-    /// Reveal the new track information by sliding it upward.
+    /// Slide the new track in from the right.
+    SlideRight,
+    /// Slide the new track in from the left.
+    SlideLeft,
+    /// Slide the new track in from the bottom.
     SlideUp,
+    /// Slide the new track in from the top.
+    SlideDown,
+    /// Swing the new track in from the left.
+    SwingRight,
+    /// Swing the new track in from the right.
+    SwingLeft,
+    /// Swing the new track in from the bottom.
+    SwingUp,
+    /// Swing the new track in from the top.
+    SwingDown,
 }
 
 impl TransitionEffect {
@@ -1181,7 +1332,14 @@ impl TransitionEffect {
         match self {
             Self::None => "none",
             Self::Fade => "fade",
+            Self::SlideRight => "slide-right",
+            Self::SlideLeft => "slide-left",
             Self::SlideUp => "slide-up",
+            Self::SlideDown => "slide-down",
+            Self::SwingRight => "swing-right",
+            Self::SwingLeft => "swing-left",
+            Self::SwingUp => "swing-up",
+            Self::SwingDown => "swing-down",
         }
     }
 
@@ -1189,34 +1347,52 @@ impl TransitionEffect {
     pub fn from_preference(value: Option<&str>) -> Self {
         match value {
             Some("fade") => Self::Fade,
+            Some("slide-right") => Self::SlideRight,
+            Some("slide-left") => Self::SlideLeft,
             Some("slide-up") => Self::SlideUp,
+            Some("slide-down") => Self::SlideDown,
+            Some("swing-right") => Self::SwingRight,
+            Some("swing-left") => Self::SwingLeft,
+            Some("swing-up") => Self::SwingUp,
+            Some("swing-down") => Self::SwingDown,
             _ => Self::None,
         }
     }
 
-    /// Converts the effect into the GTK revealer animation used by the window.
+    /// Converts the effect into the corresponding GTK revealer animation.
     pub fn revealer_type(self) -> gtk::RevealerTransitionType {
         match self {
             Self::None => gtk::RevealerTransitionType::None,
             Self::Fade => gtk::RevealerTransitionType::Crossfade,
+            Self::SlideRight => gtk::RevealerTransitionType::SlideRight,
+            Self::SlideLeft => gtk::RevealerTransitionType::SlideLeft,
             Self::SlideUp => gtk::RevealerTransitionType::SlideUp,
+            Self::SlideDown => gtk::RevealerTransitionType::SlideDown,
+            Self::SwingRight => gtk::RevealerTransitionType::SwingRight,
+            Self::SwingLeft => gtk::RevealerTransitionType::SwingLeft,
+            Self::SwingUp => gtk::RevealerTransitionType::SwingUp,
+            Self::SwingDown => gtk::RevealerTransitionType::SwingDown,
         }
     }
 
-    /// Returns the zero-based index used by the Transition dropdown.
+    /// Returns the zero-based index used by the Transition effect dropdown.
     pub fn index(self) -> u32 {
-        match self {
-            Self::None => 0,
-            Self::Fade => 1,
-            Self::SlideUp => 2,
-        }
+        self as u32
     }
 
-    /// Converts a Transition dropdown index into an effect, defaulting to None.
+    /// Converts a Transition effect dropdown index into an effect.
     pub fn from_index(index: u32) -> Self {
         match index {
+            0 => Self::None,
             1 => Self::Fade,
-            2 => Self::SlideUp,
+            2 => Self::SlideRight,
+            3 => Self::SlideLeft,
+            4 => Self::SlideUp,
+            5 => Self::SlideDown,
+            6 => Self::SwingRight,
+            7 => Self::SwingLeft,
+            8 => Self::SwingUp,
+            9 => Self::SwingDown,
             _ => Self::None,
         }
     }

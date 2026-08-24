@@ -6,10 +6,11 @@ use log::{debug, error, info, trace};
 use mpris_server::PlaybackStatus;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use serde_json::json;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::error::Error;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crate::core::http_task::http_task;
 use crate::core::logging::Logging;
@@ -823,6 +824,10 @@ impl App {
             .object("always_display_last_recognized_song_setting")
             .unwrap();
         let transition_setting: adw::ComboRow = self.builder.object("transition_setting").unwrap();
+        let transition_duration_scale: gtk::Scale = self
+            .builder
+            .object("transition_duration_setting_scale")
+            .unwrap();
         let lights_off_setting: adw::SwitchRow = self.builder.object("lights_off_setting").unwrap();
         let results_section: adw::PreferencesGroup =
             self.builder.object("results_section").unwrap();
@@ -868,15 +873,30 @@ impl App {
                 .always_display_last_recognized_song
                 .unwrap_or(true),
         );
-        let transition_model =
-            gtk::StringList::new(&[&gettext("None"), &gettext("Fade"), &gettext("Slide up")]);
+        let transition_model = gtk::StringList::new(&[
+            &gettext("None"),
+            &gettext("Fade"),
+            &gettext("Slide right"),
+            &gettext("Slide left"),
+            &gettext("Slide up"),
+            &gettext("Slide down"),
+            &gettext("Swing right"),
+            &gettext("Swing left"),
+            &gettext("Swing up"),
+            &gettext("Swing down"),
+        ]);
         transition_setting.set_model(Some(&transition_model));
-        transition_setting.set_selected(
-            TransitionEffect::from_preference(
-                initial_preferences.now_playing_transition.as_deref(),
-            )
-            .index(),
+        let initial_transition = TransitionEffect::from_preference(
+            initial_preferences.now_playing_transition.as_deref(),
         );
+        transition_setting.set_selected(initial_transition.index());
+        let initial_duration = initial_preferences
+            .now_playing_transition_duration_ms
+            .unwrap_or(2000)
+            .clamp(500, 5000);
+        transition_duration_scale.set_value(initial_duration as f64);
+        transition_duration_scale
+            .set_sensitive(!matches!(initial_transition, TransitionEffect::None));
         let lights_off_initial = initial_preferences.lights_off_enabled.unwrap_or(false);
         lights_off_setting.set_active(lights_off_initial);
         // When Lights Off is enabled, the artwork rounding and track-info controls are not applicable.
@@ -925,11 +945,32 @@ impl App {
         });
 
         let gui_tx_for_transition = self.gui_tx.clone();
+        let transition_duration_for_effect = transition_duration_scale.clone();
         transition_setting.connect_selected_notify(move |combo| {
             let effect = TransitionEffect::from_index(combo.selected());
+            transition_duration_for_effect.set_sensitive(!matches!(effect, TransitionEffect::None));
             send_preference_update(&gui_tx_for_transition, |preference| {
                 preference.now_playing_transition = Some(effect.as_preference_value().to_string());
+                preference.now_playing_transition_duration_ms = Some(
+                    transition_duration_for_effect
+                        .value()
+                        .round()
+                        .clamp(500.0, 5000.0) as u64,
+                );
             });
+        });
+
+        let gui_tx_for_transition_duration = self.gui_tx.clone();
+        let transition_duration_update_generation = Rc::new(Cell::new(0u64));
+        transition_duration_scale.connect_value_changed(move |scale| {
+            let duration_ms = scale.value().round().clamp(500.0, 5000.0) as u64;
+            schedule_preference_update(
+                gui_tx_for_transition_duration.clone(),
+                transition_duration_update_generation.clone(),
+                move |preference| {
+                    preference.now_playing_transition_duration_ms = Some(duration_ms);
+                },
+            );
         });
 
         let gui_tx_for_lights_off = self.gui_tx.clone();
@@ -1122,12 +1163,19 @@ impl App {
                                     .always_display_last_recognized_song
                                     .unwrap_or(true),
                             );
-                            transition_setting.set_selected(
-                                TransitionEffect::from_preference(
-                                    preferences.now_playing_transition.as_deref(),
-                                )
-                                .index(),
+                            let transition_effect = TransitionEffect::from_preference(
+                                preferences.now_playing_transition.as_deref(),
                             );
+                            transition_setting.set_selected(transition_effect.index());
+                            let transition_duration = preferences
+                                .now_playing_transition_duration_ms
+                                .unwrap_or(2000)
+                                .clamp(500, 5000);
+                            transition_duration_scale.set_value(transition_duration as f64);
+                            transition_duration_scale.set_sensitive(!matches!(
+                                transition_effect,
+                                TransitionEffect::None
+                            ));
                             lights_off_setting
                                 .set_active(preferences.lights_off_enabled.unwrap_or(false));
                             match BackgroundStyle::from_preference(
@@ -1860,6 +1908,27 @@ fn send_preference_update(
     if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
         error!("failed to send preference update: {error}");
     }
+}
+
+fn schedule_preference_update(
+    gui_tx: async_channel::Sender<GUIMessage>,
+    generation: Rc<Cell<u64>>,
+    mut configure: impl FnMut(&mut Preferences) + 'static,
+) {
+    let current_generation = generation.get().wrapping_add(1);
+    generation.set(current_generation);
+
+    glib::timeout_add_local_once(Duration::from_millis(150), move || {
+        if generation.get() != current_generation {
+            return;
+        }
+
+        let mut preference = Preferences::new();
+        configure(&mut preference);
+        if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
+            error!("failed to send preference update: {error}");
+        }
+    });
 }
 
 fn background_style_value(style: BackgroundStyle) -> &'static str {

@@ -516,7 +516,28 @@ Adw.ApplicationWindow main_window {
 
             Adw.ComboRow transition_setting {
               subtitle: _("Choose the effect used when the recognized track changes");
-              title: _("Transition");
+              title: _("Transition effect");
+            }
+
+            Adw.ActionRow transition_duration_setting {
+              subtitle: _("Duration of the selected transition effect (500–5000 ms)");
+              title: _("Transition duration");
+
+              [suffix]
+              Scale transition_duration_setting_scale {
+                orientation: horizontal;
+                width-request: 300;
+                hexpand: true;
+                draw-value: true;
+                digits: 0;
+                adjustment: Adjustment {
+                  lower: 500;
+                  upper: 5000;
+                  step-increment: 100;
+                  page-increment: 500;
+                  value: 2000;
+                };
+              }
             }
 
             Adw.SwitchRow lights_off_setting {
