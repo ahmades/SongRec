@@ -29,7 +29,6 @@ mod core {
 #[cfg(feature = "gui")]
 mod gui {
     pub mod main_window;
-    pub mod now_playing_background;
     pub mod now_playing_window;
     pub mod song_history_interface;
 

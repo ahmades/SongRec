@@ -1,16 +1,16 @@
-//! Artwork-derived background color extraction for the Now Playing window.
+//! Artwork-palette extraction used by the Now Playing background renderer.
 
 type RGB = (u8, u8, u8);
 type HSL = (f32, f32, f32);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Background {
-    pub(crate) top: RGB,
-    pub(crate) bottom: RGB,
+pub(super) struct Background {
+    pub(super) top: RGB,
+    pub(super) bottom: RGB,
 }
 
 impl Background {
-    pub(crate) fn fallback() -> Self {
+    pub(super) fn fallback() -> Self {
         Self {
             top: (38, 38, 38),
             bottom: (0, 0, 0),
@@ -19,7 +19,7 @@ impl Background {
 }
 
 /// Builds a dark, artwork-derived background from a cover-image byte stream.
-pub(crate) fn from_cover_image(bytes: &[u8]) -> Background {
+pub(super) fn from_cover_image(bytes: &[u8]) -> Background {
     image::load_from_memory(bytes)
         .map(|image| generate_cover_background(&image))
         .unwrap_or_else(|_| Background::fallback())
@@ -234,4 +234,36 @@ fn contrast_ratio(first: RGB, second: RGB) -> f32 {
     let lighter = first.max(second);
     let darker = first.min(second);
     (lighter + 0.05) / (darker + 0.05)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Background, contrast_ratio, from_cover_image, generate_cover_background};
+    use image::{DynamicImage, Rgb, RgbImage};
+
+    #[test]
+    fn invalid_cover_bytes_use_the_fallback_background() {
+        assert_eq!(from_cover_image(&[]), Background::fallback());
+    }
+
+    #[test]
+    fn unusably_bright_artwork_uses_the_fallback_background() {
+        let white_cover = DynamicImage::ImageRgb8(RgbImage::from_pixel(8, 8, Rgb([255, 255, 255])));
+
+        assert_eq!(
+            generate_cover_background(&white_cover),
+            Background::fallback()
+        );
+    }
+
+    #[test]
+    fn artwork_palette_preserves_white_text_contrast() {
+        let saturated_cover =
+            DynamicImage::ImageRgb8(RgbImage::from_pixel(8, 8, Rgb([224, 54, 72])));
+        let background = generate_cover_background(&saturated_cover);
+        let white = (255, 255, 255);
+
+        assert!(contrast_ratio(background.top, white) >= 4.75);
+        assert!(contrast_ratio(background.bottom, white) >= 7.0);
+    }
 }

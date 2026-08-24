@@ -36,7 +36,8 @@ use crate::gui::context_menu::ContextMenuUtil;
 use crate::gui::history_entry::HistoryEntry;
 use crate::gui::listed_device::ListedDevice;
 use crate::gui::now_playing_window::{
-    BackgroundStyle, NowPlayingWindow, TrackInfoAlignment, TransitionEffect,
+    BackgroundStyle, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment, TransitionEffect,
+    reconcile_transition_duration, transition_duration_from_scale,
 };
 
 #[cfg(windows)]
@@ -93,16 +94,6 @@ fn open_now_playing_window(
             Some(gui_tx.clone()),
             Some(preferences_interface.clone()),
         );
-        let preferences = preferences_interface.lock().unwrap().preferences.clone();
-        window.set_round_corners(preferences.now_playing_round_corners.unwrap_or(true));
-        window.set_show_track_info(!preferences.hide_now_playing_info.unwrap_or(false));
-        window.set_track_info_alignment(TrackInfoAlignment::from_preference(
-            preferences.now_playing_track_info_alignment.as_deref(),
-        ));
-        window.set_background_style(BackgroundStyle::from_preference(
-            preferences.now_playing_background_style.as_deref(),
-        ));
-        window.set_lights_off(preferences.lights_off_enabled.unwrap_or(false));
         if let Some(ref message) = *last_recognized_song.borrow() {
             window.update(message);
         }
@@ -841,18 +832,10 @@ impl App {
             .unwrap()
             .preferences
             .clone();
-        round_corners_setting.set_active(
-            initial_preferences
-                .now_playing_round_corners
-                .unwrap_or(true),
-        );
-        hide_track_info_setting
-            .set_active(initial_preferences.hide_now_playing_info.unwrap_or(false));
-        match TrackInfoAlignment::from_preference(
-            initial_preferences
-                .now_playing_track_info_alignment
-                .as_deref(),
-        ) {
+        let initial_now_playing_settings = NowPlayingSettings::from(&initial_preferences);
+        round_corners_setting.set_active(initial_now_playing_settings.round_corners);
+        hide_track_info_setting.set_active(initial_now_playing_settings.hide_track_info);
+        match initial_now_playing_settings.track_info_alignment {
             TrackInfoAlignment::Left => {
                 track_info_alignment_left.set_active(true);
                 track_info_alignment_center.set_active(false);
@@ -862,57 +845,54 @@ impl App {
                 track_info_alignment_center.set_active(true);
             }
         }
-        match BackgroundStyle::from_preference(
-            initial_preferences.now_playing_background_style.as_deref(),
-        ) {
+        match initial_now_playing_settings.background_style {
             BackgroundStyle::Gradient => background_style_gradient.set_active(true),
             BackgroundStyle::Solid => background_style_solid.set_active(true),
         }
-        always_display_last_recognized_song_setting.set_active(
-            initial_preferences
-                .always_display_last_recognized_song
-                .unwrap_or(true),
-        );
-        let transition_model = gtk::StringList::new(&[
-            &gettext("None"),
-            &gettext("Fade"),
-            &gettext("Slide right"),
-            &gettext("Slide left"),
-            &gettext("Slide up"),
-            &gettext("Slide down"),
-            &gettext("Swing right"),
-            &gettext("Swing left"),
-            &gettext("Swing up"),
-            &gettext("Swing down"),
-        ]);
+        always_display_last_recognized_song_setting
+            .set_active(initial_now_playing_settings.always_display_last_recognized_song);
+        let transition_labels = TransitionEffect::ALL
+            .into_iter()
+            .map(TransitionEffect::translated_label)
+            .collect::<Vec<_>>();
+        let transition_label_refs = transition_labels
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        let transition_model = gtk::StringList::new(&transition_label_refs);
         transition_setting.set_model(Some(&transition_model));
-        let initial_transition = TransitionEffect::from_preference(
-            initial_preferences.now_playing_transition.as_deref(),
-        );
-        transition_setting.set_selected(initial_transition.index());
-        let initial_duration = initial_preferences
-            .now_playing_transition_duration_ms
-            .unwrap_or(2000)
-            .clamp(500, 5000);
-        transition_duration_scale.set_value(initial_duration as f64);
+        transition_setting.set_selected(initial_now_playing_settings.transition.index());
         transition_duration_scale
-            .set_sensitive(!matches!(initial_transition, TransitionEffect::None));
-        let lights_off_initial = initial_preferences.lights_off_enabled.unwrap_or(false);
-        lights_off_setting.set_active(lights_off_initial);
+            .set_value(initial_now_playing_settings.transition_duration_ms as f64);
+        transition_duration_scale.set_sensitive(!matches!(
+            initial_now_playing_settings.transition,
+            TransitionEffect::None
+        ));
+        lights_off_setting.set_active(initial_now_playing_settings.lights_off);
         // When Lights Off is enabled, the artwork rounding and track-info controls are not applicable.
-        hide_track_info_setting.set_sensitive(!lights_off_initial);
-        round_corners_setting.set_sensitive(!lights_off_initial);
+        hide_track_info_setting.set_sensitive(!initial_now_playing_settings.lights_off);
+        round_corners_setting.set_sensitive(!initial_now_playing_settings.lights_off);
 
+        let applying_now_playing_settings = Rc::new(Cell::new(false));
+        let transition_duration_update_generation = Rc::new(Cell::new(0u64));
+        let pending_transition_duration_ms = Rc::new(Cell::new(None));
+
+        let applying_now_playing_settings_for_round_corners = applying_now_playing_settings.clone();
         let gui_tx_for_round_corners = self.gui_tx.clone();
         round_corners_setting.connect_active_notify(move |switch_row| {
+            if applying_now_playing_settings_for_round_corners.get() {
+                return;
+            }
             send_preference_update(&gui_tx_for_round_corners, |preference| {
                 preference.now_playing_round_corners = Some(switch_row.is_active());
             });
         });
 
+        let applying_now_playing_settings_for_alignment_left =
+            applying_now_playing_settings.clone();
         let gui_tx_for_alignment_left = self.gui_tx.clone();
         track_info_alignment_left.connect_toggled(move |button| {
-            if button.is_active() {
+            if !applying_now_playing_settings_for_alignment_left.get() && button.is_active() {
                 send_preference_update(&gui_tx_for_alignment_left, |preference| {
                     preference.now_playing_track_info_alignment =
                         Some(TrackInfoAlignment::Left.as_preference_value().to_string());
@@ -920,9 +900,11 @@ impl App {
             }
         });
 
+        let applying_now_playing_settings_for_alignment_center =
+            applying_now_playing_settings.clone();
         let gui_tx_for_alignment_center = self.gui_tx.clone();
         track_info_alignment_center.connect_toggled(move |button| {
-            if button.is_active() {
+            if !applying_now_playing_settings_for_alignment_center.get() && button.is_active() {
                 send_preference_update(&gui_tx_for_alignment_center, |preference| {
                     preference.now_playing_track_info_alignment =
                         Some(TrackInfoAlignment::Center.as_preference_value().to_string());
@@ -930,79 +912,119 @@ impl App {
             }
         });
 
+        let applying_now_playing_settings_for_hide = applying_now_playing_settings.clone();
         let gui_tx_for_hide_info = self.gui_tx.clone();
         hide_track_info_setting.connect_active_notify(move |switch_row| {
+            if applying_now_playing_settings_for_hide.get() {
+                return;
+            }
             send_preference_update(&gui_tx_for_hide_info, |preference| {
                 preference.hide_now_playing_info = Some(switch_row.is_active());
             });
         });
 
+        let applying_now_playing_settings_for_always_display_last =
+            applying_now_playing_settings.clone();
         let gui_tx_for_always_display_last = self.gui_tx.clone();
         always_display_last_recognized_song_setting.connect_active_notify(move |switch_row| {
+            if applying_now_playing_settings_for_always_display_last.get() {
+                return;
+            }
             send_preference_update(&gui_tx_for_always_display_last, |preference| {
                 preference.always_display_last_recognized_song = Some(switch_row.is_active());
             });
         });
 
+        let applying_now_playing_settings_for_transition = applying_now_playing_settings.clone();
         let gui_tx_for_transition = self.gui_tx.clone();
         let transition_duration_for_effect = transition_duration_scale.clone();
+        let transition_duration_update_generation_for_transition =
+            transition_duration_update_generation.clone();
+        let pending_transition_duration_for_transition = pending_transition_duration_ms.clone();
         transition_setting.connect_selected_notify(move |combo| {
+            if applying_now_playing_settings_for_transition.get() {
+                return;
+            }
             let effect = TransitionEffect::from_index(combo.selected());
             transition_duration_for_effect.set_sensitive(!matches!(effect, TransitionEffect::None));
+            pending_transition_duration_for_transition.set(None);
+            transition_duration_update_generation_for_transition.set(
+                transition_duration_update_generation_for_transition
+                    .get()
+                    .wrapping_add(1),
+            );
             send_preference_update(&gui_tx_for_transition, |preference| {
                 preference.now_playing_transition = Some(effect.as_preference_value().to_string());
                 preference.now_playing_transition_duration_ms = Some(
-                    transition_duration_for_effect
-                        .value()
-                        .round()
-                        .clamp(500.0, 5000.0) as u64,
+                    transition_duration_from_scale(transition_duration_for_effect.value()),
                 );
             });
         });
 
+        let applying_now_playing_settings_for_duration = applying_now_playing_settings.clone();
         let gui_tx_for_transition_duration = self.gui_tx.clone();
-        let transition_duration_update_generation = Rc::new(Cell::new(0u64));
+        let transition_duration_update_generation_for_refresh =
+            transition_duration_update_generation.clone();
+        let pending_transition_duration_for_refresh = pending_transition_duration_ms.clone();
+        let pending_transition_duration_for_duration = pending_transition_duration_ms.clone();
         transition_duration_scale.connect_value_changed(move |scale| {
-            let duration_ms = scale.value().round().clamp(500.0, 5000.0) as u64;
-            schedule_preference_update(
+            if applying_now_playing_settings_for_duration.get() {
+                return;
+            }
+            let duration_ms = transition_duration_from_scale(scale.value());
+            pending_transition_duration_for_duration.set(Some(duration_ms));
+            schedule_transition_duration_update(
                 gui_tx_for_transition_duration.clone(),
                 transition_duration_update_generation.clone(),
-                move |preference| {
-                    preference.now_playing_transition_duration_ms = Some(duration_ms);
-                },
+                pending_transition_duration_for_duration.clone(),
+                duration_ms,
             );
         });
 
+        let applying_now_playing_settings_for_lights_off = applying_now_playing_settings.clone();
         let gui_tx_for_lights_off = self.gui_tx.clone();
         let hide_for_lights = hide_track_info_setting.clone();
         let round_for_lights = round_corners_setting.clone();
         lights_off_setting.connect_active_notify(move |switch_row| {
+            if applying_now_playing_settings_for_lights_off.get() {
+                return;
+            }
+
+            let lights_off = switch_row.is_active();
+            if lights_off {
+                let was_applying_settings =
+                    applying_now_playing_settings_for_lights_off.replace(true);
+                hide_for_lights.set_active(false);
+                applying_now_playing_settings_for_lights_off.set(was_applying_settings);
+            }
             send_preference_update(&gui_tx_for_lights_off, |preference| {
-                preference.lights_off_enabled = Some(switch_row.is_active());
-                if switch_row.is_active() {
+                preference.lights_off_enabled = Some(lights_off);
+                if lights_off {
                     preference.hide_now_playing_info = Some(false);
                 }
             });
-            hide_for_lights.set_sensitive(!switch_row.is_active());
-            round_for_lights.set_sensitive(!switch_row.is_active());
+            hide_for_lights.set_sensitive(!lights_off);
+            round_for_lights.set_sensitive(!lights_off);
         });
 
+        let applying_now_playing_settings_for_gradient = applying_now_playing_settings.clone();
         let gui_tx_for_gradient = self.gui_tx.clone();
         background_style_gradient.connect_toggled(move |check| {
-            if check.is_active() {
+            if !applying_now_playing_settings_for_gradient.get() && check.is_active() {
                 send_preference_update(&gui_tx_for_gradient, |preference| {
                     preference.now_playing_background_style =
-                        Some(background_style_value(BackgroundStyle::Gradient).to_string());
+                        Some(BackgroundStyle::Gradient.as_preference_value().to_string());
                 });
             }
         });
 
+        let applying_now_playing_settings_for_solid = applying_now_playing_settings.clone();
         let gui_tx_for_solid = self.gui_tx.clone();
         background_style_solid.connect_toggled(move |check| {
-            if check.is_active() {
+            if !applying_now_playing_settings_for_solid.get() && check.is_active() {
                 send_preference_update(&gui_tx_for_solid, |preference| {
                     preference.now_playing_background_style =
-                        Some(background_style_value(BackgroundStyle::Solid).to_string());
+                        Some(BackgroundStyle::Solid.as_preference_value().to_string());
                 });
             }
         });
@@ -1051,6 +1073,7 @@ impl App {
         let _old_preferences = self.old_preferences.clone();
         let ctx_buffered_log = self.ctx_buffered_log.clone();
         let application = application.clone();
+        let applying_now_playing_settings_for_refresh = applying_now_playing_settings.clone();
 
         glib::spawn_future_local(async move {
             #[cfg(all(target_os = "linux", feature = "mpris"))]
@@ -1140,13 +1163,30 @@ impl App {
                                 .preferences
                                 .clone();
 
-                            round_corners_setting
-                                .set_active(preferences.now_playing_round_corners.unwrap_or(true));
+                            let mut now_playing_settings = NowPlayingSettings::from(&preferences);
+                            let pending_duration_ms = pending_transition_duration_for_refresh.get();
+                            let (duration_ms, pending_duration_ms_after_refresh) =
+                                reconcile_transition_duration(
+                                    now_playing_settings.transition_duration_ms,
+                                    pending_duration_ms,
+                                );
+                            now_playing_settings.transition_duration_ms = duration_ms;
+                            if pending_duration_ms_after_refresh != pending_duration_ms {
+                                pending_transition_duration_for_refresh
+                                    .set(pending_duration_ms_after_refresh);
+                                transition_duration_update_generation_for_refresh.set(
+                                    transition_duration_update_generation_for_refresh
+                                        .get()
+                                        .wrapping_add(1),
+                                );
+                            }
+                            let was_applying_settings =
+                                applying_now_playing_settings_for_refresh.replace(true);
+
+                            round_corners_setting.set_active(now_playing_settings.round_corners);
                             hide_track_info_setting
-                                .set_active(preferences.hide_now_playing_info.unwrap_or(false));
-                            match TrackInfoAlignment::from_preference(
-                                preferences.now_playing_track_info_alignment.as_deref(),
-                            ) {
+                                .set_active(now_playing_settings.hide_track_info);
+                            match now_playing_settings.track_info_alignment {
                                 TrackInfoAlignment::Left => {
                                     track_info_alignment_left.set_active(true);
                                 }
@@ -1154,33 +1194,21 @@ impl App {
                                     track_info_alignment_center.set_active(true);
                                 }
                             }
-                            hide_track_info_setting
-                                .set_sensitive(!preferences.lights_off_enabled.unwrap_or(false));
-                            round_corners_setting
-                                .set_sensitive(!preferences.lights_off_enabled.unwrap_or(false));
+                            hide_track_info_setting.set_sensitive(!now_playing_settings.lights_off);
+                            round_corners_setting.set_sensitive(!now_playing_settings.lights_off);
                             always_display_last_recognized_song_setting.set_active(
-                                preferences
-                                    .always_display_last_recognized_song
-                                    .unwrap_or(true),
+                                now_playing_settings.always_display_last_recognized_song,
                             );
-                            let transition_effect = TransitionEffect::from_preference(
-                                preferences.now_playing_transition.as_deref(),
-                            );
-                            transition_setting.set_selected(transition_effect.index());
-                            let transition_duration = preferences
-                                .now_playing_transition_duration_ms
-                                .unwrap_or(2000)
-                                .clamp(500, 5000);
-                            transition_duration_scale.set_value(transition_duration as f64);
+                            transition_setting
+                                .set_selected(now_playing_settings.transition.index());
+                            transition_duration_scale
+                                .set_value(now_playing_settings.transition_duration_ms as f64);
                             transition_duration_scale.set_sensitive(!matches!(
-                                transition_effect,
+                                now_playing_settings.transition,
                                 TransitionEffect::None
                             ));
-                            lights_off_setting
-                                .set_active(preferences.lights_off_enabled.unwrap_or(false));
-                            match BackgroundStyle::from_preference(
-                                preferences.now_playing_background_style.as_deref(),
-                            ) {
+                            lights_off_setting.set_active(now_playing_settings.lights_off);
+                            match now_playing_settings.background_style {
                                 BackgroundStyle::Gradient => {
                                     background_style_gradient.set_active(true);
                                     background_style_solid.set_active(false);
@@ -1190,6 +1218,7 @@ impl App {
                                     background_style_solid.set_active(true);
                                 }
                             }
+                            applying_now_playing_settings_for_refresh.set(was_applying_settings);
 
                             if let Some(ref now_playing_window) = *now_playing_window.borrow() {
                                 now_playing_window.refresh_from_preferences(&preferences);
@@ -1910,27 +1939,28 @@ fn send_preference_update(
     }
 }
 
-fn schedule_preference_update(
+fn schedule_transition_duration_update(
     gui_tx: async_channel::Sender<GUIMessage>,
     generation: Rc<Cell<u64>>,
-    mut configure: impl FnMut(&mut Preferences) + 'static,
+    pending_duration_ms: Rc<Cell<Option<u64>>>,
+    duration_ms: u64,
 ) {
     let current_generation = generation.get().wrapping_add(1);
     generation.set(current_generation);
 
     glib::timeout_add_local_once(Duration::from_millis(150), move || {
-        if generation.get() != current_generation {
+        if generation.get() != current_generation || pending_duration_ms.get() != Some(duration_ms)
+        {
             return;
         }
 
         let mut preference = Preferences::new();
-        configure(&mut preference);
+        preference.now_playing_transition_duration_ms = Some(duration_ms);
         if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
             error!("failed to send preference update: {error}");
+            if pending_duration_ms.get() == Some(duration_ms) {
+                pending_duration_ms.set(None);
+            }
         }
     });
-}
-
-fn background_style_value(style: BackgroundStyle) -> &'static str {
-    style.as_preference_value()
 }

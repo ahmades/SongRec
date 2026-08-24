@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 09:26+0200\n"
+"POT-Creation-Date: 2026-08-24 23:30+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -45,8 +45,8 @@ msgstr "Upozornenie: Sieť nedostupná"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1235 src/gui/main_window.rs:1240
-#: src/gui/main_window.rs:1252
+#: src/gui/main_window.rs:1264 src/gui/main_window.rs:1269
+#: src/gui/main_window.rs:1281
 msgid "No match for this song"
 msgstr "Žiadna zhoda pre túto skladbu"
 
@@ -58,12 +58,12 @@ msgstr "Chyba:"
 msgid "Recording started!"
 msgstr "Nahrávanie spustené!"
 
-#: src/main.rs:76
+#: src/main.rs:75
 msgid "An open-source Shazam client for Linux, written in Rust."
 msgstr ""
 "Klient Shazam s otvoreným zdrojovým kódom pre Linux napísaný v jazyku Rust."
 
-#: src/main.rs:96
+#: src/main.rs:95
 msgid ""
 "-v: Set the log level to DEBUG instead of INFO for SongRec-related messages\n"
 "-vv: Set the log level to DEBUG for SongRec-related messages and INFO for "
@@ -76,7 +76,7 @@ msgstr ""
 "INFO pre správy súvisiace s knižnicou\n"
 "-vvv: Nastaviť úroveň protokolu na TRACE"
 
-#: src/main.rs:102
+#: src/main.rs:101
 msgid ""
 "Run as a command-line program listening the microphone and printing "
 "recognized songs to stdout, exposing current song info via MPRIS"
@@ -85,15 +85,15 @@ msgstr ""
 "rozpoznané skladby na stdout, pričom zobrazuje aktuálne informácie o skladbe "
 "prostredníctvom MPRIS"
 
-#: src/main.rs:108 src/main.rs:154 src/main.rs:209
+#: src/main.rs:107 src/main.rs:153 src/main.rs:208
 msgid "List available audio devices and quit"
 msgstr "Zobraziť dostupné zvukové zariadenia a ukončiť"
 
-#: src/main.rs:114 src/main.rs:161 src/main.rs:215
+#: src/main.rs:113 src/main.rs:160 src/main.rs:214
 msgid "Specify the audio device to use"
 msgstr "Zadajte zvukové zariadenie, ktoré sa má použiť"
 
-#: src/main.rs:122 src/main.rs:169 src/main.rs:223
+#: src/main.rs:121 src/main.rs:168 src/main.rs:222
 msgid ""
 "Shazam interval between requests in seconds (increase if you are rate-"
 "limited)"
@@ -101,29 +101,29 @@ msgstr ""
 "Interval medzi požiadavkami Shazam v sekundách (zvýšte, ak máte obmedzenú "
 "rýchlosť)"
 
-#: src/main.rs:130 src/main.rs:177
+#: src/main.rs:129 src/main.rs:176
 msgid "Enable printing full song info in JSON"
 msgstr "Zapnúť tlač úplných informácií o skladbe v JSON"
 
-#: src/main.rs:137 src/main.rs:184
+#: src/main.rs:136 src/main.rs:183
 msgid "Enable printing full song info in the CSV format"
 msgstr "Zapnúť tlač úplných informácií o skladbe v CSV formáte"
 
-#: src/main.rs:143 src/main.rs:263 src/main.rs:284
+#: src/main.rs:142 src/main.rs:262 src/main.rs:283
 msgid "Disable MPRIS support"
 msgstr "Vypnúť podporu MPRIS"
 
-#: src/main.rs:148
+#: src/main.rs:147
 msgid "Recognize one song from a sound file or microphone and print its info."
 msgstr ""
 "Rozpoznať jednu skladbu zo zvukového súboru alebo mikrofónu a vypísať jej "
 "informácie."
 
-#: src/main.rs:189
+#: src/main.rs:188
 msgid "Recognize a file instead of using mic input"
 msgstr "Rozpoznať súbor namiesto použitia vstupu z mikrofónu"
 
-#: src/main.rs:194
+#: src/main.rs:193
 msgid ""
 "Generate a Shazam fingerprint from a sound file, perform song recognition "
 "towards Shazam's servers and print obtained information to the standard "
@@ -132,11 +132,11 @@ msgstr ""
 "Generovať odtlačok Shazam zo zvukového súboru, vykonať rozpoznanie skladby "
 "voči serverom Shazam a vypísať získané informácie na štandardný výstup."
 
-#: src/main.rs:198
+#: src/main.rs:197
 msgid "The audio file to recognize."
 msgstr "Zvukový súbor na rozpoznanie."
 
-#: src/main.rs:203
+#: src/main.rs:202
 msgid ""
 "Recognize a currently playing song using the microphone and print obtained "
 "information to the standard output"
@@ -144,7 +144,7 @@ msgstr ""
 "Rozpoznať aktuálne prehrávanú skladbu pomocou mikrofónu a vypísať získané "
 "informácie na štandardný výstup"
 
-#: src/main.rs:228
+#: src/main.rs:227
 msgid ""
 "Generate a Shazam fingerprint from a sound file, and print it to the "
 "standard output."
@@ -152,11 +152,11 @@ msgstr ""
 "Vygenerovať odtlačok Shazam zo zvukového súboru a vypísať ho na štandardný "
 "výstup."
 
-#: src/main.rs:232
+#: src/main.rs:231
 msgid "The .WAV or .MP3 file to generate an audio fingerprint for."
 msgstr "Súbor .WAV alebo .MP3 na vytvorenie zvukového odtlačku."
 
-#: src/main.rs:237
+#: src/main.rs:236
 msgid ""
 "Take a data-URI Shazam fingerprint, perform song recognition towards "
 "Shazam's servers and print obtained information to the standard output."
@@ -164,23 +164,23 @@ msgstr ""
 "Prevziať data-URI odtlačok Shazam, vykonať rozpoznanie skladby voči serverom "
 "Shazam a vypísať získané informácie na štandardný výstup."
 
-#: src/main.rs:241
+#: src/main.rs:240
 msgid "The data-URI Shazam fingerprint to recognize."
 msgstr "Data-URI odtlačok Shazam na rozpoznanie."
 
-#: src/main.rs:253
+#: src/main.rs:252
 msgid "The default action. Display a GUI."
 msgstr "Predvolená akcia. Zobrazenie grafického rozhrania."
 
-#: src/main.rs:257 src/main.rs:278
+#: src/main.rs:256 src/main.rs:277
 msgid "An optional audio file to recognize on the launch of the application."
 msgstr "Voliteľný zvukový súbor, ktorý sa rozpozná pri spustení aplikácie."
 
-#: src/main.rs:269 src/main.rs:290
+#: src/main.rs:268 src/main.rs:289
 msgid "Disable PipeWire native support"
 msgstr "Vypnúť natívnu podporu PipeWire"
 
-#: src/main.rs:274
+#: src/main.rs:273
 msgid ""
 "Launch the GUI, but don't recognize audio through the microphone as soon as "
 "it is launched (rather than expecting the user to click on a button)."
@@ -202,7 +202,7 @@ msgid "Audio error: No input device available"
 msgstr "Chyba zvuku: Nie je k dispozícii žiadne vstupné zariadenie"
 
 #: src/core/preferences.rs:74 src/core/preferences.rs:101
-#: src/gui/main_window.rs:342 src/gui/interface.blp:129
+#: src/gui/main_window.rs:333 src/gui/interface.blp:129
 #: src/gui/interface.blp:674 src/gui/interface.blp:724
 msgid "Search on YouTube"
 msgstr "Vyhľadať na YouTube"
@@ -228,137 +228,41 @@ msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr ""
 "Pri kódovaní paketu Shazam bola odovzdaná nesprávna vzorkovacia frekvencia"
 
-#: src/gui/main_window.rs:300
+#: src/gui/main_window.rs:291
 msgid "Application error"
 msgstr "Chyba aplikácie"
 
-#: src/gui/main_window.rs:321
+#: src/gui/main_window.rs:312
 msgid "Network error"
 msgstr "Chyba siete"
 
-#: src/gui/main_window.rs:397
+#: src/gui/main_window.rs:388
 msgid "Unable to enable notification icon"
 msgstr "Nie je možné aktivovať ikonu upozornenia"
 
-#: src/gui/main_window.rs:877 src/gui/now_playing_window.rs:354
-msgid "None"
-msgstr ""
-
-#: src/gui/main_window.rs:878 src/gui/now_playing_window.rs:355
-msgid "Fade"
-msgstr ""
-
-#: src/gui/main_window.rs:879 src/gui/now_playing_window.rs:356
-msgid "Slide right"
-msgstr ""
-
-#: src/gui/main_window.rs:880 src/gui/now_playing_window.rs:357
-msgid "Slide left"
-msgstr ""
-
-#: src/gui/main_window.rs:881 src/gui/now_playing_window.rs:358
-msgid "Slide up"
-msgstr ""
-
-#: src/gui/main_window.rs:882 src/gui/now_playing_window.rs:359
-msgid "Slide down"
-msgstr ""
-
-#: src/gui/main_window.rs:883 src/gui/now_playing_window.rs:360
-msgid "Swing right"
-msgstr ""
-
-#: src/gui/main_window.rs:884 src/gui/now_playing_window.rs:361
-msgid "Swing left"
-msgstr ""
-
-#: src/gui/main_window.rs:885 src/gui/now_playing_window.rs:362
-msgid "Swing up"
-msgstr ""
-
-#: src/gui/main_window.rs:886 src/gui/now_playing_window.rs:363
-msgid "Swing down"
-msgstr ""
-
-#: src/gui/main_window.rs:1079 src/gui/main_window.rs:1222
+#: src/gui/main_window.rs:1102 src/gui/main_window.rs:1251
 msgid "Unable to enable MPRIS support"
 msgstr "Nie je možné zapnúť podporu MPRIS"
 
-#: src/gui/main_window.rs:1249
+#: src/gui/main_window.rs:1278
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:1330
+#: src/gui/main_window.rs:1359
 msgid "Song recognized"
 msgstr "Skladba rozpoznaná"
 
-#: src/gui/main_window.rs:1467
+#: src/gui/main_window.rs:1496
 msgid "Are you sure you want to wipe history?"
 msgstr "Naozaj chcete vymazať históriu?"
 
-#: src/gui/main_window.rs:1473
+#: src/gui/main_window.rs:1502
 msgid "_Yes"
 msgstr "_Áno"
 
-#: src/gui/main_window.rs:1474
+#: src/gui/main_window.rs:1503
 msgid "_Cancel"
 msgstr "_Zrušiť"
-
-#: src/gui/now_playing_window.rs:189
-msgid "Now playing"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:220
-msgid "Listening..."
-msgstr ""
-
-#: src/gui/now_playing_window.rs:377 src/gui/interface.blp:502
-msgid "Gradient"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:378 src/gui/interface.blp:507
-msgid "Solid"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:380 src/gui/interface.blp:479
-msgid "Left"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:381 src/gui/interface.blp:485
-msgid "Center"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:496 src/gui/interface.blp:460
-msgid "Round corners of album cover"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:503 src/gui/interface.blp:465
-msgid "Hide track info"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:512 src/gui/interface.blp:514
-msgid "Always display last recognized song"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:532
-msgid "Lights off"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:594 src/gui/interface.blp:519
-msgid "Transition effect"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:616 src/gui/interface.blp:524
-msgid "Transition duration"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:632 src/gui/interface.blp:470
-msgid "Track info alignment"
-msgstr ""
-
-#: src/gui/now_playing_window.rs:662 src/gui/interface.blp:492
-msgid "Background style"
-msgstr ""
 
 #: src/gui/song_history_interface.rs:95
 msgid "Error when reading the song history on the disk:"
@@ -367,6 +271,102 @@ msgstr "Chyba pri čítaní histórie skladieb z disku:"
 #: src/gui/song_history_interface.rs:165
 msgid "Error when reading the favorites on the disk:"
 msgstr "Chyba pri čítaní obľúbených položiek z disku:"
+
+#: src/gui/now_playing_window/menu.rs:57 src/gui/interface.blp:502
+msgid "Gradient"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:58 src/gui/interface.blp:507
+msgid "Solid"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:60 src/gui/interface.blp:479
+msgid "Left"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:61 src/gui/interface.blp:485
+msgid "Center"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:149 src/gui/interface.blp:460
+msgid "Round corners of album cover"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:157 src/gui/interface.blp:465
+msgid "Hide track info"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:167 src/gui/interface.blp:514
+msgid "Always display last recognized song"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:188
+msgid "Lights off"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:242 src/gui/interface.blp:519
+msgid "Transition effect"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:262 src/gui/interface.blp:524
+msgid "Transition duration"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:280 src/gui/interface.blp:470
+msgid "Track info alignment"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:309 src/gui/interface.blp:492
+msgid "Background style"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:88
+msgid "None"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:89
+msgid "Fade"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:90
+msgid "Slide right"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:91
+msgid "Slide left"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:92
+msgid "Slide up"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:93
+msgid "Slide down"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:94
+msgid "Swing right"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:95
+msgid "Swing left"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:96
+msgid "Swing up"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:97
+msgid "Swing down"
+msgstr ""
+
+#: src/gui/now_playing_window/ui.rs:48
+msgid "Now playing"
+msgstr ""
+
+#: src/gui/now_playing_window/ui.rs:79
+msgid "Listening..."
+msgstr ""
 
 #: src/plugins/ksni.rs:48
 msgid "Open SongRec"
