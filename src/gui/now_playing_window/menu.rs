@@ -180,7 +180,12 @@ impl NowPlayingWindow {
             settings.hide_track_info,
             !settings.lights_off,
         );
-        self.add_alignment_menu_row(&menu_grid, 3, settings.track_info_alignment);
+        self.add_alignment_menu_row(
+            &menu_grid,
+            3,
+            settings.track_info_alignment,
+            !settings.hide_track_info,
+        );
         self.add_background_style_menu_row(&menu_grid, 4, settings.background_style);
         self.add_switch_menu_row(
             &menu_grid,
@@ -324,6 +329,7 @@ impl NowPlayingWindow {
         menu_grid: &gtk::Grid,
         row: i32,
         alignment: TrackInfoAlignment,
+        sensitive: bool,
     ) {
         let label = gtk::Label::new(Some(&gettext("Track info alignment")));
         label.set_halign(gtk::Align::Start);
@@ -338,6 +344,7 @@ impl NowPlayingWindow {
             .build();
         buttons.append(&self.controls.track_info_alignment_left);
         buttons.append(&self.controls.track_info_alignment_center);
+        buttons.set_sensitive(sensitive);
         match alignment {
             TrackInfoAlignment::Left => self.controls.track_info_alignment_left.set_active(true),
             TrackInfoAlignment::Center => {
@@ -407,6 +414,8 @@ impl NowPlayingWindow {
         let settings_for_hide = self.state.settings.clone();
         let gui_tx_for_hide = self.gui_tx.clone();
         let info_box_for_hide = self.ui.info_box.clone();
+        let alignment_left_for_hide = self.controls.track_info_alignment_left.clone();
+        let alignment_center_for_hide = self.controls.track_info_alignment_center.clone();
         self.controls
             .hide_track_info
             .connect_active_notify(move |button| {
@@ -419,6 +428,8 @@ impl NowPlayingWindow {
                 settings.hide_track_info = hide_track_info;
                 settings_for_hide.set(settings);
                 info_box_for_hide.set_visible(!hide_track_info);
+                alignment_left_for_hide.set_sensitive(!hide_track_info);
+                alignment_center_for_hide.set_sensitive(!hide_track_info);
                 Self::send_preference_update(&gui_tx_for_hide, |preference| {
                     preference.hide_now_playing_info = Some(hide_track_info);
                 });
@@ -582,6 +593,8 @@ impl NowPlayingWindow {
         let gui_tx_for_lights = self.gui_tx.clone();
         let round_for_lights_menu = self.controls.round_corners.clone();
         let hide_for_lights_menu = self.controls.hide_track_info.clone();
+        let alignment_left_for_lights_menu = self.controls.track_info_alignment_left.clone();
+        let alignment_center_for_lights_menu = self.controls.track_info_alignment_center.clone();
         let info_box_for_lights = self.ui.info_box.clone();
         let artwork_for_lights = self.ui.artwork.clone();
         let artwork_placeholder_for_lights = self.ui.artwork_placeholder.clone();
@@ -603,6 +616,8 @@ impl NowPlayingWindow {
                 lights_off_state.set(active);
                 round_for_lights_menu.set_sensitive(!active);
                 hide_for_lights_menu.set_sensitive(!active);
+                alignment_left_for_lights_menu.set_sensitive(!settings.hide_track_info);
+                alignment_center_for_lights_menu.set_sensitive(!settings.hide_track_info);
 
                 if active {
                     let was_applying_settings = applying_settings_for_lights.replace(true);

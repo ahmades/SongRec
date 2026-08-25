@@ -802,6 +802,8 @@ impl App {
             self.builder.object("round_corners_setting").unwrap();
         let hide_track_info_setting: adw::SwitchRow =
             self.builder.object("hide_track_info_setting").unwrap();
+        let track_info_alignment_setting: adw::ActionRow =
+            self.builder.object("track_info_alignment_setting").unwrap();
         let track_info_alignment_left: gtk::ToggleButton =
             self.builder.object("track_info_alignment_left").unwrap();
         let track_info_alignment_center: gtk::ToggleButton =
@@ -876,6 +878,7 @@ impl App {
         // When Lights Off is enabled, the artwork rounding and track-info controls are not applicable.
         hide_track_info_setting.set_sensitive(!initial_now_playing_settings.lights_off);
         round_corners_setting.set_sensitive(!initial_now_playing_settings.lights_off);
+        track_info_alignment_setting.set_sensitive(!initial_now_playing_settings.hide_track_info);
 
         let applying_now_playing_settings = Rc::new(Cell::new(false));
         let transition_duration_update_generation = Rc::new(Cell::new(0u64));
@@ -936,10 +939,12 @@ impl App {
 
         let applying_now_playing_settings_for_hide = applying_now_playing_settings.clone();
         let gui_tx_for_hide_info = self.gui_tx.clone();
+        let track_info_alignment_for_hide = track_info_alignment_setting.clone();
         hide_track_info_setting.connect_active_notify(move |switch_row| {
             if applying_now_playing_settings_for_hide.get() {
                 return;
             }
+            track_info_alignment_for_hide.set_sensitive(!switch_row.is_active());
             send_preference_update(&gui_tx_for_hide_info, |preference| {
                 preference.hide_now_playing_info = Some(switch_row.is_active());
             });
@@ -1007,6 +1012,7 @@ impl App {
         let gui_tx_for_lights_off = self.gui_tx.clone();
         let hide_for_lights = hide_track_info_setting.clone();
         let round_for_lights = round_corners_setting.clone();
+        let track_info_alignment_for_lights = track_info_alignment_setting.clone();
         lights_off_setting.connect_active_notify(move |switch_row| {
             if applying_now_playing_settings_for_lights_off.get() {
                 return;
@@ -1027,6 +1033,7 @@ impl App {
             });
             hide_for_lights.set_sensitive(!lights_off);
             round_for_lights.set_sensitive(!lights_off);
+            track_info_alignment_for_lights.set_sensitive(!hide_for_lights.is_active());
         });
 
         let applying_now_playing_settings_for_gradient = applying_now_playing_settings.clone();
@@ -1235,6 +1242,8 @@ impl App {
                             }
                             hide_track_info_setting.set_sensitive(!now_playing_settings.lights_off);
                             round_corners_setting.set_sensitive(!now_playing_settings.lights_off);
+                            track_info_alignment_setting
+                                .set_sensitive(!now_playing_settings.hide_track_info);
                             always_display_last_recognized_song_setting.set_active(
                                 now_playing_settings.always_display_last_recognized_song,
                             );

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 14:09+0200\n"
+"POT-Creation-Date: 2026-08-25 22:11+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -45,8 +45,8 @@ msgstr "Upozornenie: Sieť nedostupná"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
 #: src/core/http_task.rs:75 src/core/http_task.rs:110
-#: src/gui/main_window.rs:1306 src/gui/main_window.rs:1311
-#: src/gui/main_window.rs:1323
+#: src/gui/main_window.rs:1315 src/gui/main_window.rs:1320
+#: src/gui/main_window.rs:1332
 msgid "No match for this song"
 msgstr "Žiadna zhoda pre túto skladbu"
 
@@ -240,27 +240,27 @@ msgstr "Chyba siete"
 msgid "Unable to enable notification icon"
 msgstr "Nie je možné aktivovať ikonu upozornenia"
 
-#: src/gui/main_window.rs:1124 src/gui/main_window.rs:1293
+#: src/gui/main_window.rs:1131 src/gui/main_window.rs:1302
 msgid "Unable to enable MPRIS support"
 msgstr "Nie je možné zapnúť podporu MPRIS"
 
-#: src/gui/main_window.rs:1320
+#: src/gui/main_window.rs:1329
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:1401
+#: src/gui/main_window.rs:1410
 msgid "Song recognized"
 msgstr "Skladba rozpoznaná"
 
-#: src/gui/main_window.rs:1538
+#: src/gui/main_window.rs:1547
 msgid "Are you sure you want to wipe history?"
 msgstr "Naozaj chcete vymazať históriu?"
 
-#: src/gui/main_window.rs:1544
+#: src/gui/main_window.rs:1553
 msgid "_Yes"
 msgstr "_Áno"
 
-#: src/gui/main_window.rs:1545
+#: src/gui/main_window.rs:1554
 msgid "_Cancel"
 msgstr "_Zrušiť"
 
@@ -300,31 +300,31 @@ msgstr ""
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:188 src/gui/interface.blp:518
+#: src/gui/now_playing_window/menu.rs:193 src/gui/interface.blp:518
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:209
+#: src/gui/now_playing_window/menu.rs:214
 msgid "Lights off"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:217
+#: src/gui/now_playing_window/menu.rs:222
 msgid "Full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:290 src/gui/interface.blp:523
+#: src/gui/now_playing_window/menu.rs:295 src/gui/interface.blp:523
 msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:310 src/gui/interface.blp:528
+#: src/gui/now_playing_window/menu.rs:315 src/gui/interface.blp:528
 msgid "Transition duration"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:328 src/gui/interface.blp:474
+#: src/gui/now_playing_window/menu.rs:334 src/gui/interface.blp:474
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:357 src/gui/interface.blp:496
+#: src/gui/now_playing_window/menu.rs:364 src/gui/interface.blp:496
 msgid "Background style"
 msgstr ""
 

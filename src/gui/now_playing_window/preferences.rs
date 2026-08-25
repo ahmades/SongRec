@@ -182,6 +182,10 @@ impl NowPlayingWindow {
                 self.controls.hide_track_info.set_active(hide_track_info);
             }
             self.ui.info_box.set_visible(show);
+            self.controls.track_info_alignment_left.set_sensitive(show);
+            self.controls
+                .track_info_alignment_center
+                .set_sensitive(show);
         });
     }
 }
