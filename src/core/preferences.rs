@@ -7,6 +7,12 @@ use std::path::PathBuf;
 
 use crate::utils::filesystem_operations::obtain_preferences_file_path;
 
+/// The default duration for a Now Playing transition.
+///
+/// This lives with the persisted preferences rather than the GUI so both
+/// preference defaults and the Now Playing controls share one source of truth.
+pub(crate) const TRANSITION_DURATION_DEFAULT_MS: u64 = 2_000;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Preferences {
@@ -58,29 +64,26 @@ impl Preferences {
         }
     }
 
-    pub fn with_interval(interval: u64) -> Self {
+    /// Returns a partial update that restores every Now Playing preference to
+    /// its default value without changing unrelated application preferences.
+    pub(crate) fn now_playing_defaults() -> Self {
         Preferences {
-            enable_notifications: Some(true),
-            enable_systray: Some(false),
-            enable_mpris: None,
-            enable_mpris_v2: Some(true),
-            no_duplicates: Some(false),
-            buffer_size_secs: None,
-            request_interval_secs: None,
-            request_interval_secs_v2: None,
-            request_interval_secs_v3: Some(interval),
-            current_device_name: None,
-            website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
-            website_search_text: Some(gettext("Search on YouTube".to_string())),
             now_playing_round_corners: Some(true),
             hide_now_playing_info: Some(false),
             now_playing_track_info_alignment: Some("center".to_string()),
             now_playing_background_style: Some("gradient".to_string()),
             always_display_last_recognized_song: Some(true),
             now_playing_transition: Some("none".to_string()),
-            now_playing_transition_duration_ms: Some(2000),
+            now_playing_transition_duration_ms: Some(TRANSITION_DURATION_DEFAULT_MS),
             lights_off_enabled: Some(false),
+            ..Self::new()
         }
+    }
+
+    pub fn with_interval(interval: u64) -> Self {
+        let mut preferences = Self::default();
+        preferences.request_interval_secs_v3 = Some(interval);
+        preferences
     }
 }
 
@@ -99,14 +102,7 @@ impl Default for Preferences {
             current_device_name: None,
             website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
             website_search_text: Some(gettext("Search on YouTube".to_string())),
-            now_playing_round_corners: Some(true),
-            hide_now_playing_info: Some(false),
-            now_playing_track_info_alignment: Some("center".to_string()),
-            now_playing_background_style: Some("gradient".to_string()),
-            always_display_last_recognized_song: Some(true),
-            now_playing_transition: Some("none".to_string()),
-            now_playing_transition_duration_ms: Some(2000),
-            lights_off_enabled: Some(false),
+            ..Self::now_playing_defaults()
         }
     }
 }
@@ -224,5 +220,58 @@ impl PreferencesInterface {
             std::fs::write(preferences_file_path, contents)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Preferences, PreferencesInterface, TRANSITION_DURATION_DEFAULT_MS};
+
+    #[test]
+    fn now_playing_defaults_are_a_partial_preference_update() {
+        let preferences = Preferences::now_playing_defaults();
+
+        assert_eq!(preferences.now_playing_round_corners, Some(true));
+        assert_eq!(preferences.hide_now_playing_info, Some(false));
+        assert_eq!(
+            preferences.now_playing_track_info_alignment.as_deref(),
+            Some("center")
+        );
+        assert_eq!(
+            preferences.now_playing_background_style.as_deref(),
+            Some("gradient")
+        );
+        assert_eq!(preferences.always_display_last_recognized_song, Some(true));
+        assert_eq!(preferences.now_playing_transition.as_deref(), Some("none"));
+        assert_eq!(
+            preferences.now_playing_transition_duration_ms,
+            Some(TRANSITION_DURATION_DEFAULT_MS)
+        );
+        assert_eq!(preferences.lights_off_enabled, Some(false));
+
+        assert_eq!(preferences.enable_notifications, None);
+        assert_eq!(preferences.request_interval_secs_v3, None);
+        assert_eq!(preferences.website_search_url, None);
+    }
+
+    #[test]
+    fn reset_update_preserves_unrelated_preferences() {
+        let mut preferences = Preferences::new();
+        preferences.enable_notifications = Some(false);
+        preferences.now_playing_round_corners = Some(false);
+        preferences.now_playing_transition_duration_ms = Some(5_000);
+        let mut interface = PreferencesInterface {
+            preferences_file_path: None,
+            preferences,
+        };
+
+        interface.update(Preferences::now_playing_defaults());
+
+        assert_eq!(interface.preferences.enable_notifications, Some(false));
+        assert_eq!(interface.preferences.now_playing_round_corners, Some(true));
+        assert_eq!(
+            interface.preferences.now_playing_transition_duration_ms,
+            Some(TRANSITION_DURATION_DEFAULT_MS)
+        );
     }
 }

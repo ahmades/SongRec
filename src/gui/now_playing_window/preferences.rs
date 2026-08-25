@@ -19,6 +19,20 @@ impl NowPlayingWindow {
         self.apply_settings(NowPlayingSettings::from(preferences));
     }
 
+    /// Discards a local duration change that has not yet been persisted.
+    ///
+    /// A reset must invalidate its debounce callback before applying the
+    /// shared defaults, otherwise an older slider value could overwrite them.
+    pub(crate) fn cancel_pending_transition_duration_update(&self) {
+        self.state.pending_transition_duration_ms.set(None);
+        self.state.transition_duration_update_generation.set(
+            self.state
+                .transition_duration_update_generation
+                .get()
+                .wrapping_add(1),
+        );
+    }
+
     /// Applies one resolved settings snapshot without treating control notifications as user input.
     fn apply_settings(&self, mut settings: NowPlayingSettings) {
         let pending_duration_ms = self.state.pending_transition_duration_ms.get();

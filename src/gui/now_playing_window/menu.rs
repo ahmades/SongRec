@@ -28,6 +28,7 @@ pub(super) struct NowPlayingControls {
     pub(super) transition_menu: gtk::DropDown,
     pub(super) transition_duration: gtk::Scale,
     pub(super) lights_off_menu: gtk::Switch,
+    pub(super) fullscreen: gtk::Switch,
 }
 
 /// Creates the switches and segmented controls used by the Now Playing context menu.
@@ -54,6 +55,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     transition_duration.set_hexpand(true);
     transition_duration.set_width_request(190);
     let lights_off_menu = gtk::Switch::new();
+    let fullscreen = gtk::Switch::new();
     let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
     let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
     background_style_solid.set_group(Some(&background_style_gradient));
@@ -72,6 +74,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         transition_menu,
         transition_duration,
         lights_off_menu,
+        fullscreen,
     }
 }
 
@@ -143,9 +146,27 @@ impl NowPlayingWindow {
             .halign(gtk::Align::Start)
             .build();
 
+        let reset_button = gtk::Button::with_label(&gettext("Reset"));
+        reset_button.set_halign(gtk::Align::Center);
+        menu_grid.attach(&reset_button, 0, 0, 2, 1);
+        let gui_tx_for_reset = self.gui_tx.clone();
+        let pending_duration_for_reset = self.state.pending_transition_duration_ms.clone();
+        let duration_update_generation_for_reset =
+            self.state.transition_duration_update_generation.clone();
+        reset_button.connect_clicked(move |_| {
+            pending_duration_for_reset.set(None);
+            duration_update_generation_for_reset
+                .set(duration_update_generation_for_reset.get().wrapping_add(1));
+            if let Some(gui_tx) = gui_tx_for_reset.as_ref()
+                && let Err(error) = gui_tx.try_send(GUIMessage::ResetNowPlayingPreferences)
+            {
+                eprintln!("failed to reset Now Playing preferences: {error}");
+            }
+        });
+
         self.add_switch_menu_row(
             &menu_grid,
-            0,
+            1,
             &gettext("Round corners of album cover"),
             &self.controls.round_corners,
             settings.round_corners,
@@ -153,17 +174,17 @@ impl NowPlayingWindow {
         );
         self.add_switch_menu_row(
             &menu_grid,
-            1,
+            2,
             &gettext("Hide track info"),
             &self.controls.hide_track_info,
             settings.hide_track_info,
             !settings.lights_off,
         );
-        self.add_alignment_menu_row(&menu_grid, 2, settings.track_info_alignment);
-        self.add_background_style_menu_row(&menu_grid, 3, settings.background_style);
+        self.add_alignment_menu_row(&menu_grid, 3, settings.track_info_alignment);
+        self.add_background_style_menu_row(&menu_grid, 4, settings.background_style);
         self.add_switch_menu_row(
             &menu_grid,
-            4,
+            5,
             &gettext("Always display last recognized song"),
             &self.controls.always_display_last_recognized_song,
             settings.always_display_last_recognized_song,
@@ -171,23 +192,31 @@ impl NowPlayingWindow {
         );
         self.add_transition_menu_row(
             &menu_grid,
-            5,
+            6,
             &self.controls.transition_menu,
             settings.transition,
         );
         self.add_transition_duration_menu_row(
             &menu_grid,
-            6,
+            7,
             &self.controls.transition_duration,
             settings.transition_duration_ms,
             !matches!(settings.transition, TransitionEffect::None),
         );
         self.add_switch_menu_row(
             &menu_grid,
-            7,
+            8,
             &gettext("Lights off"),
             &self.controls.lights_off_menu,
             settings.lights_off,
+            true,
+        );
+        self.add_switch_menu_row(
+            &menu_grid,
+            9,
+            &gettext("Full screen"),
+            &self.controls.fullscreen,
+            self.ui.window.is_fullscreen(),
             true,
         );
 
@@ -208,6 +237,25 @@ impl NowPlayingWindow {
             popover_for_click.popup();
         });
         self.ui.window.add_controller(gesture);
+
+        let window_for_fullscreen = self.ui.window.clone();
+        self.controls
+            .fullscreen
+            .connect_active_notify(move |switch| {
+                if switch.is_active() {
+                    window_for_fullscreen.fullscreen();
+                } else {
+                    window_for_fullscreen.unfullscreen();
+                }
+            });
+
+        let fullscreen_switch = self.controls.fullscreen.clone();
+        self.ui.window.connect_fullscreened_notify(move |window| {
+            let fullscreened = window.is_fullscreen();
+            if fullscreen_switch.is_active() != fullscreened {
+                fullscreen_switch.set_active(fullscreened);
+            }
+        });
     }
 
     /// Adds a label-and-switch row to the context menu.

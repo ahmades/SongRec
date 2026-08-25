@@ -53,6 +53,8 @@ pub enum GUIMessage {
     DevicesList(Vec<DeviceListItem>),
     #[cfg(feature = "gui")]
     UpdatePreference(Preferences),
+    #[cfg(feature = "gui")]
+    ResetNowPlayingPreferences,
     NetworkStatus(bool),  // Is the network reachable?
     RateLimitState(bool), // Are we rate-limited?
     #[cfg(feature = "gui")]

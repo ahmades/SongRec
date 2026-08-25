@@ -455,6 +455,10 @@ Adw.ApplicationWindow main_window {
           Adw.PreferencesGroup now_playing_preferences {
             title: _("Now Playing preferences");
 
+            header-suffix: Button reset_now_playing_preferences_button {
+              label: _("Reset");
+            };
+
             Adw.SwitchRow round_corners_setting {
               subtitle: _("Round the corners of the album artwork");
               title: _("Round corners of album cover");

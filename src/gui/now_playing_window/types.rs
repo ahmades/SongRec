@@ -1,15 +1,13 @@
 //! Persisted presentation choices for the Now Playing window.
 
 use crate::core::preferences::Preferences;
+pub(crate) use crate::core::preferences::TRANSITION_DURATION_DEFAULT_MS;
 use gettextrs::gettext;
 
 /// The shortest transition duration exposed by the UI.
 pub(crate) const TRANSITION_DURATION_MIN_MS: u64 = 500;
 /// The longest transition duration exposed by the UI.
 pub(crate) const TRANSITION_DURATION_MAX_MS: u64 = 5000;
-/// The transition duration used when no preference has been persisted yet.
-pub(crate) const TRANSITION_DURATION_DEFAULT_MS: u64 = 2000;
-
 /// Clamps a persisted transition duration to the range supported by the UI.
 pub(crate) fn clamp_transition_duration_ms(duration_ms: u64) -> u64 {
     duration_ms.clamp(TRANSITION_DURATION_MIN_MS, TRANSITION_DURATION_MAX_MS)

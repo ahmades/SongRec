@@ -820,6 +820,10 @@ impl App {
             .object("transition_duration_setting_scale")
             .unwrap();
         let lights_off_setting: adw::SwitchRow = self.builder.object("lights_off_setting").unwrap();
+        let reset_now_playing_preferences_button: gtk::Button = self
+            .builder
+            .object("reset_now_playing_preferences_button")
+            .unwrap();
         let results_section: adw::PreferencesGroup =
             self.builder.object("results_section").unwrap();
         let no_network_message: gtk::Label = self.builder.object("no_network_message").unwrap();
@@ -876,6 +880,24 @@ impl App {
         let applying_now_playing_settings = Rc::new(Cell::new(false));
         let transition_duration_update_generation = Rc::new(Cell::new(0u64));
         let pending_transition_duration_ms = Rc::new(Cell::new(None));
+
+        let gui_tx_for_reset_now_playing_preferences = self.gui_tx.clone();
+        let transition_duration_update_generation_for_reset =
+            transition_duration_update_generation.clone();
+        let pending_transition_duration_for_reset = pending_transition_duration_ms.clone();
+        reset_now_playing_preferences_button.connect_clicked(move |_| {
+            pending_transition_duration_for_reset.set(None);
+            transition_duration_update_generation_for_reset.set(
+                transition_duration_update_generation_for_reset
+                    .get()
+                    .wrapping_add(1),
+            );
+            if let Err(error) =
+                gui_tx_for_reset_now_playing_preferences.try_send(ResetNowPlayingPreferences)
+            {
+                error!("failed to reset Now Playing preferences: {error}");
+            }
+        });
 
         let applying_now_playing_settings_for_round_corners = applying_now_playing_settings.clone();
         let gui_tx_for_round_corners = self.gui_tx.clone();
@@ -1150,8 +1172,25 @@ impl App {
                         _ => {}
                     }
 
+                    let resetting_now_playing_preferences =
+                        matches!(&gui_message, ResetNowPlayingPreferences);
+                    let gui_message = if resetting_now_playing_preferences {
+                        UpdatePreference(Preferences::now_playing_defaults())
+                    } else {
+                        gui_message
+                    };
+
                     match gui_message {
                         UpdatePreference(new_preference) => {
+                            if resetting_now_playing_preferences {
+                                pending_transition_duration_for_refresh.set(None);
+                                transition_duration_update_generation_for_refresh.set(
+                                    transition_duration_update_generation_for_refresh
+                                        .get()
+                                        .wrapping_add(1),
+                                );
+                            }
+
                             preferences_interface_ptr
                                 .lock()
                                 .unwrap()
@@ -1221,6 +1260,9 @@ impl App {
                             applying_now_playing_settings_for_refresh.set(was_applying_settings);
 
                             if let Some(ref now_playing_window) = *now_playing_window.borrow() {
+                                if resetting_now_playing_preferences {
+                                    now_playing_window.cancel_pending_transition_duration_update();
+                                }
                                 now_playing_window.refresh_from_preferences(&preferences);
                             }
 

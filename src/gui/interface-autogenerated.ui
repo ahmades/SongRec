@@ -531,6 +531,11 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                     <child>
                       <object class="AdwPreferencesGroup" id="now_playing_preferences">
                         <property name="title" translatable="yes">Now Playing preferences</property>
+                        <property name="header-suffix">
+                          <object class="GtkButton" id="reset_now_playing_preferences_button">
+                            <property name="label" translatable="yes">Reset</property>
+                          </object>
+                        </property>
                         <child>
                           <object class="AdwSwitchRow" id="round_corners_setting">
                             <property name="subtitle" translatable="yes">Round the corners of the album artwork</property>
