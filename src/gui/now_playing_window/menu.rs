@@ -15,6 +15,7 @@ use std::time::Duration;
 
 const PREFERENCE_UPDATE_DEBOUNCE_MS: u64 = 150;
 const TRANSITION_DURATION_STEP_MS: f64 = 100.0;
+const FULLSCREEN_CURSOR_HIDE_DELAY_MS: u64 = 1_500;
 
 /// The context-menu controls whose state mirrors the active presentation settings.
 pub(super) struct NowPlayingControls {
@@ -147,7 +148,7 @@ impl NowPlayingWindow {
             .build();
 
         let reset_button = gtk::Button::with_label(&gettext("Reset"));
-        reset_button.set_halign(gtk::Align::Center);
+        reset_button.set_halign(gtk::Align::End);
         menu_grid.attach(&reset_button, 0, 0, 2, 1);
         let gui_tx_for_reset = self.gui_tx.clone();
         let pending_duration_for_reset = self.state.pending_transition_duration_ms.clone();
@@ -254,13 +255,62 @@ impl NowPlayingWindow {
                 }
             });
 
+        let fullscreen_cursor_hide_generation = Rc::new(Cell::new(0u64));
+        let window_for_cursor_motion = self.ui.window.clone();
+        let cursor_hide_generation_for_motion = fullscreen_cursor_hide_generation.clone();
+        let cursor_motion = gtk::EventControllerMotion::new();
+        cursor_motion.set_propagation_phase(gtk::PropagationPhase::Capture);
+        cursor_motion.connect_motion(move |_, _, _| {
+            Self::reveal_fullscreen_cursor(
+                &window_for_cursor_motion,
+                &cursor_hide_generation_for_motion,
+            );
+        });
+        let window_for_cursor_enter = self.ui.window.clone();
+        let cursor_hide_generation_for_enter = fullscreen_cursor_hide_generation.clone();
+        cursor_motion.connect_enter(move |_, _, _| {
+            Self::reveal_fullscreen_cursor(
+                &window_for_cursor_enter,
+                &cursor_hide_generation_for_enter,
+            );
+        });
+        self.ui.window.add_controller(cursor_motion);
+
         let fullscreen_switch = self.controls.fullscreen.clone();
+        let cursor_hide_generation_for_fullscreen = fullscreen_cursor_hide_generation.clone();
         self.ui.window.connect_fullscreened_notify(move |window| {
             let fullscreened = window.is_fullscreen();
+            cursor_hide_generation_for_fullscreen
+                .set(cursor_hide_generation_for_fullscreen.get().wrapping_add(1));
+            window.set_cursor_from_name(if fullscreened { Some("none") } else { None });
             if fullscreen_switch.is_active() != fullscreened {
                 fullscreen_switch.set_active(fullscreened);
             }
         });
+    }
+
+    /// Temporarily reveals the cursor in fullscreen, then hides it after the pointer is idle.
+    fn reveal_fullscreen_cursor(window: &gtk::Window, hide_generation: &Rc<Cell<u64>>) {
+        if !window.is_fullscreen() {
+            return;
+        }
+
+        window.set_cursor_from_name(None);
+        let generation = hide_generation.get().wrapping_add(1);
+        hide_generation.set(generation);
+
+        let window_for_cursor_timeout = window.clone();
+        let hide_generation_for_timeout = hide_generation.clone();
+        glib::timeout_add_local_once(
+            Duration::from_millis(FULLSCREEN_CURSOR_HIDE_DELAY_MS),
+            move || {
+                if hide_generation_for_timeout.get() == generation
+                    && window_for_cursor_timeout.is_fullscreen()
+                {
+                    window_for_cursor_timeout.set_cursor_from_name(Some("none"));
+                }
+            },
+        );
     }
 
     /// Adds a label-and-switch row to the context menu.
@@ -277,7 +327,7 @@ impl NowPlayingWindow {
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
         menu_grid.attach(&label, 0, row, 1, 1);
-        switch.set_halign(gtk::Align::Start);
+        switch.set_halign(gtk::Align::End);
         switch.set_valign(gtk::Align::Center);
         switch.set_active(active);
         switch.set_sensitive(sensitive);
@@ -297,7 +347,7 @@ impl NowPlayingWindow {
         label.set_valign(gtk::Align::Center);
         menu_grid.attach(&label, 0, row, 1, 1);
         dropdown.set_selected(effect.index());
-        dropdown.set_halign(gtk::Align::Start);
+        dropdown.set_halign(gtk::Align::End);
         dropdown.set_valign(gtk::Align::Center);
         dropdown.set_hexpand(false);
         menu_grid.attach(dropdown, 1, row, 1, 1);
@@ -318,7 +368,7 @@ impl NowPlayingWindow {
         menu_grid.attach(&label, 0, row, 1, 1);
         scale.set_value(duration_ms as f64);
         scale.set_sensitive(sensitive);
-        scale.set_halign(gtk::Align::Start);
+        scale.set_halign(gtk::Align::End);
         scale.set_valign(gtk::Align::Center);
         scale.set_hexpand(false);
         menu_grid.attach(scale, 1, row, 1, 1);
@@ -339,7 +389,7 @@ impl NowPlayingWindow {
             .orientation(gtk::Orientation::Horizontal)
             .spacing(0)
             .css_classes(["linked"])
-            .halign(gtk::Align::Start)
+            .halign(gtk::Align::End)
             .valign(gtk::Align::Center)
             .build();
         buttons.append(&self.controls.track_info_alignment_left);
@@ -369,7 +419,7 @@ impl NowPlayingWindow {
             .orientation(gtk::Orientation::Horizontal)
             .spacing(0)
             .css_classes(["linked"])
-            .halign(gtk::Align::Start)
+            .halign(gtk::Align::End)
             .valign(gtk::Align::Center)
             .hexpand(false)
             .build();
