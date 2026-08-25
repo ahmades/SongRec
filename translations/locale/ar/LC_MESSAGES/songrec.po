@@ -318,7 +318,7 @@ msgid "None"
 msgstr ""
 
 #: src/gui/now_playing_window/types.rs:89
-msgid "Fade"
+msgid "Crossfade"
 msgstr ""
 
 #: src/gui/now_playing_window/types.rs:90

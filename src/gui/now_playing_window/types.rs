@@ -45,7 +45,7 @@ pub enum TransitionEffect {
     /// Replace the current track immediately without animation.
     None,
     /// Crossfade the current track into the new track.
-    Fade,
+    Crossfade,
     /// Slide the new track in from the right.
     SlideRight,
     /// Slide the new track in from the left.
@@ -68,7 +68,7 @@ impl TransitionEffect {
     /// All transition effects in the order used by the dropdown controls.
     pub const ALL: [Self; 10] = [
         Self::None,
-        Self::Fade,
+        Self::Crossfade,
         Self::SlideRight,
         Self::SlideLeft,
         Self::SlideUp,
@@ -86,7 +86,7 @@ impl TransitionEffect {
     pub(crate) fn translated_label(self) -> String {
         match self {
             Self::None => gettext("None"),
-            Self::Fade => gettext("Fade"),
+            Self::Crossfade => gettext("Crossfade"),
             Self::SlideRight => gettext("Slide right"),
             Self::SlideLeft => gettext("Slide left"),
             Self::SlideUp => gettext("Slide up"),
@@ -102,7 +102,7 @@ impl TransitionEffect {
     pub fn as_preference_value(self) -> &'static str {
         match self {
             Self::None => "none",
-            Self::Fade => "fade",
+            Self::Crossfade => "fade",
             Self::SlideRight => "slide-right",
             Self::SlideLeft => "slide-left",
             Self::SlideUp => "slide-up",
@@ -117,7 +117,7 @@ impl TransitionEffect {
     /// Parses a persisted transition value, defaulting to no animation.
     pub fn from_preference(value: Option<&str>) -> Self {
         match value {
-            Some("fade") => Self::Fade,
+            Some("fade") => Self::Crossfade,
             Some("slide-right") => Self::SlideRight,
             Some("slide-left") => Self::SlideLeft,
             Some("slide-up") => Self::SlideUp,
@@ -134,7 +134,7 @@ impl TransitionEffect {
     pub fn revealer_type(self) -> gtk::RevealerTransitionType {
         match self {
             Self::None => gtk::RevealerTransitionType::None,
-            Self::Fade => gtk::RevealerTransitionType::Crossfade,
+            Self::Crossfade => gtk::RevealerTransitionType::Crossfade,
             Self::SlideRight => gtk::RevealerTransitionType::SlideRight,
             Self::SlideLeft => gtk::RevealerTransitionType::SlideLeft,
             Self::SlideUp => gtk::RevealerTransitionType::SlideUp,
@@ -155,7 +155,7 @@ impl TransitionEffect {
     pub fn from_index(index: u32) -> Self {
         match index {
             0 => Self::None,
-            1 => Self::Fade,
+            1 => Self::Crossfade,
             2 => Self::SlideRight,
             3 => Self::SlideLeft,
             4 => Self::SlideUp,

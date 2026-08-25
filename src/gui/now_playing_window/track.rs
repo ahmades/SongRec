@@ -352,11 +352,11 @@ mod tests {
     fn in_progress_reveals_apply_the_latest_track_without_a_second_transition() {
         assert!(should_apply_track_immediately(TransitionEffect::None, true));
         assert!(should_apply_track_immediately(
-            TransitionEffect::Fade,
+            TransitionEffect::Crossfade,
             false
         ));
         assert!(!should_apply_track_immediately(
-            TransitionEffect::Fade,
+            TransitionEffect::Crossfade,
             true
         ));
     }
