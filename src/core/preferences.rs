@@ -31,6 +31,7 @@ pub struct Preferences {
     pub now_playing_round_corners: Option<bool>,
     pub hide_now_playing_info: Option<bool>,
     pub now_playing_track_info_alignment: Option<String>,
+    pub now_playing_album_cover_size: Option<String>,
     pub now_playing_background_style: Option<String>,
     pub always_display_last_recognized_song: Option<bool>,
     pub now_playing_transition: Option<String>,
@@ -56,6 +57,7 @@ impl Preferences {
             now_playing_round_corners: None,
             hide_now_playing_info: None,
             now_playing_track_info_alignment: None,
+            now_playing_album_cover_size: None,
             now_playing_background_style: None,
             always_display_last_recognized_song: None,
             now_playing_transition: None,
@@ -71,6 +73,7 @@ impl Preferences {
             now_playing_round_corners: Some(true),
             hide_now_playing_info: Some(false),
             now_playing_track_info_alignment: Some("center".to_string()),
+            now_playing_album_cover_size: Some("0.8500".to_string()),
             now_playing_background_style: Some("gradient".to_string()),
             always_display_last_recognized_song: Some(true),
             now_playing_transition: Some("none".to_string()),
@@ -193,6 +196,9 @@ impl PreferencesInterface {
             now_playing_track_info_alignment: update_preferences
                 .now_playing_track_info_alignment
                 .or_else(|| current_preferences.now_playing_track_info_alignment.clone()),
+            now_playing_album_cover_size: update_preferences
+                .now_playing_album_cover_size
+                .or_else(|| current_preferences.now_playing_album_cover_size.clone()),
             now_playing_background_style: update_preferences
                 .now_playing_background_style
                 .or_else(|| current_preferences.now_playing_background_style.clone()),
@@ -238,6 +244,10 @@ mod tests {
             Some("center")
         );
         assert_eq!(
+            preferences.now_playing_album_cover_size.as_deref(),
+            Some("0.8500")
+        );
+        assert_eq!(
             preferences.now_playing_background_style.as_deref(),
             Some("gradient")
         );
@@ -259,6 +269,7 @@ mod tests {
         let mut preferences = Preferences::new();
         preferences.enable_notifications = Some(false);
         preferences.now_playing_round_corners = Some(false);
+        preferences.now_playing_album_cover_size = Some("small".to_string());
         preferences.now_playing_transition_duration_ms = Some(5_000);
         let mut interface = PreferencesInterface {
             preferences_file_path: None,
@@ -269,6 +280,13 @@ mod tests {
 
         assert_eq!(interface.preferences.enable_notifications, Some(false));
         assert_eq!(interface.preferences.now_playing_round_corners, Some(true));
+        assert_eq!(
+            interface
+                .preferences
+                .now_playing_album_cover_size
+                .as_deref(),
+            Some("0.8500")
+        );
         assert_eq!(
             interface.preferences.now_playing_transition_duration_ms,
             Some(TRANSITION_DURATION_DEFAULT_MS)

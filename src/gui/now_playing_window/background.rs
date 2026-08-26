@@ -85,6 +85,7 @@ impl NowPlayingWindow {
             }
             self.controls.hide_track_info.set_sensitive(!enabled);
             self.controls.round_corners.set_sensitive(!enabled);
+            self.controls.album_cover_size.set_sensitive(!enabled);
 
             if enabled {
                 if self.controls.hide_track_info.is_active() {

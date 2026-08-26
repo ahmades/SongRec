@@ -36,8 +36,8 @@ use crate::gui::context_menu::ContextMenuUtil;
 use crate::gui::history_entry::HistoryEntry;
 use crate::gui::listed_device::ListedDevice;
 use crate::gui::now_playing_window::{
-    BackgroundStyle, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment, TransitionEffect,
-    reconcile_transition_duration, transition_duration_from_scale,
+    AlbumCoverSize, BackgroundStyle, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment,
+    TransitionEffect, reconcile_transition_duration, transition_duration_from_scale,
 };
 
 #[cfg(windows)]
@@ -808,6 +808,10 @@ impl App {
             self.builder.object("track_info_alignment_left").unwrap();
         let track_info_alignment_center: gtk::ToggleButton =
             self.builder.object("track_info_alignment_center").unwrap();
+        let album_cover_size_scale: gtk::Scale = self
+            .builder
+            .object("album_cover_size_setting_scale")
+            .unwrap();
         let background_style_gradient: gtk::ToggleButton =
             self.builder.object("background_style_gradient").unwrap();
         let background_style_solid: gtk::ToggleButton =
@@ -839,6 +843,8 @@ impl App {
             .preferences
             .clone();
         let initial_now_playing_settings = NowPlayingSettings::from(&initial_preferences);
+        AlbumCoverSize::configure_scale(&album_cover_size_scale);
+        AlbumCoverSize::install_slider_snap(&album_cover_size_scale);
         round_corners_setting.set_active(initial_now_playing_settings.round_corners);
         hide_track_info_setting.set_active(initial_now_playing_settings.hide_track_info);
         match initial_now_playing_settings.track_info_alignment {
@@ -851,6 +857,8 @@ impl App {
                 track_info_alignment_center.set_active(true);
             }
         }
+        album_cover_size_scale
+            .set_value(initial_now_playing_settings.album_cover_size.scale_value());
         match initial_now_playing_settings.background_style {
             BackgroundStyle::Gradient => background_style_gradient.set_active(true),
             BackgroundStyle::Solid => background_style_solid.set_active(true),
@@ -875,9 +883,10 @@ impl App {
             TransitionEffect::None
         ));
         lights_off_setting.set_active(initial_now_playing_settings.lights_off);
-        // When Lights Off is enabled, the artwork rounding and track-info controls are not applicable.
+        // When Lights Off is enabled, controls that affect the hidden artwork are not applicable.
         hide_track_info_setting.set_sensitive(!initial_now_playing_settings.lights_off);
         round_corners_setting.set_sensitive(!initial_now_playing_settings.lights_off);
+        album_cover_size_scale.set_sensitive(!initial_now_playing_settings.lights_off);
         track_info_alignment_setting.set_sensitive(!initial_now_playing_settings.hide_track_info);
 
         let applying_now_playing_settings = Rc::new(Cell::new(false));
@@ -950,6 +959,20 @@ impl App {
             });
         });
 
+        let applying_now_playing_settings_for_album_cover_size =
+            applying_now_playing_settings.clone();
+        let gui_tx_for_album_cover_size = self.gui_tx.clone();
+        album_cover_size_scale.connect_value_changed(move |scale| {
+            if applying_now_playing_settings_for_album_cover_size.get() {
+                return;
+            }
+
+            let size = AlbumCoverSize::from_scale_value(scale.value());
+            send_preference_update(&gui_tx_for_album_cover_size, |preference| {
+                preference.now_playing_album_cover_size = Some(size.as_preference_value());
+            });
+        });
+
         let applying_now_playing_settings_for_always_display_last =
             applying_now_playing_settings.clone();
         let gui_tx_for_always_display_last = self.gui_tx.clone();
@@ -1012,6 +1035,7 @@ impl App {
         let gui_tx_for_lights_off = self.gui_tx.clone();
         let hide_for_lights = hide_track_info_setting.clone();
         let round_for_lights = round_corners_setting.clone();
+        let album_cover_size_for_lights = album_cover_size_scale.clone();
         let track_info_alignment_for_lights = track_info_alignment_setting.clone();
         lights_off_setting.connect_active_notify(move |switch_row| {
             if applying_now_playing_settings_for_lights_off.get() {
@@ -1033,6 +1057,7 @@ impl App {
             });
             hide_for_lights.set_sensitive(!lights_off);
             round_for_lights.set_sensitive(!lights_off);
+            album_cover_size_for_lights.set_sensitive(!lights_off);
             track_info_alignment_for_lights.set_sensitive(!hide_for_lights.is_active());
         });
 
@@ -1240,8 +1265,11 @@ impl App {
                                     track_info_alignment_center.set_active(true);
                                 }
                             }
+                            album_cover_size_scale
+                                .set_value(now_playing_settings.album_cover_size.scale_value());
                             hide_track_info_setting.set_sensitive(!now_playing_settings.lights_off);
                             round_corners_setting.set_sensitive(!now_playing_settings.lights_off);
+                            album_cover_size_scale.set_sensitive(!now_playing_settings.lights_off);
                             track_info_alignment_setting
                                 .set_sensitive(!now_playing_settings.hide_track_info);
                             always_display_last_recognized_song_setting.set_active(

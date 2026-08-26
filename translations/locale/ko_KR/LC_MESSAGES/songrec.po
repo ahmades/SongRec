@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-26 10:30+0200\n"
+"POT-Creation-Date: 2026-08-26 17:15+0200\n"
 "PO-Revision-Date: 2023-12-30 23:42+0900\n"
 "Last-Translator: 이정희 <daemul72@gmail.com>\n"
 "Language-Team: \n"
@@ -44,8 +44,8 @@ msgstr "경고: 네트워크에 연결할 수 없음"
 
 #: src/cli_main.rs:179 src/core/http_task.rs:155 src/core/http_task.rs:164
 #: src/core/http_task.rs:173 src/core/http_task.rs:312
-#: src/gui/main_window.rs:1315 src/gui/main_window.rs:1320
-#: src/gui/main_window.rs:1332
+#: src/gui/main_window.rs:1343 src/gui/main_window.rs:1348
+#: src/gui/main_window.rs:1360
 msgid "No match for this song"
 msgstr "이 노래와 일치하는 항목이 없습니다"
 
@@ -185,17 +185,17 @@ msgstr ""
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:104 src/gui/main_window.rs:333
-#: src/gui/interface.blp:129 src/gui/interface.blp:678
-#: src/gui/interface.blp:728
+#: src/core/preferences.rs:107 src/gui/main_window.rs:333
+#: src/gui/interface.blp:129 src/gui/interface.blp:698
+#: src/gui/interface.blp:748
 msgid "Search on YouTube"
 msgstr "YouTube에서 검색하기"
 
-#: src/core/preferences.rs:121
+#: src/core/preferences.rs:124
 msgid "When parsing the preferences file:"
 msgstr "환경설정 파일을 구문 분석하는 경우:"
 
-#: src/core/preferences.rs:213
+#: src/core/preferences.rs:219
 msgid "When saving the preferences file:"
 msgstr "환경설정 파일을 저장하는 경우:"
 
@@ -223,27 +223,27 @@ msgstr ""
 msgid "Unable to enable notification icon"
 msgstr ""
 
-#: src/gui/main_window.rs:1131 src/gui/main_window.rs:1302
+#: src/gui/main_window.rs:1156 src/gui/main_window.rs:1330
 msgid "Unable to enable MPRIS support"
 msgstr "MPRIS 지원을 활성화할 수 없습니다"
 
-#: src/gui/main_window.rs:1329
+#: src/gui/main_window.rs:1357
 msgid "_Ok"
 msgstr ""
 
-#: src/gui/main_window.rs:1410
+#: src/gui/main_window.rs:1438
 msgid "Song recognized"
 msgstr "인식된 노래"
 
-#: src/gui/main_window.rs:1547
+#: src/gui/main_window.rs:1575
 msgid "Are you sure you want to wipe history?"
 msgstr ""
 
-#: src/gui/main_window.rs:1553
+#: src/gui/main_window.rs:1581
 msgid "_Yes"
 msgstr ""
 
-#: src/gui/main_window.rs:1554
+#: src/gui/main_window.rs:1582
 msgid "_Cancel"
 msgstr "취소하기(_C)"
 
@@ -255,107 +255,123 @@ msgstr "디스크에서 노래 기록을 읽는 동안 오류 발생:"
 msgid "Error when reading the favorites on the disk:"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:60 src/gui/interface.blp:506
+#: src/gui/now_playing_window/menu.rs:71 src/gui/interface.blp:526
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:61 src/gui/interface.blp:511
+#: src/gui/now_playing_window/menu.rs:72 src/gui/interface.blp:531
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:63 src/gui/interface.blp:483
+#: src/gui/now_playing_window/menu.rs:74 src/gui/interface.blp:483
 msgid "Left"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:64 src/gui/interface.blp:489
+#: src/gui/now_playing_window/menu.rs:75 src/gui/interface.blp:489
 msgid "Center"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:150 src/gui/interface.blp:459
+#: src/gui/now_playing_window/menu.rs:162 src/gui/interface.blp:459
 msgid "Reset"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:171 src/gui/interface.blp:464
+#: src/gui/now_playing_window/menu.rs:183 src/gui/interface.blp:464
 msgid "Round corners of album cover"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:179 src/gui/interface.blp:469
+#: src/gui/now_playing_window/menu.rs:191 src/gui/interface.blp:469
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:194 src/gui/interface.blp:518
+#: src/gui/now_playing_window/menu.rs:212 src/gui/interface.blp:538
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:215
+#: src/gui/now_playing_window/menu.rs:233
 msgid "Lights off"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:223
+#: src/gui/now_playing_window/menu.rs:241
 msgid "Full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:345 src/gui/interface.blp:523
+#: src/gui/now_playing_window/menu.rs:363 src/gui/interface.blp:543
 msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:365 src/gui/interface.blp:528
+#: src/gui/now_playing_window/menu.rs:383 src/gui/interface.blp:548
 msgid "Transition duration"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:384 src/gui/interface.blp:474
+#: src/gui/now_playing_window/menu.rs:403 src/gui/interface.blp:496
+msgid "Album cover size"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:424 src/gui/interface.blp:474
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:414 src/gui/interface.blp:496
+#: src/gui/now_playing_window/menu.rs:454 src/gui/interface.blp:516
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:86
+#: src/gui/now_playing_window/types.rs:40
+msgid "Small"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:42
+msgid "Medium"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:44
+msgid "Large"
+msgstr ""
+
+#: src/gui/now_playing_window/types.rs:250
 msgid "None"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:87
+#: src/gui/now_playing_window/types.rs:251
 msgid "Crossfade"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:88
+#: src/gui/now_playing_window/types.rs:252
 msgid "Slide right"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:89
+#: src/gui/now_playing_window/types.rs:253
 msgid "Slide left"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:90
+#: src/gui/now_playing_window/types.rs:254
 msgid "Slide up"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:91
+#: src/gui/now_playing_window/types.rs:255
 msgid "Slide down"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:92
+#: src/gui/now_playing_window/types.rs:256
 msgid "Swing right"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:93
+#: src/gui/now_playing_window/types.rs:257
 msgid "Swing left"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:94
+#: src/gui/now_playing_window/types.rs:258
 msgid "Swing up"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:95
+#: src/gui/now_playing_window/types.rs:259
 msgid "Swing down"
 msgstr ""
 
-#: src/gui/now_playing_window/ui.rs:48
+#: src/gui/now_playing_window/ui.rs:106
 msgid "Now playing"
 msgstr ""
 
-#: src/gui/now_playing_window/ui.rs:79
+#: src/gui/now_playing_window/ui.rs:137
 msgid "Listening..."
 msgstr ""
 
@@ -463,7 +479,7 @@ msgstr ""
 msgid "Application menu"
 msgstr ""
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:630
+#: src/gui/interface.blp:369 src/gui/interface.blp:650
 msgid "Export to CSV"
 msgstr "CSV로 내보내기"
 
@@ -479,7 +495,7 @@ msgstr ""
 msgid "Notify when a new song is recognized or network error is encountered"
 msgstr ""
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:585
+#: src/gui/interface.blp:388 src/gui/interface.blp:605
 msgid "Show notifications"
 msgstr ""
 
@@ -556,78 +572,82 @@ msgid "Choose how the track information is positioned"
 msgstr ""
 
 #: src/gui/interface.blp:495
+msgid "Choose between small, medium, and large album artwork"
+msgstr ""
+
+#: src/gui/interface.blp:515
 msgid "Choose how the window's background is rendered"
 msgstr ""
 
-#: src/gui/interface.blp:517
+#: src/gui/interface.blp:537
 msgid "Keep showing the last recognized song when there is no current match"
 msgstr ""
 
-#: src/gui/interface.blp:522
+#: src/gui/interface.blp:542
 msgid "Choose the effect used when the recognized track changes"
 msgstr ""
 
-#: src/gui/interface.blp:527
+#: src/gui/interface.blp:547
 msgid "Duration of the selected transition effect (500–5000 ms)"
 msgstr ""
 
-#: src/gui/interface.blp:548
+#: src/gui/interface.blp:568
 msgid "Show only the track on a black background"
 msgstr ""
 
-#: src/gui/interface.blp:549
+#: src/gui/interface.blp:569
 msgid "Lights Off"
 msgstr ""
 
-#: src/gui/interface.blp:560
+#: src/gui/interface.blp:580
 msgid "Settings"
 msgstr ""
 
-#: src/gui/interface.blp:590
+#: src/gui/interface.blp:610
 msgid "_Preferences..."
 msgstr ""
 
-#: src/gui/interface.blp:597
+#: src/gui/interface.blp:617
 msgid "_Keyboard Shortcuts"
 msgstr ""
 
-#: src/gui/interface.blp:602
+#: src/gui/interface.blp:622
 msgid "About..."
 msgstr ""
 
-#: src/gui/interface.blp:635
+#: src/gui/interface.blp:655
 msgid "Delete history"
 msgstr ""
 
-#: src/gui/interface.blp:640
+#: src/gui/interface.blp:660
 msgid "Select a file to recognize"
 msgstr "인식할 파일을 선택합니다"
 
-#: src/gui/interface.blp:652 src/gui/interface.blp:702
+#: src/gui/interface.blp:672 src/gui/interface.blp:722
 msgid "Copy artist and track"
 msgstr "아티스트 및 트랙 복사하기"
 
-#: src/gui/interface.blp:658 src/gui/interface.blp:708
+#: src/gui/interface.blp:678 src/gui/interface.blp:728
 msgid "Copy artist"
 msgstr "아티스트 복사하기"
 
-#: src/gui/interface.blp:664 src/gui/interface.blp:714
+#: src/gui/interface.blp:684 src/gui/interface.blp:734
 msgid "Copy track name"
 msgstr "트랙 이름 복사하기"
 
-#: src/gui/interface.blp:670 src/gui/interface.blp:720
+#: src/gui/interface.blp:690 src/gui/interface.blp:740
 msgid "Copy album"
 msgstr "앨범 복사하기"
 
-#: src/gui/interface.blp:686
+#: src/gui/interface.blp:706
 msgid "Delete from History"
 msgstr ""
 
-#: src/gui/interface.blp:692
+#: src/gui/interface.blp:712
 msgid "Add to Favorites"
 msgstr ""
 
-#: src/gui/interface.blp:736
+#: src/gui/interface.blp:756
 msgid "Remove from Favorites"
 msgstr ""
 

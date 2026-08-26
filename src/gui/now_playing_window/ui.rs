@@ -1,11 +1,13 @@
 //! GTK widget construction for the Now Playing window.
 
-use super::TRANSITION_DURATION_DEFAULT_MS;
 use super::style::{
     ALBUM_CSS_CLASS, ARTIST_CSS_CLASS, DETAILS_CSS_CLASS, TITLE_CSS_CLASS, font_css_for_size,
 };
+use super::{AlbumCoverSize, TRANSITION_DURATION_DEFAULT_MS};
 use adw::prelude::*;
 use gettextrs::gettext;
+use std::cell::Cell;
+use std::rc::Rc;
 
 const WINDOW_WIDTH: i32 = 720;
 const WINDOW_HEIGHT: i32 = 820;
@@ -19,10 +21,66 @@ const INFO_BOX_SPACING: i32 = 2;
 const BACKGROUND_PADDING_PX: i32 = 96;
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
 
+/// Sizes and centers album artwork without changing the space reserved for
+/// metadata in the outer vertical layout.
+#[derive(Clone)]
+pub(super) struct AlbumCoverLayout {
+    container: gtk::Overlay,
+    size: Rc<Cell<AlbumCoverSize>>,
+}
+
+impl AlbumCoverLayout {
+    fn new(artwork_overlay: &gtk::Overlay) -> Self {
+        // The main child is the only child that participates in measuring the
+        // slot. The scaled artwork is an unmeasured overlay child, so changing
+        // its allocation can never move the metadata below this frame.
+        let container = gtk::Overlay::builder().hexpand(true).vexpand(true).build();
+        let reservation = gtk::Box::builder().hexpand(true).vexpand(true).build();
+        container.set_child(Some(&reservation));
+
+        container.add_overlay(artwork_overlay);
+        container.set_measure_overlay(artwork_overlay, false);
+        container.set_clip_overlay(artwork_overlay, true);
+
+        let size = Rc::new(Cell::new(AlbumCoverSize::default()));
+        let size_for_position = size.clone();
+        let artwork_widget = artwork_overlay.clone().upcast::<gtk::Widget>();
+        container.connect_get_child_position(move |_, child| {
+            if child != &artwork_widget {
+                return None;
+            }
+
+            // The rectangle is relative to the main child, which is the
+            // stable artwork reservation inside the outer aspect frame.
+            let width = reservation.width().max(0);
+            let height = reservation.height().max(0);
+            let side = (f64::from(width.min(height)) * size_for_position.get().layout_fraction())
+                .round() as i32;
+
+            Some(gdk::Rectangle::new(
+                (width - side) / 2,
+                (height - side) / 2,
+                side,
+                side,
+            ))
+        });
+
+        Self { container, size }
+    }
+
+    /// Changes only the artwork allocation; the outer frame keeps the metadata position stable.
+    pub(super) fn set_size(&self, size: AlbumCoverSize) {
+        if self.size.replace(size) != size {
+            self.container.queue_allocate();
+        }
+    }
+}
+
 pub(super) struct NowPlayingWidgets {
     pub(super) window: gtk::Window,
     pub(super) artwork: gtk::Picture,
     pub(super) artwork_overlay: gtk::Overlay,
+    pub(super) album_cover_layout: AlbumCoverLayout,
     pub(super) artwork_placeholder: gtk::Label,
     pub(super) title_label: gtk::Label,
     pub(super) artist_label: gtk::Label,
@@ -85,7 +143,8 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
     cover_overlay.set_child(Some(&cover_picture));
     cover_overlay.set_overflow(gtk::Overflow::Hidden);
     cover_overlay.add_css_class("now-playing-artwork-rounded");
-    cover_frame.set_child(Some(&cover_overlay));
+    let album_cover_layout = AlbumCoverLayout::new(&cover_overlay);
+    cover_frame.set_child(Some(&album_cover_layout.container));
 
     let title_label = metadata_label(TITLE_CSS_CLASS);
     let artist_label = metadata_label(ARTIST_CSS_CLASS);
@@ -171,6 +230,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
             window,
             artwork: cover_picture,
             artwork_overlay: cover_overlay,
+            album_cover_layout,
             artwork_placeholder,
             title_label,
             artist_label,

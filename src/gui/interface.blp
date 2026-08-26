@@ -491,6 +491,26 @@ Adw.ApplicationWindow main_window {
               }
             }
 
+            Adw.ActionRow album_cover_size_setting {
+              subtitle: _("Choose between small, medium, and large album artwork");
+              title: _("Album cover size");
+
+              [suffix]
+              Scale album_cover_size_setting_scale {
+                orientation: horizontal;
+                width-request: 300;
+                hexpand: true;
+                draw-value: false;
+                adjustment: Adjustment {
+                  lower: 0;
+                  upper: 200;
+                  step-increment: 1;
+                  page-increment: 10;
+                  value: 150;
+                };
+              }
+            }
+
             Adw.ActionRow background_style_setting {
               subtitle: _("Choose how the window's background is rendered");
               title: _("Background style");

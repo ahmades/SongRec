@@ -2,7 +2,171 @@
 
 use crate::core::preferences::Preferences;
 pub(crate) use crate::core::preferences::TRANSITION_DURATION_DEFAULT_MS;
+use adw::prelude::*;
 use gettextrs::gettext;
+
+/// Controls the relative size of the album artwork within its reserved layout area.
+///
+/// The value is continuous so users can choose an exact size, while the three
+/// named positions remain convenient slider anchors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlbumCoverSize(u16);
+
+impl Default for AlbumCoverSize {
+    fn default() -> Self {
+        // Keep the cover prominent while leaving some space around it.
+        Self::MEDIUM_LARGE_MIDPOINT
+    }
+}
+
+impl AlbumCoverSize {
+    pub const SMALL: Self = Self(4_500);
+    pub const MEDIUM: Self = Self(7_000);
+    pub const LARGE: Self = Self(10_000);
+    pub const SMALL_MEDIUM_MIDPOINT: Self = Self((Self::SMALL.0 + Self::MEDIUM.0) / 2);
+    pub const MEDIUM_LARGE_MIDPOINT: Self = Self((Self::MEDIUM.0 + Self::LARGE.0) / 2);
+    pub const ALL: [Self; 3] = [Self::SMALL, Self::MEDIUM, Self::LARGE];
+    pub(crate) const MIN_SCALE_VALUE: f64 = 0.0;
+    pub(crate) const MAX_SCALE_VALUE: f64 = 200.0;
+    pub(crate) const SCALE_STEP: f64 = 1.0;
+
+    // A little more than one slider step makes the named positions easy to
+    // acquire without preventing a custom value elsewhere on the track.
+    const SNAP_DISTANCE: f64 = Self::SCALE_STEP * 2.0;
+
+    /// Returns the localized label used by the named slider marks.
+    pub(crate) fn translated_label(self) -> String {
+        if self == Self::SMALL {
+            gettext("Small")
+        } else if self == Self::MEDIUM {
+            gettext("Medium")
+        } else {
+            gettext("Large")
+        }
+    }
+
+    /// Returns the persisted representation of this size.
+    pub fn as_preference_value(self) -> String {
+        format!("{:.4}", self.layout_fraction())
+    }
+
+    /// Parses both the legacy named positions and a custom persisted size.
+    pub fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("small") => Self::SMALL,
+            Some("medium") => Self::MEDIUM,
+            Some("large") => Self::LARGE,
+            Some(value) => value
+                .parse::<f64>()
+                .map(Self::from_layout_fraction)
+                .unwrap_or_default(),
+            None => Self::default(),
+        }
+    }
+
+    /// Returns the exact value represented by this size on the slider.
+    pub(crate) fn scale_value(self) -> f64 {
+        if self.0 <= Self::MEDIUM.0 {
+            (self.0 - Self::SMALL.0) as f64 * 100.0 / (Self::MEDIUM.0 - Self::SMALL.0) as f64
+        } else {
+            100.0
+                + (self.0 - Self::MEDIUM.0) as f64 * 100.0 / (Self::LARGE.0 - Self::MEDIUM.0) as f64
+        }
+    }
+
+    /// Converts a slider value into a valid custom artwork size.
+    pub(crate) fn from_scale_value(value: f64) -> Self {
+        if !value.is_finite() {
+            return Self::default();
+        }
+
+        let value = value
+            .round()
+            .clamp(Self::MIN_SCALE_VALUE, Self::MAX_SCALE_VALUE) as u16;
+        if value <= 100 {
+            Self(
+                Self::SMALL.0
+                    + (u32::from(value) * u32::from(Self::MEDIUM.0 - Self::SMALL.0) / 100) as u16,
+            )
+        } else {
+            Self(
+                Self::MEDIUM.0
+                    + (u32::from(value - 100) * u32::from(Self::LARGE.0 - Self::MEDIUM.0) / 100)
+                        as u16,
+            )
+        }
+    }
+
+    /// Returns the nearest named position when the slider is close enough to
+    /// it to feel magnetic, otherwise retains the user's custom value.
+    pub(crate) fn snapped_scale_value(value: f64) -> f64 {
+        let value = Self::from_scale_value(value).scale_value();
+        Self::ALL
+            .into_iter()
+            .find(|anchor| (value - anchor.scale_value()).abs() <= Self::SNAP_DISTANCE)
+            .map_or(value, Self::scale_value)
+    }
+
+    /// Converts a slider value to a size after applying the named-position snap.
+    pub(crate) fn from_snapped_scale_value(value: f64) -> Self {
+        Self::from_scale_value(Self::snapped_scale_value(value))
+    }
+
+    /// Returns the fraction of the reserved artwork area occupied by the cover.
+    pub(crate) fn layout_fraction(self) -> f64 {
+        self.0 as f64 / Self::LARGE.0 as f64
+    }
+
+    /// Converts a persisted artwork fraction into the nearest slider value.
+    fn from_layout_fraction(value: f64) -> Self {
+        if !value.is_finite() {
+            return Self::default();
+        }
+
+        let value = value.clamp(Self::SMALL.layout_fraction(), Self::LARGE.layout_fraction());
+        let scale_value = if value <= Self::MEDIUM.layout_fraction() {
+            (value - Self::SMALL.layout_fraction()) * 100.0
+                / (Self::MEDIUM.layout_fraction() - Self::SMALL.layout_fraction())
+        } else {
+            100.0
+                + (value - Self::MEDIUM.layout_fraction()) * 100.0
+                    / (Self::LARGE.layout_fraction() - Self::MEDIUM.layout_fraction())
+        };
+        Self::from_scale_value(scale_value)
+    }
+
+    /// Configures a continuous slider with three labeled snap anchors and two
+    /// unlabeled midpoint ticks.
+    pub(crate) fn configure_scale(scale: &gtk::Scale) {
+        scale.set_round_digits(0);
+        scale.set_digits(0);
+        scale.set_draw_value(false);
+
+        for size in Self::ALL {
+            let label = size.translated_label();
+            scale.add_mark(size.scale_value(), gtk::PositionType::Bottom, Some(&label));
+        }
+        for midpoint in [Self::SMALL_MEDIUM_MIDPOINT, Self::MEDIUM_LARGE_MIDPOINT] {
+            scale.add_mark(midpoint.scale_value(), gtk::PositionType::Bottom, None);
+        }
+    }
+
+    /// Snaps a drag near one of the labeled slider marks once it ends.
+    pub(crate) fn install_slider_snap(scale: &gtk::Scale) {
+        let scale = scale.clone();
+        let scale_for_drag_end = scale.clone();
+        let drag = gtk::GestureDrag::new();
+        drag.set_propagation_phase(gtk::PropagationPhase::Capture);
+        drag.connect_drag_end(move |_, _, _| {
+            let snapped_value =
+                Self::from_snapped_scale_value(scale_for_drag_end.value()).scale_value();
+            if scale_for_drag_end.value() != snapped_value {
+                scale_for_drag_end.set_value(snapped_value);
+            }
+        });
+        scale.add_controller(drag);
+    }
+}
 
 /// The shortest transition duration exposed by the UI.
 pub(crate) const TRANSITION_DURATION_MIN_MS: u64 = 500;
@@ -226,6 +390,7 @@ pub(crate) struct NowPlayingSettings {
     pub(crate) round_corners: bool,
     pub(crate) hide_track_info: bool,
     pub(crate) track_info_alignment: TrackInfoAlignment,
+    pub(crate) album_cover_size: AlbumCoverSize,
     pub(crate) background_style: BackgroundStyle,
     pub(crate) always_display_last_recognized_song: bool,
     pub(crate) transition: TransitionEffect,
@@ -245,6 +410,9 @@ impl From<&Preferences> for NowPlayingSettings {
             hide_track_info: !lights_off && preferences.hide_now_playing_info.unwrap_or(false),
             track_info_alignment: TrackInfoAlignment::from_preference(
                 preferences.now_playing_track_info_alignment.as_deref(),
+            ),
+            album_cover_size: AlbumCoverSize::from_preference(
+                preferences.now_playing_album_cover_size.as_deref(),
             ),
             background_style: BackgroundStyle::from_preference(
                 preferences.now_playing_background_style.as_deref(),
@@ -268,7 +436,7 @@ impl From<&Preferences> for NowPlayingSettings {
 #[cfg(test)]
 mod tests {
     use super::{
-        BackgroundStyle, NowPlayingSettings, TRANSITION_DURATION_DEFAULT_MS,
+        AlbumCoverSize, BackgroundStyle, NowPlayingSettings, TRANSITION_DURATION_DEFAULT_MS,
         TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TrackInfoAlignment,
         TransitionEffect, clamp_transition_duration_ms, reconcile_transition_duration,
     };
@@ -290,12 +458,84 @@ mod tests {
             );
         }
 
+        for size in [
+            AlbumCoverSize::SMALL,
+            AlbumCoverSize::SMALL_MEDIUM_MIDPOINT,
+            AlbumCoverSize::MEDIUM,
+            AlbumCoverSize::MEDIUM_LARGE_MIDPOINT,
+            AlbumCoverSize::LARGE,
+        ] {
+            let preference_value = size.as_preference_value();
+            assert_eq!(
+                AlbumCoverSize::from_preference(Some(&preference_value)),
+                size
+            );
+            assert_eq!(AlbumCoverSize::from_scale_value(size.scale_value()), size);
+        }
+        assert_eq!(
+            AlbumCoverSize::from_preference(Some("small")),
+            AlbumCoverSize::SMALL
+        );
+        assert_eq!(
+            AlbumCoverSize::from_preference(Some("medium")),
+            AlbumCoverSize::MEDIUM
+        );
+        assert_eq!(
+            AlbumCoverSize::from_preference(Some("large")),
+            AlbumCoverSize::LARGE
+        );
+
         for style in [BackgroundStyle::Gradient, BackgroundStyle::Solid] {
             assert_eq!(
                 BackgroundStyle::from_preference(Some(style.as_preference_value())),
                 style
             );
         }
+    }
+
+    #[test]
+    fn album_cover_size_preserves_custom_values_and_snaps_to_named_marks() {
+        assert_eq!(
+            AlbumCoverSize::from_scale_value(-1.0),
+            AlbumCoverSize::SMALL
+        );
+        let custom_size = AlbumCoverSize::from_scale_value(57.0);
+        let custom_preference_value = custom_size.as_preference_value();
+        assert_eq!(custom_size.scale_value(), 57.0);
+        assert_eq!(
+            AlbumCoverSize::from_preference(Some(&custom_preference_value)),
+            custom_size
+        );
+        assert_eq!(AlbumCoverSize::SMALL.layout_fraction(), 0.45);
+        assert_eq!(AlbumCoverSize::MEDIUM.layout_fraction(), 0.70);
+        assert_eq!(AlbumCoverSize::LARGE.layout_fraction(), 1.0);
+        assert_eq!(
+            AlbumCoverSize::SMALL_MEDIUM_MIDPOINT.layout_fraction(),
+            0.575
+        );
+        assert_eq!(
+            AlbumCoverSize::MEDIUM_LARGE_MIDPOINT.layout_fraction(),
+            0.85
+        );
+        assert_eq!(AlbumCoverSize::SMALL_MEDIUM_MIDPOINT.scale_value(), 50.0);
+        assert_eq!(AlbumCoverSize::MEDIUM_LARGE_MIDPOINT.scale_value(), 150.0);
+        assert_eq!(AlbumCoverSize::default().as_preference_value(), "0.8500");
+        assert_eq!(
+            AlbumCoverSize::snapped_scale_value(2.0),
+            AlbumCoverSize::SMALL.scale_value()
+        );
+        assert_eq!(
+            AlbumCoverSize::snapped_scale_value(102.0),
+            AlbumCoverSize::MEDIUM.scale_value()
+        );
+        assert_eq!(
+            AlbumCoverSize::snapped_scale_value(198.0),
+            AlbumCoverSize::LARGE.scale_value()
+        );
+        assert_eq!(
+            AlbumCoverSize::from_scale_value(f64::NAN),
+            AlbumCoverSize::MEDIUM_LARGE_MIDPOINT
+        );
     }
 
     #[test]
@@ -307,6 +547,10 @@ mod tests {
         );
         assert!(!defaults.hide_track_info);
         assert!(!defaults.lights_off);
+        assert_eq!(
+            defaults.album_cover_size,
+            AlbumCoverSize::MEDIUM_LARGE_MIDPOINT
+        );
 
         let mut preferences = Preferences::new();
         preferences.now_playing_transition_duration_ms = Some(1);
@@ -316,12 +560,14 @@ mod tests {
         );
 
         preferences.now_playing_transition_duration_ms = Some(u64::MAX);
+        preferences.now_playing_album_cover_size = Some("small".to_string());
         preferences.hide_now_playing_info = Some(true);
         preferences.lights_off_enabled = Some(true);
         let settings = NowPlayingSettings::from(&preferences);
         assert_eq!(settings.transition_duration_ms, TRANSITION_DURATION_MAX_MS);
         assert!(!settings.hide_track_info);
         assert!(settings.lights_off);
+        assert_eq!(settings.album_cover_size, AlbumCoverSize::SMALL);
 
         assert_eq!(clamp_transition_duration_ms(1200), 1200);
     }

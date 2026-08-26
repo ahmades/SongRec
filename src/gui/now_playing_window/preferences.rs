@@ -1,7 +1,7 @@
 //! Applying persisted Now Playing preferences to the active window.
 
 use super::{
-    NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment, TransitionEffect,
+    AlbumCoverSize, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment, TransitionEffect,
     clamp_transition_duration_ms, reconcile_transition_duration,
 };
 use crate::core::preferences::Preferences;
@@ -58,6 +58,7 @@ impl NowPlayingWindow {
             self.set_round_corners(settings.round_corners);
             self.set_show_track_info(!settings.hide_track_info);
             self.set_track_info_alignment(settings.track_info_alignment);
+            self.set_album_cover_size(settings.album_cover_size);
             self.set_always_display_last_recognized_song(
                 settings.always_display_last_recognized_song,
             );
@@ -169,6 +170,17 @@ impl NowPlayingWindow {
                 if !self.controls.track_info_alignment_center.is_active() {
                     self.controls.track_info_alignment_center.set_active(true);
                 }
+            }
+        });
+    }
+
+    /// Sets the constrained artwork size and synchronizes the context-menu slider.
+    pub fn set_album_cover_size(&self, size: AlbumCoverSize) {
+        self.update_settings(|settings| settings.album_cover_size = size);
+        self.ui.album_cover_layout.set_size(size);
+        self.with_preference_updates_suspended(|| {
+            if self.controls.album_cover_size.value() != size.scale_value() {
+                self.controls.album_cover_size.set_value(size.scale_value());
             }
         });
     }

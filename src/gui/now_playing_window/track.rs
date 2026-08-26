@@ -260,13 +260,18 @@ impl NowPlayingWindow {
 
     /// Handles a recognition attempt that produced no track information according to the active preference.
     pub fn handle_no_recognition(&self) {
+        // An unmatched result must cancel any in-progress transition even if
+        // the preference keeps the last committed presentation. Otherwise a
+        // fullscreen/configure event can leave the revealer hidden, exposing
+        // only the background.
+        self.cancel_pending_transition();
+
         if should_show_listening_for_no_recognition(
             self.state
                 .settings
                 .get()
                 .always_display_last_recognized_song,
         ) {
-            self.cancel_pending_transition();
             self.set_listening_state_after_transition_cancelled();
         }
     }

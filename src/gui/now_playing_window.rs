@@ -23,7 +23,7 @@ use state::NowPlayingState;
 use std::sync::{Arc, Mutex};
 use ui::NowPlayingWidgets;
 
-pub use types::{BackgroundStyle, TrackInfoAlignment, TransitionEffect};
+pub use types::{AlbumCoverSize, BackgroundStyle, TrackInfoAlignment, TransitionEffect};
 pub(crate) use types::{
     NowPlayingSettings, TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS,
     TRANSITION_DURATION_MIN_MS, clamp_transition_duration_ms, reconcile_transition_duration,

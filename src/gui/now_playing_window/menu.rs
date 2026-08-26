@@ -1,9 +1,9 @@
 //! Context-menu construction and preference-update signal bindings.
 
 use super::{
-    BackgroundStyle, NowPlayingSettings, NowPlayingWindow, TRANSITION_DURATION_DEFAULT_MS,
-    TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TrackInfoAlignment, TransitionEffect,
-    transition_duration_from_scale,
+    AlbumCoverSize, BackgroundStyle, NowPlayingSettings, NowPlayingWindow,
+    TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
+    TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
 use crate::core::preferences::Preferences;
 use crate::core::thread_messages::GUIMessage;
@@ -25,6 +25,7 @@ pub(super) struct NowPlayingControls {
     pub(super) background_style_solid: gtk::ToggleButton,
     pub(super) track_info_alignment_left: gtk::ToggleButton,
     pub(super) track_info_alignment_center: gtk::ToggleButton,
+    pub(super) album_cover_size: gtk::Scale,
     pub(super) always_display_last_recognized_song: gtk::Switch,
     pub(super) transition_menu: gtk::DropDown,
     pub(super) transition_duration: gtk::Scale,
@@ -36,6 +37,16 @@ pub(super) struct NowPlayingControls {
 pub(super) fn build_controls() -> NowPlayingControls {
     let round_corners = gtk::Switch::new();
     let hide_track_info = gtk::Switch::new();
+    let album_cover_size = gtk::Scale::with_range(
+        gtk::Orientation::Horizontal,
+        AlbumCoverSize::MIN_SCALE_VALUE,
+        AlbumCoverSize::MAX_SCALE_VALUE,
+        AlbumCoverSize::SCALE_STEP,
+    );
+    AlbumCoverSize::configure_scale(&album_cover_size);
+    AlbumCoverSize::install_slider_snap(&album_cover_size);
+    album_cover_size.set_value(AlbumCoverSize::default().scale_value());
+    album_cover_size.set_width_request(190);
     let always_display_last_recognized_song = gtk::Switch::new();
     let transition_labels: Vec<_> = TransitionEffect::ALL
         .into_iter()
@@ -71,6 +82,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         background_style_solid,
         track_info_alignment_left,
         track_info_alignment_center,
+        album_cover_size,
         always_display_last_recognized_song,
         transition_menu,
         transition_duration,
@@ -187,10 +199,16 @@ impl NowPlayingWindow {
             settings.track_info_alignment,
             !settings.hide_track_info,
         );
-        self.add_background_style_menu_row(&menu_grid, 4, settings.background_style);
+        self.add_album_cover_size_menu_row(
+            &menu_grid,
+            4,
+            settings.album_cover_size,
+            !settings.lights_off,
+        );
+        self.add_background_style_menu_row(&menu_grid, 5, settings.background_style);
         self.add_switch_menu_row(
             &menu_grid,
-            5,
+            6,
             &gettext("Always display last recognized song"),
             &self.controls.always_display_last_recognized_song,
             settings.always_display_last_recognized_song,
@@ -198,20 +216,20 @@ impl NowPlayingWindow {
         );
         self.add_transition_menu_row(
             &menu_grid,
-            6,
+            7,
             &self.controls.transition_menu,
             settings.transition,
         );
         self.add_transition_duration_menu_row(
             &menu_grid,
-            7,
+            8,
             &self.controls.transition_duration,
             settings.transition_duration_ms,
             !matches!(settings.transition, TransitionEffect::None),
         );
         self.add_switch_menu_row(
             &menu_grid,
-            8,
+            9,
             &gettext("Lights off"),
             &self.controls.lights_off_menu,
             settings.lights_off,
@@ -219,7 +237,7 @@ impl NowPlayingWindow {
         );
         self.add_switch_menu_row(
             &menu_grid,
-            9,
+            10,
             &gettext("Full screen"),
             &self.controls.fullscreen,
             self.ui.window.is_fullscreen(),
@@ -372,6 +390,28 @@ impl NowPlayingWindow {
         scale.set_valign(gtk::Align::Center);
         scale.set_hexpand(false);
         menu_grid.attach(scale, 1, row, 1, 1);
+    }
+
+    /// Adds the continuous album-cover-size slider above the background-style control.
+    fn add_album_cover_size_menu_row(
+        &self,
+        menu_grid: &gtk::Grid,
+        row: i32,
+        size: AlbumCoverSize,
+        sensitive: bool,
+    ) {
+        let label = gtk::Label::new(Some(&gettext("Album cover size")));
+        label.set_halign(gtk::Align::Start);
+        label.set_valign(gtk::Align::Center);
+        menu_grid.attach(&label, 0, row, 1, 1);
+        self.controls.album_cover_size.set_value(size.scale_value());
+        self.controls.album_cover_size.set_sensitive(sensitive);
+        self.controls.album_cover_size.set_halign(gtk::Align::End);
+        self.controls
+            .album_cover_size
+            .set_valign(gtk::Align::Center);
+        self.controls.album_cover_size.set_hexpand(false);
+        menu_grid.attach(&self.controls.album_cover_size, 1, row, 1, 1);
     }
 
     fn add_alignment_menu_row(
@@ -549,6 +589,28 @@ impl NowPlayingWindow {
                 });
             });
 
+        let applying_settings_for_album_cover_size = self.state.applying_settings.clone();
+        let settings_for_album_cover_size = self.state.settings.clone();
+        let album_cover_layout = self.ui.album_cover_layout.clone();
+        let gui_tx_for_album_cover_size = self.gui_tx.clone();
+        self.controls
+            .album_cover_size
+            .connect_value_changed(move |scale| {
+                if applying_settings_for_album_cover_size.get() {
+                    return;
+                }
+
+                let size = AlbumCoverSize::from_scale_value(scale.value());
+
+                let mut settings = settings_for_album_cover_size.get();
+                settings.album_cover_size = size;
+                settings_for_album_cover_size.set(settings);
+                album_cover_layout.set_size(size);
+                Self::send_preference_update(&gui_tx_for_album_cover_size, |preference| {
+                    preference.now_playing_album_cover_size = Some(size.as_preference_value());
+                });
+            });
+
         let applying_settings_for_always_display_last = self.state.applying_settings.clone();
         let settings_for_always_display_last = self.state.settings.clone();
         let gui_tx_for_always_display_last = self.gui_tx.clone();
@@ -646,6 +708,7 @@ impl NowPlayingWindow {
         let alignment_left_for_lights_menu = self.controls.track_info_alignment_left.clone();
         let alignment_center_for_lights_menu = self.controls.track_info_alignment_center.clone();
         let info_box_for_lights = self.ui.info_box.clone();
+        let album_cover_size_for_lights = self.controls.album_cover_size.clone();
         let artwork_for_lights = self.ui.artwork.clone();
         let artwork_placeholder_for_lights = self.ui.artwork_placeholder.clone();
         let background_area_for_lights = self.ui.background_area.clone();
@@ -666,6 +729,7 @@ impl NowPlayingWindow {
                 lights_off_state.set(active);
                 round_for_lights_menu.set_sensitive(!active);
                 hide_for_lights_menu.set_sensitive(!active);
+                album_cover_size_for_lights.set_sensitive(!active);
                 alignment_left_for_lights_menu.set_sensitive(!settings.hide_track_info);
                 alignment_center_for_lights_menu.set_sensitive(!settings.hide_track_info);
 
