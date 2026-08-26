@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 22:35+0200\n"
+"POT-Creation-Date: 2026-08-26 10:30+0200\n"
 "PO-Revision-Date: 2026-07-09 20:02+0000\n"
 "Last-Translator: Fjuro <fjuro@users.noreply.weblate.fossplant.re>\n"
 "Language-Team: Czech <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -44,8 +44,8 @@ msgstr "Chyba: síť není dostupná"
 msgid "Warning: Network unreachable"
 msgstr "Varování: síť není dostupná"
 
-#: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
-#: src/core/http_task.rs:75 src/core/http_task.rs:110
+#: src/cli_main.rs:179 src/core/http_task.rs:155 src/core/http_task.rs:164
+#: src/core/http_task.rs:173 src/core/http_task.rs:312
 #: src/gui/main_window.rs:1315 src/gui/main_window.rs:1320
 #: src/gui/main_window.rs:1332
 msgid "No match for this song"
@@ -185,7 +185,7 @@ msgstr ""
 "Spustit grafické rozhraní, ale nezačít okamžitě po spuštění rozpoznávat zvuk "
 "z mikrofonu (namísto čekání, než uživatel klikne na tlačítko)."
 
-#: src/core/http_task.rs:117 src/core/fingerprinting/communication.rs:124
+#: src/core/http_task.rs:319 src/core/fingerprinting/communication.rs:124
 msgid "Your IP has been rate-limited"
 msgstr "Vaše IP byla omezena"
 

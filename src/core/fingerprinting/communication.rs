@@ -146,8 +146,15 @@ pub async fn obtain_raw_cover_image(
         .send_and_read_future(&message, Priority::DEFAULT)
         .await?;
 
-    let resp_header = format!("{:?}...", &response[..32]);
+    let resp_header = format!("{:?}...", &response[..response.len().min(32)]);
     log_response(&message, &resp_header);
 
-    Ok(response[..].to_vec())
+    if !(200..300).contains(&message.status_code()) {
+        return Err(Box::new(std::io::Error::other(format!(
+            "Cover artwork request failed with HTTP status {}",
+            message.status_code()
+        ))));
+    }
+
+    Ok(response.to_vec())
 }

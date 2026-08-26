@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 22:35+0200\n"
+"POT-Creation-Date: 2026-08-26 10:30+0200\n"
 "PO-Revision-Date: 2026-07-06 14:05+0000\n"
 "Last-Translator: Arda Aydın <arda.aydin@operationsilkscarf.com>\n"
 "Language-Team: Turkish <https://weblate.fossplant.re/projects/songrec/"
@@ -43,8 +43,8 @@ msgstr "Hata: Ağa ulaşılamıyor"
 msgid "Warning: Network unreachable"
 msgstr "Uyarı: Ağa ulaşılamıyor"
 
-#: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
-#: src/core/http_task.rs:75 src/core/http_task.rs:110
+#: src/cli_main.rs:179 src/core/http_task.rs:155 src/core/http_task.rs:164
+#: src/core/http_task.rs:173 src/core/http_task.rs:312
 #: src/gui/main_window.rs:1315 src/gui/main_window.rs:1320
 #: src/gui/main_window.rs:1332
 msgid "No match for this song"
@@ -188,7 +188,7 @@ msgstr ""
 "GUI'yi başlat, ama açıldığı gibi mikrofondan ses tanımayı açma. (Bunun "
 "yerine kullanıcının butona basmasını bekle)"
 
-#: src/core/http_task.rs:117 src/core/fingerprinting/communication.rs:124
+#: src/core/http_task.rs:319 src/core/fingerprinting/communication.rs:124
 msgid "Your IP has been rate-limited"
 msgstr "IP'niz hız aşımına yakalanmış"
 

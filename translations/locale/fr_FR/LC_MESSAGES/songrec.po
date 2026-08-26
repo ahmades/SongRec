@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 22:35+0200\n"
+"POT-Creation-Date: 2026-08-26 10:30+0200\n"
 "PO-Revision-Date: 2026-06-27 17:34+0000\n"
 "Last-Translator: Marin <25437947+marin-m@users.noreply.github.com>\n"
 "Language-Team: French <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -46,8 +46,8 @@ msgstr "Erreur : aucune connexion réseau"
 msgid "Warning: Network unreachable"
 msgstr "Avertissement : Pas de connexion réseau"
 
-#: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
-#: src/core/http_task.rs:75 src/core/http_task.rs:110
+#: src/cli_main.rs:179 src/core/http_task.rs:155 src/core/http_task.rs:164
+#: src/core/http_task.rs:173 src/core/http_task.rs:312
 #: src/gui/main_window.rs:1315 src/gui/main_window.rs:1320
 #: src/gui/main_window.rs:1332
 msgid "No match for this song"
@@ -197,7 +197,7 @@ msgstr ""
 "microphone dès que celle-ci est lancée (au lieu de cela, attendre que "
 "l'utilisateur clique sur un bouton)."
 
-#: src/core/http_task.rs:117 src/core/fingerprinting/communication.rs:124
+#: src/core/http_task.rs:319 src/core/fingerprinting/communication.rs:124
 msgid "Your IP has been rate-limited"
 msgstr "Votre adresse IP fait l'objet d'une rate-limit"
 

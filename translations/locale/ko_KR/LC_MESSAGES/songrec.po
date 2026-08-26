@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 22:35+0200\n"
+"POT-Creation-Date: 2026-08-26 10:30+0200\n"
 "PO-Revision-Date: 2023-12-30 23:42+0900\n"
 "Last-Translator: 이정희 <daemul72@gmail.com>\n"
 "Language-Team: \n"
@@ -42,8 +42,8 @@ msgstr "오류: 네트워크에 연결할 수 없음"
 msgid "Warning: Network unreachable"
 msgstr "경고: 네트워크에 연결할 수 없음"
 
-#: src/cli_main.rs:179 src/core/http_task.rs:54 src/core/http_task.rs:63
-#: src/core/http_task.rs:75 src/core/http_task.rs:110
+#: src/cli_main.rs:179 src/core/http_task.rs:155 src/core/http_task.rs:164
+#: src/core/http_task.rs:173 src/core/http_task.rs:312
 #: src/gui/main_window.rs:1315 src/gui/main_window.rs:1320
 #: src/gui/main_window.rs:1332
 msgid "No match for this song"
@@ -173,7 +173,7 @@ msgstr ""
 "GUI를 실행하되, (사용자가 버튼을 클릭할 것으로 예상하지 않고) 실행하자마자 마"
 "이크를 통해 오디오를 인식하지 않도록 합니다."
 
-#: src/core/http_task.rs:117 src/core/fingerprinting/communication.rs:124
+#: src/core/http_task.rs:319 src/core/fingerprinting/communication.rs:124
 msgid "Your IP has been rate-limited"
 msgstr ""
 
