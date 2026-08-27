@@ -3,6 +3,7 @@
 use super::style::{
     ALBUM_CSS_CLASS, ARTIST_CSS_CLASS, DETAILS_CSS_CLASS, TITLE_CSS_CLASS, font_css_for_size,
 };
+use super::track::transition_leg_duration_ms;
 use super::{AlbumCoverSize, TRANSITION_DURATION_DEFAULT_MS};
 use adw::prelude::*;
 use gettextrs::gettext;
@@ -166,7 +167,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
 
     let content_revealer = gtk::Revealer::builder()
         .reveal_child(true)
-        .transition_duration(TRANSITION_DURATION_DEFAULT_MS as u32)
+        .transition_duration(transition_leg_duration_ms(TRANSITION_DURATION_DEFAULT_MS))
         .transition_type(gtk::RevealerTransitionType::Crossfade)
         .hexpand(true)
         .vexpand(true)
@@ -210,13 +211,15 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
     text_css.load_from_string(&font_css_for_size((WINDOW_WIDTH, WINDOW_HEIGHT)));
 
     let key_controller = gtk::EventControllerKey::new();
-    let window_for_key = window.clone();
+    let window_for_key = window.downgrade();
     key_controller.connect_key_pressed(move |_, key, _, _| {
-        if key == gtk::gdk::Key::F11 {
-            if window_for_key.is_fullscreen() {
-                window_for_key.unfullscreen();
+        if key == gtk::gdk::Key::F11
+            && let Some(window) = window_for_key.upgrade()
+        {
+            if window.is_fullscreen() {
+                window.unfullscreen();
             } else {
-                window_for_key.fullscreen();
+                window.fullscreen();
             }
             glib::Propagation::Stop
         } else {

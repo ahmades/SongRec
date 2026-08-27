@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-26 17:15+0200\n"
+"POT-Creation-Date: 2026-08-27 16:46+0200\n"
 "PO-Revision-Date: 2026-03-09 12:56+0000\n"
 "Last-Translator: Mu7ammed Basha "
 "<mu7basha@users.noreply.weblate.fossplant.re>\n"
@@ -22,51 +22,48 @@ msgstr ""
 "&& n%100<=10 ? 3 : n%100>=11 ? 4 : 5;\n"
 "X-Generator: Weblate 5.15.2\n"
 
-#: src/cli_main.rs:118
+#: src/cli_main.rs:119
 msgid "Available device:"
 msgstr "الجهاز المتاح:"
 
-#: src/cli_main.rs:136
+#: src/cli_main.rs:137
 msgid "Exiting: audio device not found"
 msgstr "جارٍ المغادرة: لم يُعثر على جهاز صوت"
 
-#: src/cli_main.rs:142
+#: src/cli_main.rs:143
 msgid "Exiting: no audio devices found!"
 msgstr "جارٍ المغادرة: لم يُعثر على أجهزة صوت!"
 
-#: src/cli_main.rs:147
+#: src/cli_main.rs:148
 #, c-format
 msgid "Using device %s"
 msgstr ""
 
-#: src/cli_main.rs:171
+#: src/cli_main.rs:172
 msgid "Error: Network unreachable"
 msgstr "خطأ: تعذر الاتصال بالشبكة"
 
-#: src/cli_main.rs:174
+#: src/cli_main.rs:175
 msgid "Warning: Network unreachable"
 msgstr "تحذير: تعذر الاتصال بالشبكة"
 
-#: src/cli_main.rs:179 src/core/http_task.rs:155 src/core/http_task.rs:164
-#: src/core/http_task.rs:173 src/core/http_task.rs:312
-#: src/gui/main_window.rs:1343 src/gui/main_window.rs:1348
-#: src/gui/main_window.rs:1360
-msgid "No match for this song"
-msgstr "لم يُعثر على أغنية مُطابِقة"
-
-#: src/cli_main.rs:180
+#: src/cli_main.rs:180 src/cli_main.rs:189
 msgid "Error:"
 msgstr "خطأ:"
 
-#: src/cli_main.rs:187
+#: src/cli_main.rs:190 src/gui/main_window.rs:1030
+msgid "No match for this song"
+msgstr "لم يُعثر على أغنية مُطابِقة"
+
+#: src/cli_main.rs:196
 msgid "Recording started!"
 msgstr "بدأ التسجيل!"
 
-#: src/main.rs:75
+#: src/main.rs:77
 msgid "An open-source Shazam client for Linux, written in Rust."
 msgstr "عميل Shazam مفتوح المصدر على لينكس، مكتوب بلغة Rust."
 
-#: src/main.rs:95
+#: src/main.rs:97
 msgid ""
 "-v: Set the log level to DEBUG instead of INFO for SongRec-related messages\n"
 "-vv: Set the log level to DEBUG for SongRec-related messages and INFO for "
@@ -78,7 +75,7 @@ msgstr ""
 "المتعلقة بالمكتبة\n"
 "(vvv-): عيّن مستوى السجل إلى TRACE"
 
-#: src/main.rs:101
+#: src/main.rs:103
 msgid ""
 "Run as a command-line program listening the microphone and printing "
 "recognized songs to stdout, exposing current song info via MPRIS"
@@ -86,41 +83,41 @@ msgstr ""
 "شغّل كبرنامج سطر أوامر يستمع للميكروفون ويطبع الأغاني التي تم التعرف عليها "
 "إلى stdout، واعرض الأغنية الحالية عبر MPRIS"
 
-#: src/main.rs:107 src/main.rs:153 src/main.rs:208
+#: src/main.rs:109 src/main.rs:155 src/main.rs:210
 msgid "List available audio devices and quit"
 msgstr "أنشئ قائمة بأجهزة الصوت الحالية ثم غادر"
 
-#: src/main.rs:113 src/main.rs:160 src/main.rs:214
+#: src/main.rs:115 src/main.rs:162 src/main.rs:216
 msgid "Specify the audio device to use"
 msgstr "حدد جهاز صوت لإستخدامه"
 
-#: src/main.rs:121 src/main.rs:168 src/main.rs:222
+#: src/main.rs:123 src/main.rs:170 src/main.rs:224
 msgid ""
 "Shazam interval between requests in seconds (increase if you are rate-"
 "limited)"
 msgstr "الفاصل الزمني بين طلبات Shazam بالثواني (زود إن تم تقييد استخدامك)"
 
-#: src/main.rs:129 src/main.rs:176
+#: src/main.rs:131 src/main.rs:178
 msgid "Enable printing full song info in JSON"
 msgstr "تفعيل طباعة المعلومات الكاملة للأغنية لملف JSON"
 
-#: src/main.rs:136 src/main.rs:183
+#: src/main.rs:138 src/main.rs:185
 msgid "Enable printing full song info in the CSV format"
 msgstr "تفعيل طباعة معلومات الأغنية كاملة في ملف CSV"
 
-#: src/main.rs:142 src/main.rs:262 src/main.rs:283
+#: src/main.rs:144 src/main.rs:264 src/main.rs:285
 msgid "Disable MPRIS support"
 msgstr "تعطيل دعم MPRIS"
 
-#: src/main.rs:147
+#: src/main.rs:149
 msgid "Recognize one song from a sound file or microphone and print its info."
 msgstr "تعرف على أغنية واحدة من ملف صوت أو عبر الميكروفون ثم اطبع معلوماتها."
 
-#: src/main.rs:188
+#: src/main.rs:190
 msgid "Recognize a file instead of using mic input"
 msgstr "تعرف على ملف بدل استخدام إدخال الميكروفون"
 
-#: src/main.rs:193
+#: src/main.rs:195
 msgid ""
 "Generate a Shazam fingerprint from a sound file, perform song recognition "
 "towards Shazam's servers and print obtained information to the standard "
@@ -129,11 +126,11 @@ msgstr ""
 "ولِّد بصمة Shazam من ملف صوت، نفذ التعرف على الأغاني عبر خوادم Shazam واطبع "
 "المعلومات التي تم الحصول عليها إلى إخراج اعتيادي."
 
-#: src/main.rs:197
+#: src/main.rs:199
 msgid "The audio file to recognize."
 msgstr "ملف الصوت المستخدم للتعرف."
 
-#: src/main.rs:202
+#: src/main.rs:204
 msgid ""
 "Recognize a currently playing song using the microphone and print obtained "
 "information to the standard output"
@@ -141,17 +138,17 @@ msgstr ""
 "تعرف على الأغنية المُشغَّلة حاليًا باستخدام الميكروفون واطبع المعلومات التي تم "
 "الحصول عليها لإخراج اعتيادي"
 
-#: src/main.rs:227
+#: src/main.rs:229
 msgid ""
 "Generate a Shazam fingerprint from a sound file, and print it to the "
 "standard output."
 msgstr "ولِّد بصمة Shazam من ملف صوت، واطبعه إلى إخراج اعتيادي."
 
-#: src/main.rs:231
+#: src/main.rs:233
 msgid "The .WAV or .MP3 file to generate an audio fingerprint for."
 msgstr "ملف WAV. أو MP3. المستخدم لتوليد بصمة الصوت."
 
-#: src/main.rs:236
+#: src/main.rs:238
 msgid ""
 "Take a data-URI Shazam fingerprint, perform song recognition towards "
 "Shazam's servers and print obtained information to the standard output."
@@ -159,33 +156,29 @@ msgstr ""
 "خذ رابط بيانات بصمة Shazam، نفذ التعرف على الأغاني عبر خوادم Shazam واطبع "
 "المعلومات التي تم الحصول عليها لإخراج اعتيادي."
 
-#: src/main.rs:240
+#: src/main.rs:242
 msgid "The data-URI Shazam fingerprint to recognize."
 msgstr "رابط بيانات بصمة Shazam المستخدم للتعرف."
 
-#: src/main.rs:252
+#: src/main.rs:254
 msgid "The default action. Display a GUI."
 msgstr "الإجراء الافتراضي. عرض واجهة مستخدم رسومية."
 
-#: src/main.rs:256 src/main.rs:277
+#: src/main.rs:258 src/main.rs:279
 msgid "An optional audio file to recognize on the launch of the application."
 msgstr "ملف صوت اختياري للتعرف عليه عند تشغيل التطبيق."
 
-#: src/main.rs:268 src/main.rs:289
+#: src/main.rs:270 src/main.rs:291
 msgid "Disable PipeWire native support"
 msgstr ""
 
-#: src/main.rs:273
+#: src/main.rs:275
 msgid ""
 "Launch the GUI, but don't recognize audio through the microphone as soon as "
 "it is launched (rather than expecting the user to click on a button)."
 msgstr ""
 "شغّل واجهة المستخدم الرسومية، لكن لا تتعرف على الصوتيات عبر الميكروفون مباشرةً "
 "بعد التشغيل (بدلًا من ذلك توقع من المستخدم أن يضغط زرًا)."
-
-#: src/core/http_task.rs:319 src/core/fingerprinting/communication.rs:124
-msgid "Your IP has been rate-limited"
-msgstr "تم تقييد استخدام عنوان IP خاصتك"
 
 #: src/core/microphone_thread.rs:68
 msgid "Audio error:"
@@ -195,19 +188,23 @@ msgstr "خطأ في الصوت:"
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:107 src/gui/main_window.rs:333
+#: src/core/preferences.rs:525 src/gui/main_window.rs:338
 #: src/gui/interface.blp:129 src/gui/interface.blp:698
 #: src/gui/interface.blp:748
 msgid "Search on YouTube"
 msgstr "ابحث على YouTube"
 
-#: src/core/preferences.rs:124
+#: src/core/preferences.rs:564
 msgid "When parsing the preferences file:"
 msgstr "عند تحليل ملف التفضيلات:"
 
-#: src/core/preferences.rs:219
+#: src/core/preferences.rs:635
 msgid "When saving the preferences file:"
 msgstr "عند حفظ ملف التفضيلات:"
+
+#: src/core/fingerprinting/communication.rs:23
+msgid "Your IP has been rate-limited"
+msgstr "تم تقييد استخدام عنوان IP خاصتك"
 
 #: src/core/fingerprinting/signature_format.rs:84
 msgid "Invalid sample rate in decoded Shazam packet"
@@ -221,39 +218,39 @@ msgstr "نطاق التردد غير صالح في فك ترميز حزمة Shaz
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "عبَر معدل عينة غير صالح أثناء ترميز حزمة Shazam"
 
-#: src/gui/main_window.rs:291
+#: src/gui/main_window.rs:296
 msgid "Application error"
 msgstr "خطأ في التطبيق"
 
-#: src/gui/main_window.rs:312
+#: src/gui/main_window.rs:317
 msgid "Network error"
 msgstr "خطأ في الشبكة"
 
-#: src/gui/main_window.rs:388
+#: src/gui/main_window.rs:393
 msgid "Unable to enable notification icon"
 msgstr "تعذر تفعيل أيقونة الإشعار"
 
-#: src/gui/main_window.rs:1156 src/gui/main_window.rs:1330
+#: src/gui/main_window.rs:882 src/gui/main_window.rs:966
 msgid "Unable to enable MPRIS support"
 msgstr "تعذر تفعيل دعم MPRIS"
 
-#: src/gui/main_window.rs:1357
+#: src/gui/main_window.rs:1014 src/gui/main_window.rs:1034
 msgid "_Ok"
 msgstr "_حسنًا"
 
-#: src/gui/main_window.rs:1438
+#: src/gui/main_window.rs:1102
 msgid "Song recognized"
 msgstr "الأغنية عُرِفت"
 
-#: src/gui/main_window.rs:1575
+#: src/gui/main_window.rs:1292
 msgid "Are you sure you want to wipe history?"
 msgstr "هل ترغب في محو السجل؟"
 
-#: src/gui/main_window.rs:1581
+#: src/gui/main_window.rs:1298
 msgid "_Yes"
 msgstr "_نعم"
 
-#: src/gui/main_window.rs:1582
+#: src/gui/main_window.rs:1299
 msgid "_Cancel"
 msgstr ""
 
@@ -265,124 +262,124 @@ msgstr "حدث خطأ أثناء قراءة سجل الأغاني على الق�
 msgid "Error when reading the favorites on the disk:"
 msgstr "حدث خطأ أثناء قراءة المفضلات على القرص:"
 
-#: src/gui/now_playing_window/menu.rs:71 src/gui/interface.blp:526
-msgid "Gradient"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:72 src/gui/interface.blp:531
-msgid "Solid"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:74 src/gui/interface.blp:483
-msgid "Left"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:75 src/gui/interface.blp:489
-msgid "Center"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:162 src/gui/interface.blp:459
-msgid "Reset"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:183 src/gui/interface.blp:464
-msgid "Round corners of album cover"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:191 src/gui/interface.blp:469
-msgid "Hide track info"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:212 src/gui/interface.blp:538
-msgid "Always display last recognized song"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:233
-msgid "Lights off"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:241
-msgid "Full screen"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:363 src/gui/interface.blp:543
-msgid "Transition effect"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:383 src/gui/interface.blp:548
-msgid "Transition duration"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:403 src/gui/interface.blp:496
-msgid "Album cover size"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:424 src/gui/interface.blp:474
-msgid "Track info alignment"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:454 src/gui/interface.blp:516
-msgid "Background style"
-msgstr ""
-
-#: src/gui/now_playing_window/types.rs:40
+#: src/gui/now_playing_window/album_cover_size.rs:11
 msgid "Small"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:42
+#: src/gui/now_playing_window/album_cover_size.rs:13
 msgid "Medium"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:44
+#: src/gui/now_playing_window/album_cover_size.rs:15
 msgid "Large"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:250
+#: src/gui/now_playing_window/menu.rs:98 src/gui/interface.blp:526
+msgid "Gradient"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:99 src/gui/interface.blp:531
+msgid "Solid"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:101 src/gui/interface.blp:483
+msgid "Left"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:102 src/gui/interface.blp:489
+msgid "Center"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:132 src/gui/interface.blp:459
+msgid "Reset"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:143 src/gui/interface.blp:464
+msgid "Round corners of album cover"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:151 src/gui/interface.blp:469
+msgid "Hide track info"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:172 src/gui/interface.blp:538
+msgid "Always display last recognized song"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:193
+msgid "Lights off"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:201
+msgid "Full screen"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:352 src/gui/interface.blp:543
+msgid "Transition effect"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:372 src/gui/interface.blp:548
+msgid "Transition duration (ms)"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:392 src/gui/interface.blp:496
+msgid "Album cover size"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:413 src/gui/interface.blp:474
+msgid "Track info alignment"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:451 src/gui/interface.blp:516
+msgid "Background style"
+msgstr ""
+
+#: src/gui/now_playing_window/track.rs:87 src/gui/now_playing_window/ui.rs:138
+msgid "Listening..."
+msgstr ""
+
+#: src/gui/now_playing_window/transition.rs:18
 msgid "None"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:251
+#: src/gui/now_playing_window/transition.rs:19
 msgid "Crossfade"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:252
+#: src/gui/now_playing_window/transition.rs:20
 msgid "Slide right"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:253
+#: src/gui/now_playing_window/transition.rs:21
 msgid "Slide left"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:254
+#: src/gui/now_playing_window/transition.rs:22
 msgid "Slide up"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:255
+#: src/gui/now_playing_window/transition.rs:23
 msgid "Slide down"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:256
+#: src/gui/now_playing_window/transition.rs:24
 msgid "Swing right"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:257
+#: src/gui/now_playing_window/transition.rs:25
 msgid "Swing left"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:258
+#: src/gui/now_playing_window/transition.rs:26
 msgid "Swing up"
 msgstr ""
 
-#: src/gui/now_playing_window/types.rs:259
+#: src/gui/now_playing_window/transition.rs:27
 msgid "Swing down"
 msgstr ""
 
-#: src/gui/now_playing_window/ui.rs:106
+#: src/gui/now_playing_window/ui.rs:107
 msgid "Now playing"
-msgstr ""
-
-#: src/gui/now_playing_window/ui.rs:137
-msgid "Listening..."
 msgstr ""
 
 #: src/plugins/ksni.rs:48
@@ -589,7 +586,7 @@ msgid "Choose how the track information is positioned"
 msgstr ""
 
 #: src/gui/interface.blp:495
-msgid "Choose between small, medium, and large album artwork"
+msgid "Choose an album artwork size or use one of the marked presets"
 msgstr ""
 
 #: src/gui/interface.blp:515

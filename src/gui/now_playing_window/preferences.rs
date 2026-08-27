@@ -2,9 +2,8 @@
 
 use super::{
     AlbumCoverSize, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment, TransitionEffect,
-    clamp_transition_duration_ms, reconcile_transition_duration,
+    clamp_transition_duration_ms,
 };
-use crate::core::preferences::Preferences;
 use adw::prelude::*;
 
 impl NowPlayingWindow {
@@ -14,44 +13,13 @@ impl NowPlayingWindow {
         self.set_listening_state();
     }
 
-    /// Refreshes all Now Playing controls and rendering state from persisted preferences.
-    pub fn refresh_from_preferences(&self, preferences: &Preferences) {
-        self.apply_settings(NowPlayingSettings::from(preferences));
-    }
-
-    /// Discards a local duration change that has not yet been persisted.
-    ///
-    /// A reset must invalidate its debounce callback before applying the
-    /// shared defaults, otherwise an older slider value could overwrite them.
-    pub(crate) fn cancel_pending_transition_duration_update(&self) {
-        self.state.pending_transition_duration_ms.set(None);
-        self.state.transition_duration_update_generation.set(
-            self.state
-                .transition_duration_update_generation
-                .get()
-                .wrapping_add(1),
-        );
+    /// Reapplies the shared model to every control and renderer.
+    pub(crate) fn refresh_from_controller(&self) {
+        self.apply_settings(self.controller.settings());
     }
 
     /// Applies one resolved settings snapshot without treating control notifications as user input.
-    fn apply_settings(&self, mut settings: NowPlayingSettings) {
-        let pending_duration_ms = self.state.pending_transition_duration_ms.get();
-        let (duration_ms, pending_duration_ms_after_refresh) =
-            reconcile_transition_duration(settings.transition_duration_ms, pending_duration_ms);
-        settings.transition_duration_ms = duration_ms;
-
-        if pending_duration_ms_after_refresh != pending_duration_ms {
-            self.state
-                .pending_transition_duration_ms
-                .set(pending_duration_ms_after_refresh);
-            self.state.transition_duration_update_generation.set(
-                self.state
-                    .transition_duration_update_generation
-                    .get()
-                    .wrapping_add(1),
-            );
-        }
-
+    fn apply_settings(&self, settings: NowPlayingSettings) {
         self.with_preference_updates_suspended(|| {
             self.state.settings.set(settings);
 
@@ -76,17 +44,8 @@ impl NowPlayingWindow {
         self.state.applying_settings.set(was_applying_settings);
     }
 
-    /// Updates the typed settings snapshot while retaining the rest of its values.
-    pub(super) fn update_settings(&self, update: impl FnOnce(&mut NowPlayingSettings)) {
-        let mut settings = self.state.settings.get();
-        update(&mut settings);
-        self.state.settings.set(settings);
-    }
-
     /// Selects and applies the transition effect used when a new track replaces the current one.
-    pub fn set_transition(&self, effect: TransitionEffect) {
-        self.update_settings(|settings| settings.transition = effect);
-        self.state.transition.set(effect);
+    pub(super) fn set_transition(&self, effect: TransitionEffect) {
         self.with_preference_updates_suspended(|| {
             if self.controls.transition_menu.selected() != effect.index() {
                 self.controls.transition_menu.set_selected(effect.index());
@@ -98,10 +57,8 @@ impl NowPlayingWindow {
     }
 
     /// Sets the transition duration in milliseconds and updates the duration control.
-    pub fn set_transition_duration(&self, duration_ms: u64) {
+    pub(super) fn set_transition_duration(&self, duration_ms: u64) {
         let duration_ms = clamp_transition_duration_ms(duration_ms);
-        self.update_settings(|settings| settings.transition_duration_ms = duration_ms);
-        self.state.transition_duration_ms.set(duration_ms);
         self.with_preference_updates_suspended(|| {
             if self.controls.transition_duration.value() != duration_ms as f64 {
                 self.controls
@@ -112,8 +69,7 @@ impl NowPlayingWindow {
     }
 
     /// Enables or disables keeping the last recognized song when no new match is available.
-    pub fn set_always_display_last_recognized_song(&self, enabled: bool) {
-        self.update_settings(|settings| settings.always_display_last_recognized_song = enabled);
+    pub(super) fn set_always_display_last_recognized_song(&self, enabled: bool) {
         self.with_preference_updates_suspended(|| {
             if self
                 .controls
@@ -129,8 +85,7 @@ impl NowPlayingWindow {
     }
 
     /// Enables or disables rounded corners on the album-art overlay.
-    pub fn set_round_corners(&self, enabled: bool) {
-        self.update_settings(|settings| settings.round_corners = enabled);
+    pub(super) fn set_round_corners(&self, enabled: bool) {
         self.with_preference_updates_suspended(|| {
             if enabled {
                 self.ui
@@ -148,8 +103,7 @@ impl NowPlayingWindow {
     }
 
     /// Applies the requested alignment to the metadata block and its labels.
-    pub fn set_track_info_alignment(&self, alignment: TrackInfoAlignment) {
-        self.update_settings(|settings| settings.track_info_alignment = alignment);
+    pub(super) fn set_track_info_alignment(&self, alignment: TrackInfoAlignment) {
         self.with_preference_updates_suspended(|| match alignment {
             TrackInfoAlignment::Left => {
                 self.ui.info_box.set_halign(gtk::Align::Start);
@@ -175,8 +129,7 @@ impl NowPlayingWindow {
     }
 
     /// Sets the constrained artwork size and synchronizes the context-menu slider.
-    pub fn set_album_cover_size(&self, size: AlbumCoverSize) {
-        self.update_settings(|settings| settings.album_cover_size = size);
+    pub(super) fn set_album_cover_size(&self, size: AlbumCoverSize) {
         self.ui.album_cover_layout.set_size(size);
         self.with_preference_updates_suspended(|| {
             if self.controls.album_cover_size.value() != size.scale_value() {
@@ -186,9 +139,8 @@ impl NowPlayingWindow {
     }
 
     /// Shows or hides the metadata block for the current track.
-    pub fn set_show_track_info(&self, show: bool) {
+    pub(super) fn set_show_track_info(&self, show: bool) {
         let hide_track_info = !show;
-        self.update_settings(|settings| settings.hide_track_info = hide_track_info);
         self.with_preference_updates_suspended(|| {
             if self.controls.hide_track_info.is_active() != hide_track_info {
                 self.controls.hide_track_info.set_active(hide_track_info);

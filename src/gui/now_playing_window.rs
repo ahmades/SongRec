@@ -5,73 +5,65 @@
 //! bindings, persisted-preference application, track presentation, and
 //! background rendering.
 
+mod album_cover_size;
 mod background;
+mod controller;
+mod main_preferences;
 mod menu;
 mod palette;
 mod preferences;
 mod state;
 mod style;
 mod track;
-mod types;
+mod transition;
 mod ui;
 
-use crate::core::preferences::{Preferences, PreferencesInterface};
-use crate::core::thread_messages::GUIMessage;
 use adw::prelude::*;
+use controller::NowPlayingSettingsController;
 use menu::NowPlayingControls;
 use state::NowPlayingState;
-use std::sync::{Arc, Mutex};
 use ui::NowPlayingWidgets;
 
-pub use types::{AlbumCoverSize, BackgroundStyle, TrackInfoAlignment, TransitionEffect};
-pub(crate) use types::{
-    NowPlayingSettings, TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS,
-    TRANSITION_DURATION_MIN_MS, clamp_transition_duration_ms, reconcile_transition_duration,
-    transition_duration_from_scale,
+pub use crate::core::preferences::{
+    AlbumCoverSize, BackgroundStyle, TrackInfoAlignment, TransitionEffect,
 };
+pub(crate) use crate::core::preferences::{
+    NowPlayingPreferences as NowPlayingSettings, TRANSITION_DURATION_DEFAULT_MS,
+    TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, clamp_transition_duration_ms,
+};
+pub(crate) use controller::NowPlayingSettingsController as SettingsController;
+pub(crate) use main_preferences::NowPlayingPreferencesView;
+pub(crate) use transition::transition_duration_from_scale;
 
 /// A reusable floating window that presents the current recognition result.
 pub struct NowPlayingWindow {
     ui: NowPlayingWidgets,
     controls: NowPlayingControls,
     state: NowPlayingState,
-    gui_tx: Option<async_channel::Sender<GUIMessage>>,
+    controller: NowPlayingSettingsController,
 }
 
 impl NowPlayingWindow {
-    /// Constructs a Now Playing window initialized from the current preferences.
-    pub fn new_with_settings(
-        gui_tx: Option<async_channel::Sender<GUIMessage>>,
-        preferences_interface: Option<Arc<Mutex<PreferencesInterface>>>,
-    ) -> Self {
-        let preferences = Self::current_preferences(preferences_interface.as_ref());
-        let settings = NowPlayingSettings::from(&preferences);
+    pub(crate) fn new_with_controller(controller: NowPlayingSettingsController) -> Self {
+        let settings = controller.settings();
         let (ui, text_css) = ui::build_ui();
         let controls = menu::build_controls();
-        let state = NowPlayingState::new(settings);
+        let state = NowPlayingState::new(controller.settings_cell());
 
         let now_playing = Self {
             ui,
             controls,
             state,
-            gui_tx,
+            controller,
         };
 
         now_playing.setup_rendering(&text_css);
+        now_playing.setup_track_transition_handlers();
         now_playing.apply_initial_preferences(settings);
         now_playing.setup_context_menu(settings);
         now_playing.connect_control_handlers();
 
         now_playing
-    }
-
-    /// Reads the current preferences from the shared interface, if available.
-    fn current_preferences(
-        preferences_interface: Option<&Arc<Mutex<PreferencesInterface>>>,
-    ) -> Preferences {
-        preferences_interface
-            .map(|interface| interface.lock().unwrap().preferences.clone())
-            .unwrap_or_default()
     }
 
     /// Presents the Now Playing window to the user.

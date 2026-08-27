@@ -12,7 +12,7 @@ use crate::core::http_task::http_task;
 use crate::core::microphone_thread::microphone_thread;
 use crate::core::processing_thread::processing_thread;
 use crate::core::thread_messages::{
-    GUIMessage, MicrophoneMessage, ProcessingMessage, spawn_big_thread,
+    GUIMessage, MicrophoneMessage, ProcessingMessage, SongRecognizedMessage, spawn_big_thread,
 };
 
 use crate::core::preferences::{Preferences, PreferencesInterface};
@@ -93,6 +93,7 @@ pub fn cli_main(parameters: CLIParameters) -> Result<(), Box<dyn Error>> {
         let mut last_cover_path = None;
 
         let mut last_track: Option<String> = None;
+        let mut current_song: Option<Arc<SongRecognizedMessage>> = None;
 
         let audio_dev_name = parameters.audio_device.as_ref().map(|dev| dev.to_string());
         let input_file_name = parameters.input_file.as_ref().map(|dev| dev.to_string());
@@ -176,10 +177,18 @@ pub fn cli_main(parameters: CLIParameters) -> Result<(), Box<dyn Error>> {
                     }
                 }
                 GUIMessage::ErrorMessage(string) => {
-                    if string != gettext("No match for this song") || input_file_name.is_some() {
-                        error!("{} {}", gettext("Error:"), string);
-                    }
+                    error!("{} {}", gettext("Error:"), string);
                     if input_file_name.is_some() {
+                        break;
+                    }
+                }
+                GUIMessage::NoRecognition => {
+                    if input_file_name.is_some() {
+                        error!(
+                            "{} {}",
+                            gettext("Error:"),
+                            gettext("No match for this song")
+                        );
                         break;
                     }
                 }
@@ -189,6 +198,7 @@ pub fn cli_main(parameters: CLIParameters) -> Result<(), Box<dyn Error>> {
                 GUIMessage::SongRecognized(message) => {
                     let track_key = Some(message.track_key.clone());
                     let song_name = format!("{} - {}", message.artist_name, message.song_name);
+                    current_song = Some(message.clone());
 
                     if last_track != track_key {
                         // TODO re-implement this with new lib
@@ -206,12 +216,12 @@ pub fn cli_main(parameters: CLIParameters) -> Result<(), Box<dyn Error>> {
                                 csv_writer
                                     .serialize(SongHistoryRecord {
                                         song_name,
-                                        album: Some(message.album_name.unwrap_or_default()),
-                                        track_key: Some(message.track_key),
+                                        album: Some(message.album_name.clone().unwrap_or_default()),
+                                        track_key: Some(message.track_key.clone()),
                                         release_year: Some(
-                                            message.release_year.unwrap_or_default(),
+                                            message.release_year.clone().unwrap_or_default(),
                                         ),
-                                        genre: Some(message.genre.unwrap_or_default()),
+                                        genre: Some(message.genre.clone().unwrap_or_default()),
                                         recognition_date: Local::now().format("%c").to_string(),
                                     })
                                     .unwrap();
@@ -224,6 +234,25 @@ pub fn cli_main(parameters: CLIParameters) -> Result<(), Box<dyn Error>> {
                     }
                     if do_recognize_once {
                         break;
+                    }
+                }
+                GUIMessage::ArtworkDownloaded { track_key, artwork } => {
+                    if let Some(song) = current_song.as_ref()
+                        && song.track_key == track_key
+                    {
+                        let updated = Arc::new(song.with_cover_image(artwork));
+                        #[cfg(all(target_os = "linux", feature = "mpris"))]
+                        if let Some(ref player) = mpris_obj {
+                            update_song(player, &updated, &mut last_cover_path).await;
+                        }
+                        current_song = Some(updated);
+                    }
+                }
+                GUIMessage::ArtworkUnavailable { track_key } => {
+                    if let Some(song) = current_song.as_ref()
+                        && song.track_key == track_key
+                    {
+                        current_song = Some(Arc::new(song.with_artwork_unavailable()));
                     }
                 }
                 _ => {}

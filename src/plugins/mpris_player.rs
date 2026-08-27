@@ -64,16 +64,21 @@ pub async fn update_song(
     }
 
     if let Some(ref buf) = message.cover_image {
-        let (mime_ext, mime_type) = if buf.len() >= 4
-            && buf[0] == 0x89
-            && buf[1] == b'P'
-            && buf[2] == b'N'
-            && buf[3] == b'G'
+        let encoded = buf.encoded();
+        let (mime_ext, mime_type) = if encoded.len() >= 4
+            && encoded[0] == 0x89
+            && encoded[1] == b'P'
+            && encoded[2] == b'N'
+            && encoded[3] == b'G'
         {
             ("png", "image/png")
-        } else if buf.len() >= 3 && buf[0] == 0x47 && buf[1] == 0x49 && buf[2] == 0x46 {
+        } else if encoded.len() >= 3
+            && encoded[0] == 0x47
+            && encoded[1] == 0x49
+            && encoded[2] == 0x46
+        {
             ("gif", "image/gif")
-        } else if buf.len() >= 12 && &buf[0..4] == b"RIFF" && &buf[8..12] == b"WEBP" {
+        } else if encoded.len() >= 12 && &encoded[0..4] == b"RIFF" && &encoded[8..12] == b"WEBP" {
             ("webp", "image/webp")
         } else {
             // default to jpeg if unknown
@@ -92,7 +97,7 @@ pub async fn update_song(
             process_uid, timestamp, mime_ext
         ));
         debug!("Writing cover file to {:?}", tmp);
-        if fs::write(&tmp, buf).is_ok() {
+        if fs::write(&tmp, encoded).is_ok() {
             // Use file:// URL for better compatibility with MPRIS clients
             metadata = metadata.art_url(format!("file://{}", tmp.display()));
             *last_cover_path = Some(tmp);
@@ -101,7 +106,7 @@ pub async fn update_song(
             metadata = metadata.art_url(format!(
                 "data:{};base64,{}",
                 mime_type,
-                base64::prelude::BASE64_STANDARD.encode(buf)
+                base64::prelude::BASE64_STANDARD.encode(encoded)
             ));
         }
     }

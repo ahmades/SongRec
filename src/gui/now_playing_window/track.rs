@@ -1,18 +1,23 @@
 //! Recognition-result presentation and transition handling.
 
 use super::background::{CachedGradient, redraw_background};
-use super::palette::{Background, from_cover_image};
-use super::{BackgroundStyle, NowPlayingWindow, TransitionEffect};
+use super::palette::{Background, prepare_artwork};
+use super::state::{PresentationAction, PresentationMode, PresentedTrack, TrackPresentationState};
+use super::{NowPlayingSettings, NowPlayingWindow, TransitionEffect};
 use crate::core::thread_messages::SongRecognizedMessage;
 use adw::prelude::*;
+use gettextrs::gettext;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-/// The GTK objects and shared state required to render one track.
+/// Converts the user-facing total transition duration into one hide/reveal leg.
+pub(super) fn transition_leg_duration_ms(total_duration_ms: u64) -> u32 {
+    (total_duration_ms / 2).max(1).min(u64::from(u32::MAX)) as u32
+}
+
+/// The GTK objects and shared state required to render one presentation.
 ///
-/// Keeping this separate from [`NowPlayingWindow`] lets delayed transitions
-/// use the exact same rendering path as immediate recognition updates. GTK
-/// callbacks must own their captures, so they cannot borrow the window.
+/// GTK callbacks own this lightweight clone instead of borrowing the window.
 #[derive(Clone)]
 struct TrackPresentation {
     artwork: gtk::Picture,
@@ -23,10 +28,9 @@ struct TrackPresentation {
     details_label: gtk::Label,
     background_area: gtk::DrawingArea,
     gradient_surface: Rc<RefCell<Option<CachedGradient>>>,
-    background_style: Rc<Cell<BackgroundStyle>>,
+    settings: Rc<Cell<NowPlayingSettings>>,
     current_background: Rc<Cell<Background>>,
-    lights_off: Rc<Cell<bool>>,
-    showing_listening: Rc<Cell<bool>>,
+    track_state: Rc<RefCell<TrackPresentationState>>,
 }
 
 impl TrackPresentation {
@@ -40,54 +44,47 @@ impl TrackPresentation {
             details_label: window.ui.details_label.clone(),
             background_area: window.ui.background_area.clone(),
             gradient_surface: window.state.gradient_surface.clone(),
-            background_style: window.state.background_style.clone(),
+            settings: window.state.settings.clone(),
             current_background: window.state.current_background.clone(),
-            lights_off: window.state.lights_off.clone(),
-            showing_listening: window.state.showing_listening.clone(),
+            track_state: window.state.track_presentation.clone(),
         }
     }
 
-    /// Synchronizes artwork and placeholder visibility with the rendered state.
-    fn sync_artwork_visibility(&self) {
-        let has_paintable = self.artwork.paintable().is_some();
-
-        if self.lights_off.get() {
-            self.artwork.set_visible(false);
-            self.artwork_placeholder
-                .set_visible(self.showing_listening.get());
-            return;
+    fn apply_action(&self, action: PresentationAction) {
+        match action {
+            PresentationAction::RenderTrack(track) => self.render_track(&track),
+            PresentationAction::RenderListening => self.render_listening(),
+            PresentationAction::None | PresentationAction::BeginTransition => {}
         }
+    }
 
-        if self.showing_listening.get() {
-            self.artwork.set_visible(false);
-            self.artwork_placeholder.set_visible(true);
-            return;
-        }
+    /// Renders a recognized track whose artwork has already been decoded.
+    fn render_track(&self, track: &PresentedTrack) {
+        // The global placeholder belongs exclusively to Listening mode; a
+        // recognized track without artwork intentionally leaves this empty.
+        self.artwork_placeholder.set_label("");
+        self.set_metadata(track);
 
-        if has_paintable {
-            self.artwork.set_visible(true);
-            self.artwork_placeholder.set_visible(false);
+        let artwork_background = if let Some(artwork) = track.artwork.as_ref() {
+            self.artwork.set_paintable(Some(&artwork.texture));
+            Some(artwork.background)
         } else {
-            self.artwork.set_visible(false);
-            self.artwork_placeholder.set_visible(true);
-        }
+            self.artwork.set_paintable(Option::<&gdk::Texture>::None);
+            None
+        };
+        self.current_background.set(background_after_track_update(
+            self.current_background.get(),
+            artwork_background,
+            track.artwork_pending,
+        ));
+
+        self.apply_background();
+        self.sync_artwork_visibility();
     }
 
-    /// Renders a recognized track immediately.
-    fn apply_track_update(&self, message: &SongRecognizedMessage) {
-        self.showing_listening.set(false);
-        self.set_metadata(message);
-
-        if let Some(bytes) = message.cover_image.as_deref() {
-            self.apply_cover(bytes);
-        } else {
-            self.set_missing_cover_state();
-        }
-    }
-
-    /// Renders the deterministic empty/listening state.
-    fn show_listening_state(&self) {
-        self.showing_listening.set(true);
+    /// Renders the deterministic empty/listening state while preserving the background.
+    fn render_listening(&self) {
+        self.artwork_placeholder.set_label(&gettext("Listening..."));
         self.artwork.set_paintable(Option::<&gdk::Texture>::None);
         self.title_label.set_label("");
         self.artist_label.set_label("");
@@ -96,285 +93,246 @@ impl TrackPresentation {
         self.sync_artwork_visibility();
     }
 
-    /// Updates the title, artist, album, and release-year labels.
-    fn set_metadata(&self, message: &SongRecognizedMessage) {
-        self.title_label.set_label(&message.song_name);
-        self.artist_label.set_label(&message.artist_name);
-        self.album_label.set_label(
-            message
-                .album_name
-                .as_deref()
-                .filter(|value| !value.is_empty())
-                .unwrap_or(""),
-        );
-        self.details_label.set_label(
-            message
-                .release_year
-                .as_deref()
-                .filter(|value| !value.is_empty())
-                .unwrap_or(""),
-        );
+    fn set_metadata(&self, track: &PresentedTrack) {
+        self.title_label.set_label(&track.song_name);
+        self.artist_label.set_label(&track.artist_name);
+        self.album_label
+            .set_label(optional_metadata(&track.album_name));
+        self.details_label
+            .set_label(optional_metadata(&track.release_year));
     }
 
-    /// Decodes cover art and derives its background, falling back cleanly on failure.
-    fn apply_cover(&self, bytes: &[u8]) {
-        if let Ok(texture) = gdk::Texture::from_bytes(&glib::Bytes::from(bytes)) {
-            self.artwork.set_paintable(Some(&texture));
-            self.current_background.set(from_cover_image(bytes));
-            self.apply_background();
-            self.sync_artwork_visibility();
-        } else {
-            self.set_missing_cover_state();
-        }
+    fn sync_artwork_visibility(&self) {
+        let mode = self.track_state.borrow().mode;
+        let (show_artwork, show_listening) =
+            artwork_visibility(mode, self.settings.get().lights_off);
+        self.artwork.set_visible(show_artwork);
+        self.artwork_placeholder.set_visible(show_listening);
     }
 
-    /// Clears artwork and restores the fallback background used without cover art.
-    fn set_missing_cover_state(&self) {
-        self.artwork.set_paintable(Option::<&gdk::Texture>::None);
-        self.current_background.set(Background::fallback());
-        self.apply_background();
-        self.sync_artwork_visibility();
-    }
-
-    /// Applies the current background state using the same rules as the window renderer.
     fn apply_background(&self) {
+        let settings = self.settings.get();
         redraw_background(
             &self.background_area,
             &self.gradient_surface,
             self.current_background.get(),
-            self.background_style.get(),
-            self.lights_off.get(),
+            settings.background_style,
+            settings.lights_off,
         );
     }
 }
 
 impl NowPlayingWindow {
-    /// Synchronizes artwork and placeholder visibility with the current window state.
+    /// Synchronizes artwork and Listening visibility with the explicit presentation mode.
     pub(super) fn sync_artwork_visibility(&self) {
         TrackPresentation::from_window(self).sync_artwork_visibility();
     }
 
+    /// Installs one completion callback for every track transition made by this window.
+    pub(super) fn setup_track_transition_handlers(&self) {
+        let track_state_for_completion = self.state.track_presentation.clone();
+        let presentation_for_completion = TrackPresentation::from_window(self);
+        self.ui
+            .content_revealer
+            .connect_child_revealed_notify(move |revealer| {
+                if revealer.is_child_revealed() {
+                    return;
+                }
+
+                let action = track_state_for_completion.borrow_mut().transition_hidden();
+                presentation_for_completion.apply_action(action);
+                // Even a stale/spurious hidden notification must not leave the
+                // reusable window exposing only its background.
+                revealer.set_reveal_child(true);
+            });
+
+        let track_state_for_hide = self.state.track_presentation.clone();
+        let presentation_for_hide = TrackPresentation::from_window(self);
+        let revealer_for_hide = self.ui.content_revealer.clone();
+        self.ui.window.connect_visible_notify(move |window| {
+            if window.is_visible() {
+                return;
+            }
+
+            let action = track_state_for_hide.borrow_mut().flush_pending_track();
+            presentation_for_hide.apply_action(action);
+            revealer_for_hide.set_reveal_child(true);
+        });
+    }
+
     /// Refreshes the displayed song metadata and artwork from a recognition result.
     pub fn update(&self, message: &SongRecognizedMessage) {
-        if !has_track_information(message) {
+        let artwork = message.cover_image.as_deref().map(prepare_artwork);
+        let track = Rc::new(PresentedTrack::from_message(message, artwork));
+        if !track.has_visible_information() {
             self.handle_no_recognition();
             return;
         }
 
-        // A recognized track is authoritative even when it has the same key.
-        // Without this invalidation, a delayed callback from an earlier result
-        // could overwrite newer metadata or cover art.
-        self.cancel_pending_transition();
+        let settings = self.state.settings.get();
+        let can_animate = !matches!(settings.transition, TransitionEffect::None)
+            && self.ui.window.is_mapped()
+            && self.ui.content_revealer.is_child_revealed();
+        let action = self
+            .state
+            .track_presentation
+            .borrow_mut()
+            .receive_track(track, can_animate);
 
-        let should_transition = should_transition_to_track(
-            self.state.last_track_key.borrow().as_deref(),
-            &message.track_key,
-        );
-        *self.state.last_track_key.borrow_mut() = Some(message.track_key.clone());
-
-        if should_transition {
-            self.transition_to_track(message.clone());
-        } else {
-            self.apply_track_update(message);
-            self.ui.content_revealer.set_reveal_child(true);
+        match action {
+            PresentationAction::BeginTransition => {
+                self.ui
+                    .content_revealer
+                    .set_transition_duration(transition_leg_duration_ms(
+                        settings.transition_duration_ms,
+                    ));
+                self.ui
+                    .content_revealer
+                    .set_transition_type(settings.transition.revealer_type());
+                self.ui.content_revealer.set_reveal_child(false);
+            }
+            PresentationAction::RenderTrack(track) => {
+                TrackPresentation::from_window(self)
+                    .apply_action(PresentationAction::RenderTrack(track));
+                self.ui.content_revealer.set_reveal_child(true);
+            }
+            PresentationAction::None | PresentationAction::RenderListening => {}
         }
     }
 
-    /// Applies a recognized track immediately without running a visual transition.
-    fn apply_track_update(&self, message: &SongRecognizedMessage) {
-        TrackPresentation::from_window(self).apply_track_update(message);
-    }
-
-    /// Invalidates a pending transition and restores the currently rendered content.
-    fn cancel_pending_transition(&self) {
-        self.state
-            .transition_generation
-            .set(next_generation(self.state.transition_generation.get()));
-        self.ui.content_revealer.set_reveal_child(true);
-    }
-
-    /// Runs the configured lightweight transition before displaying a newly recognized track.
-    fn transition_to_track(&self, message: SongRecognizedMessage) {
-        let effect = self.state.transition.get();
-        if should_apply_track_immediately(effect, self.ui.content_revealer.is_child_revealed()) {
-            self.apply_track_update(&message);
-            self.ui.content_revealer.set_reveal_child(true);
-            return;
-        }
-
-        let generation = next_generation(self.state.transition_generation.get());
-        self.state.transition_generation.set(generation);
-        self.ui
-            .content_revealer
-            .set_transition_duration(self.state.transition_duration_ms.get() as u32);
-        self.ui
-            .content_revealer
-            .set_transition_type(effect.revealer_type());
-
-        let revealer = self.ui.content_revealer.clone();
-        let generation_state = self.state.transition_generation.clone();
-        let presentation = TrackPresentation::from_window(self);
-        let handler_id = Rc::new(RefCell::new(None));
-        let handler_id_for_callback = handler_id.clone();
-
-        // `child-revealed` changes only after GTK has actually completed the
-        // outgoing animation. This is more accurate than a duration-matched
-        // timer and naturally accounts for GTK animation settings.
-        let handler = revealer.connect_child_revealed_notify(move |revealer| {
-            if generation_state.get() != generation {
-                if let Some(handler) = handler_id_for_callback.borrow_mut().take() {
-                    revealer.disconnect(handler);
-                }
-                return;
-            }
-
-            if revealer.is_child_revealed() {
-                return;
-            }
-
-            if let Some(handler) = handler_id_for_callback.borrow_mut().take() {
-                revealer.disconnect(handler);
-            }
-
-            presentation.apply_track_update(&message);
-            revealer.set_reveal_child(true);
-        });
-        *handler_id.borrow_mut() = Some(handler);
-
-        // Keep the old track visible while it animates out. The shared
-        // presentation path writes the new track only once GTK reports that
-        // the old child is fully hidden.
-        revealer.set_reveal_child(false);
-    }
-
-    /// Clears the current track and shows the listening placeholder while preserving the background.
+    /// Clears the current track and shows the listening placeholder.
     pub fn set_listening_state(&self) {
-        self.cancel_pending_transition();
-        self.set_listening_state_after_transition_cancelled();
-    }
-
-    fn set_listening_state_after_transition_cancelled(&self) {
-        TrackPresentation::from_window(self).show_listening_state();
+        let action = self.state.track_presentation.borrow_mut().show_listening();
+        TrackPresentation::from_window(self).apply_action(action);
         self.ui.content_revealer.set_reveal_child(true);
     }
 
-    /// Handles a recognition attempt that produced no track information according to the active preference.
+    /// Handles an unmatched recognition according to the active keep-last preference.
     pub fn handle_no_recognition(&self) {
-        // An unmatched result must cancel any in-progress transition even if
-        // the preference keeps the last committed presentation. Otherwise a
-        // fullscreen/configure event can leave the revealer hidden, exposing
-        // only the background.
-        self.cancel_pending_transition();
-
-        if should_show_listening_for_no_recognition(
-            self.state
-                .settings
-                .get()
-                .always_display_last_recognized_song,
-        ) {
-            self.set_listening_state_after_transition_cancelled();
-        }
+        let keep_last = self
+            .state
+            .settings
+            .get()
+            .always_display_last_recognized_song;
+        let action = self
+            .state
+            .track_presentation
+            .borrow_mut()
+            .no_recognition(keep_last);
+        TrackPresentation::from_window(self).apply_action(action);
+        self.ui.content_revealer.set_reveal_child(true);
     }
 }
 
-/// Returns whether the message contains enough information to present a track.
-fn has_track_information(message: &SongRecognizedMessage) -> bool {
-    !message.song_name.trim().is_empty()
-        || !message.artist_name.trim().is_empty()
-        || message.cover_image.is_some()
+fn optional_metadata(value: &Option<String>) -> &str {
+    value
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("")
 }
 
-/// Returns whether a non-empty incoming key should replace the last recognized track with a transition.
-fn should_transition_to_track(previous_track_key: Option<&str>, incoming_track_key: &str) -> bool {
-    !incoming_track_key.is_empty()
-        && previous_track_key.is_some_and(|previous| previous != incoming_track_key)
-}
-
-/// Returns whether the newest track must be rendered without starting another revealer cycle.
+/// Selects a new artwork palette without introducing an intermediate fallback.
 ///
-/// `child-revealed` stays false while GTK is revealing a child. Reversing that
-/// in-progress reveal into a second hide does not produce a new false edge, so
-/// a callback waiting for one could otherwise remain pending forever. Rendering
-/// the latest result immediately in that short interval keeps the presentation
-/// current; the next stable update can animate normally.
-fn should_apply_track_immediately(effect: TransitionEffect, child_revealed: bool) -> bool {
-    matches!(effect, TransitionEffect::None) || !child_revealed
+/// Recognition metadata is delivered before its separately fetched artwork.
+/// Retaining the current palette only during that gap makes the eventual update
+/// go directly from the old song's background to the new song's background,
+/// while a definitive fetch failure still restores the neutral fallback.
+fn background_after_track_update(
+    current: Background,
+    artwork_background: Option<Background>,
+    artwork_pending: bool,
+) -> Background {
+    match artwork_background {
+        Some(background) => background,
+        None if artwork_pending => current,
+        None => Background::fallback(),
+    }
 }
 
-/// Returns whether an unmatched recognition should replace the current presentation.
-fn should_show_listening_for_no_recognition(always_display_last_recognized_song: bool) -> bool {
-    !always_display_last_recognized_song
-}
-
-/// Advances a generation token, including the defined wrapping behavior at its maximum value.
-fn next_generation(generation: u64) -> u64 {
-    generation.wrapping_add(1)
+/// Returns widget visibility for each explicit presentation state.
+pub(super) fn artwork_visibility(mode: PresentationMode, lights_off: bool) -> (bool, bool) {
+    match (mode, lights_off) {
+        (PresentationMode::Listening, _) => (false, true),
+        (PresentationMode::TrackWithArtwork, false) => (true, false),
+        (PresentationMode::TrackWithArtwork, true) | (PresentationMode::TrackWithoutArtwork, _) => {
+            (false, false)
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        has_track_information, next_generation, should_apply_track_immediately,
-        should_show_listening_for_no_recognition, should_transition_to_track,
-    };
-    use crate::core::thread_messages::SongRecognizedMessage;
-    use crate::gui::now_playing_window::TransitionEffect;
+    use super::{artwork_visibility, background_after_track_update, transition_leg_duration_ms};
+    use crate::core::artwork::ArtworkBackground as Background;
+    use crate::gui::now_playing_window::state::PresentationMode;
 
-    fn message(
-        song_name: &str,
-        artist_name: &str,
-        cover_image: Option<Vec<u8>>,
-    ) -> SongRecognizedMessage {
-        SongRecognizedMessage {
-            artist_name: artist_name.to_string(),
-            album_name: None,
-            song_name: song_name.to_string(),
-            cover_image,
-            track_key: String::new(),
-            release_year: None,
-            genre: None,
-            shazam_json: String::new(),
-        }
+    #[test]
+    fn transition_duration_is_split_across_hide_and_reveal() {
+        assert_eq!(transition_leg_duration_ms(500), 250);
+        assert_eq!(transition_leg_duration_ms(2_000), 1_000);
+        assert_eq!(transition_leg_duration_ms(5_000), 2_500);
     }
 
     #[test]
-    fn track_information_accepts_any_visible_track_field() {
-        assert!(!has_track_information(&message("  ", "\n", None)));
-        assert!(has_track_information(&message("Song", "", None)));
-        assert!(has_track_information(&message("", "Artist", None)));
-        assert!(has_track_information(&message("", "", Some(Vec::new()))));
+    fn missing_artwork_never_displays_the_listening_placeholder() {
+        assert_eq!(
+            artwork_visibility(PresentationMode::TrackWithoutArtwork, false),
+            (false, false)
+        );
+        assert_eq!(
+            artwork_visibility(PresentationMode::TrackWithoutArtwork, true),
+            (false, false)
+        );
     }
 
     #[test]
-    fn transition_requires_a_changed_non_empty_track_key() {
-        assert!(!should_transition_to_track(None, "track-a"));
-        assert!(!should_transition_to_track(Some("track-a"), "track-a"));
-        assert!(!should_transition_to_track(Some("track-a"), ""));
-        assert!(should_transition_to_track(Some("track-a"), "track-b"));
+    fn listening_remains_visible_in_lights_off_mode() {
+        assert_eq!(
+            artwork_visibility(PresentationMode::Listening, true),
+            (false, true)
+        );
     }
 
     #[test]
-    fn in_progress_reveals_apply_the_latest_track_without_a_second_transition() {
-        assert!(should_apply_track_immediately(TransitionEffect::None, true));
-        assert!(should_apply_track_immediately(
-            TransitionEffect::Crossfade,
-            false
-        ));
-        assert!(!should_apply_track_immediately(
-            TransitionEffect::Crossfade,
-            true
-        ));
+    fn pending_artwork_preserves_the_previous_background() {
+        let previous = Background {
+            top: (10, 20, 30),
+            bottom: (1, 2, 3),
+        };
+
+        assert_eq!(
+            background_after_track_update(previous, None, true),
+            previous
+        );
     }
 
     #[test]
-    fn no_match_keeps_an_existing_or_transitioning_track_when_configured() {
-        assert!(!should_show_listening_for_no_recognition(true));
-        assert!(should_show_listening_for_no_recognition(false));
+    fn downloaded_artwork_replaces_the_previous_background() {
+        let previous = Background {
+            top: (10, 20, 30),
+            bottom: (1, 2, 3),
+        };
+        let next = Background {
+            top: (40, 50, 60),
+            bottom: (4, 5, 6),
+        };
+
+        assert_eq!(
+            background_after_track_update(previous, Some(next), false),
+            next
+        );
     }
 
     #[test]
-    fn transition_generation_wraps_without_panicking() {
-        assert_eq!(next_generation(41), 42);
-        assert_eq!(next_generation(u64::MAX), 0);
+    fn unavailable_artwork_uses_the_fallback_background() {
+        let previous = Background {
+            top: (10, 20, 30),
+            bottom: (1, 2, 3),
+        };
+
+        assert_eq!(
+            background_after_track_update(previous, None, false),
+            Background::fallback()
+        );
     }
 }

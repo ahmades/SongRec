@@ -21,19 +21,19 @@ impl NowPlayingWindow {
     /// Connects background drawing and resize handling for the window.
     pub(super) fn setup_rendering(&self, text_css: &gtk::CssProvider) {
         let background_state_for_draw = self.state.current_background.clone();
-        let background_style_state_for_draw = self.state.background_style.clone();
-        let lights_off_state_for_draw = self.state.lights_off.clone();
+        let settings_for_draw = self.state.settings.clone();
         let gradient_surface_for_draw = self.state.gradient_surface.clone();
         self.ui
             .background_area
             .set_draw_func(move |_, context, width, height| {
+                let settings = settings_for_draw.get();
                 draw_background(
                     context,
                     width,
                     height,
                     background_state_for_draw.get(),
-                    background_style_state_for_draw.get(),
-                    lights_off_state_for_draw.get(),
+                    settings.background_style,
+                    settings.lights_off,
                     &gradient_surface_for_draw,
                 );
             });
@@ -41,8 +41,7 @@ impl NowPlayingWindow {
         let text_css_for_resize = text_css.clone();
         let gradient_surface_for_resize = self.state.gradient_surface.clone();
         let background_state_for_resize = self.state.current_background.clone();
-        let background_style_state_for_resize = self.state.background_style.clone();
-        let lights_off_state_for_resize = self.state.lights_off.clone();
+        let settings_for_resize = self.state.settings.clone();
         self.ui
             .background_area
             .connect_resize(move |area, width, height| {
@@ -52,16 +51,14 @@ impl NowPlayingWindow {
 
                 text_css_for_resize.load_from_string(&font_css_for_size((width, height)));
 
-                if matches!(
-                    background_style_state_for_resize.get(),
-                    BackgroundStyle::Gradient
-                ) {
+                let settings = settings_for_resize.get();
+                if matches!(settings.background_style, BackgroundStyle::Gradient) {
                     rebuild_gradient_surface(
                         &gradient_surface_for_resize,
                         effective_background(
                             background_state_for_resize.get(),
-                            background_style_state_for_resize.get(),
-                            lights_off_state_for_resize.get(),
+                            settings.background_style,
+                            settings.lights_off,
                         ),
                         height,
                     );
@@ -71,14 +68,7 @@ impl NowPlayingWindow {
     }
 
     /// Enables or disables Lights Off mode and updates artwork/background visibility.
-    pub fn set_lights_off(&self, enabled: bool) {
-        self.update_settings(|settings| {
-            settings.lights_off = enabled;
-            if enabled {
-                settings.hide_track_info = false;
-            }
-        });
-        self.state.lights_off.set(enabled);
+    pub(super) fn set_lights_off(&self, enabled: bool) {
         self.with_preference_updates_suspended(|| {
             if self.controls.lights_off_menu.is_active() != enabled {
                 self.controls.lights_off_menu.set_active(enabled);
@@ -100,19 +90,18 @@ impl NowPlayingWindow {
 
     /// Applies the active background style, including the Lights Off override.
     pub(super) fn apply_background(&self) {
+        let settings = self.state.settings.get();
         redraw_background(
             &self.ui.background_area,
             &self.state.gradient_surface,
             self.state.current_background.get(),
-            self.state.background_style.get(),
-            self.state.lights_off.get(),
+            settings.background_style,
+            settings.lights_off,
         );
     }
 
     /// Selects the solid or gradient background rendering style.
-    pub fn set_background_style(&self, style: BackgroundStyle) {
-        self.update_settings(|settings| settings.background_style = style);
-        self.state.background_style.set(style);
+    pub(super) fn set_background_style(&self, style: BackgroundStyle) {
         self.with_preference_updates_suspended(|| match style {
             BackgroundStyle::Gradient => {
                 if !self.controls.background_style_gradient.is_active() {
@@ -361,8 +350,8 @@ fn argb32_pixel_bytes(red: u8, green: u8, blue: u8) -> [u8; 4] {
 #[cfg(test)]
 mod tests {
     use super::{argb32_pixel_bytes, effective_background};
+    use crate::gui::now_playing_window::BackgroundStyle;
     use crate::gui::now_playing_window::palette::Background;
-    use crate::gui::now_playing_window::types::BackgroundStyle;
 
     #[test]
     fn argb32_pixels_follow_cairos_native_endian_layout() {

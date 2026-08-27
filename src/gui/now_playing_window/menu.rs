@@ -1,21 +1,48 @@
 //! Context-menu construction and preference-update signal bindings.
 
+use super::track::artwork_visibility;
 use super::{
     AlbumCoverSize, BackgroundStyle, NowPlayingSettings, NowPlayingWindow,
     TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
     TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
-use crate::core::preferences::Preferences;
-use crate::core::thread_messages::GUIMessage;
+use crate::core::preferences::NowPlayingPreferenceChange;
 use adw::prelude::*;
 use gettextrs::gettext;
-use std::cell::Cell;
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-const PREFERENCE_UPDATE_DEBOUNCE_MS: u64 = 150;
 const TRANSITION_DURATION_STEP_MS: f64 = 100.0;
 const FULLSCREEN_CURSOR_HIDE_DELAY_MS: u64 = 1_500;
+
+/// Owns one reschedulable GLib timeout.
+///
+/// Replacing the pending source keeps high-frequency UI events from leaving a
+/// queue of stale callbacks behind merely to discover that they are obsolete.
+#[derive(Clone, Default)]
+struct DebouncedAction {
+    source_id: Rc<RefCell<Option<glib::SourceId>>>,
+}
+
+impl DebouncedAction {
+    fn schedule(&self, delay: Duration, action: impl FnOnce() + 'static) {
+        self.cancel();
+
+        let source_id_for_callback = self.source_id.clone();
+        let source_id = glib::timeout_add_local_once(delay, move || {
+            source_id_for_callback.borrow_mut().take();
+            action();
+        });
+        self.source_id.borrow_mut().replace(source_id);
+    }
+
+    fn cancel(&self) {
+        if let Some(source_id) = self.source_id.borrow_mut().take() {
+            source_id.remove();
+        }
+    }
+}
 
 /// The context-menu controls whose state mirrors the active presentation settings.
 pub(super) struct NowPlayingControls {
@@ -92,63 +119,6 @@ pub(super) fn build_controls() -> NowPlayingControls {
 }
 
 impl NowPlayingWindow {
-    /// Builds and sends a preference update message to the main GUI task.
-    fn send_preference_update(
-        gui_tx: &Option<async_channel::Sender<GUIMessage>>,
-        configure: impl FnOnce(&mut Preferences),
-    ) {
-        let mut preference = Preferences::new();
-        configure(&mut preference);
-
-        if let Some(gui_tx) = gui_tx {
-            if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
-                eprintln!("failed to send preference update: {error}");
-            }
-        }
-    }
-
-    /// Debounces a preference update so dragging the transition-duration slider does not persist every intermediate value.
-    fn schedule_transition_duration_update(
-        gui_tx: Option<async_channel::Sender<GUIMessage>>,
-        generation: Rc<Cell<u64>>,
-        pending_duration_ms: Rc<Cell<Option<u64>>>,
-        duration_ms: u64,
-    ) {
-        let current_generation = generation.get().wrapping_add(1);
-        generation.set(current_generation);
-
-        glib::timeout_add_local_once(
-            Duration::from_millis(PREFERENCE_UPDATE_DEBOUNCE_MS),
-            move || {
-                if generation.get() != current_generation
-                    || pending_duration_ms.get() != Some(duration_ms)
-                {
-                    return;
-                }
-
-                let mut preference = Preferences::new();
-                preference.now_playing_transition_duration_ms = Some(duration_ms);
-                let sent = if let Some(gui_tx) = gui_tx.as_ref() {
-                    if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
-                        eprintln!("failed to send preference update: {error}");
-                        false
-                    } else {
-                        true
-                    }
-                } else {
-                    false
-                };
-
-                // A standalone window has no shared preference task to
-                // acknowledge this value. Do not let its local pending state
-                // shadow a later explicit refresh forever.
-                if !sent && pending_duration_ms.get() == Some(duration_ms) {
-                    pending_duration_ms.set(None);
-                }
-            },
-        );
-    }
-
     /// Builds and installs the right-click context menu for the Now Playing window.
     pub(super) fn setup_context_menu(&self, settings: NowPlayingSettings) {
         let popover = gtk::Popover::new();
@@ -162,19 +132,9 @@ impl NowPlayingWindow {
         let reset_button = gtk::Button::with_label(&gettext("Reset"));
         reset_button.set_halign(gtk::Align::End);
         menu_grid.attach(&reset_button, 0, 0, 2, 1);
-        let gui_tx_for_reset = self.gui_tx.clone();
-        let pending_duration_for_reset = self.state.pending_transition_duration_ms.clone();
-        let duration_update_generation_for_reset =
-            self.state.transition_duration_update_generation.clone();
+        let controller_for_reset = self.controller.clone();
         reset_button.connect_clicked(move |_| {
-            pending_duration_for_reset.set(None);
-            duration_update_generation_for_reset
-                .set(duration_update_generation_for_reset.get().wrapping_add(1));
-            if let Some(gui_tx) = gui_tx_for_reset.as_ref()
-                && let Err(error) = gui_tx.try_send(GUIMessage::ResetNowPlayingPreferences)
-            {
-                eprintln!("failed to reset Now Playing preferences: {error}");
-            }
+            controller_for_reset.reset();
         });
 
         self.add_switch_menu_row(
@@ -245,61 +205,93 @@ impl NowPlayingWindow {
         );
 
         popover.set_child(Some(&menu_grid));
-        let popover_for_click = popover.clone();
-        let window_for_click = self.ui.window.clone();
-        popover_for_click.set_parent(&window_for_click);
+        popover.set_parent(&self.ui.window);
+        // Keep GTK's modal popover grab enabled. It normally handles outside
+        // clicks by itself, while the capture-phase controller below covers
+        // pointer sequences that were started by one of the interactive menu
+        // controls (notably scales and dropdowns).
+        popover.set_autohide(true);
+        let popover_for_click = popover.downgrade();
 
         let gesture = gtk::GestureClick::new();
         gesture.set_button(3);
         gesture.connect_pressed(move |_, _, x, y| {
-            if popover_for_click.is_visible() {
-                popover_for_click.popdown();
+            let Some(popover) = popover_for_click.upgrade() else {
+                return;
+            };
+            if popover.is_visible() {
+                popover.popdown();
                 return;
             }
             let pointing_rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
-            popover_for_click.set_pointing_to(Some(&pointing_rect));
-            popover_for_click.popup();
+            popover.set_pointing_to(Some(&pointing_rect));
+            popover.popup();
         });
         self.ui.window.add_controller(gesture);
 
-        let window_for_fullscreen = self.ui.window.clone();
+        let popover_for_outside_click = popover.downgrade();
+        let outside_click = gtk::GestureClick::new();
+        outside_click.set_button(1);
+        outside_click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        outside_click.connect_pressed(move |gesture, _, x, y| {
+            let Some(popover) = popover_for_outside_click.upgrade() else {
+                return;
+            };
+            if !popover.is_visible() {
+                return;
+            }
+
+            let clicked_inside = gesture
+                .widget()
+                .and_then(|window| {
+                    window.compute_point(&popover, &gtk::graphene::Point::new(x as f32, y as f32))
+                })
+                .is_some_and(|point| popover.contains(f64::from(point.x()), f64::from(point.y())));
+
+            if !clicked_inside {
+                popover.popdown();
+            }
+        });
+        self.ui.window.add_controller(outside_click);
+
+        let window_for_fullscreen = self.ui.window.downgrade();
         self.controls
             .fullscreen
             .connect_active_notify(move |switch| {
+                let Some(window) = window_for_fullscreen.upgrade() else {
+                    return;
+                };
                 if switch.is_active() {
-                    window_for_fullscreen.fullscreen();
+                    window.fullscreen();
                 } else {
-                    window_for_fullscreen.unfullscreen();
+                    window.unfullscreen();
                 }
             });
 
-        let fullscreen_cursor_hide_generation = Rc::new(Cell::new(0u64));
-        let window_for_cursor_motion = self.ui.window.clone();
-        let cursor_hide_generation_for_motion = fullscreen_cursor_hide_generation.clone();
+        let fullscreen_cursor_hide = DebouncedAction::default();
+        let window_for_cursor_motion = self.ui.window.downgrade();
+        let cursor_hide_for_motion = fullscreen_cursor_hide.clone();
         let cursor_motion = gtk::EventControllerMotion::new();
         cursor_motion.set_propagation_phase(gtk::PropagationPhase::Capture);
         cursor_motion.connect_motion(move |_, _, _| {
-            Self::reveal_fullscreen_cursor(
-                &window_for_cursor_motion,
-                &cursor_hide_generation_for_motion,
-            );
+            if let Some(window) = window_for_cursor_motion.upgrade() {
+                Self::reveal_fullscreen_cursor(&window, &cursor_hide_for_motion);
+            }
         });
-        let window_for_cursor_enter = self.ui.window.clone();
-        let cursor_hide_generation_for_enter = fullscreen_cursor_hide_generation.clone();
+        let window_for_cursor_enter = self.ui.window.downgrade();
+        let cursor_hide_for_enter = fullscreen_cursor_hide.clone();
         cursor_motion.connect_enter(move |_, _, _| {
-            Self::reveal_fullscreen_cursor(
-                &window_for_cursor_enter,
-                &cursor_hide_generation_for_enter,
-            );
+            if let Some(window) = window_for_cursor_enter.upgrade() {
+                Self::reveal_fullscreen_cursor(&window, &cursor_hide_for_enter);
+            }
         });
         self.ui.window.add_controller(cursor_motion);
 
         let fullscreen_switch = self.controls.fullscreen.clone();
-        let cursor_hide_generation_for_fullscreen = fullscreen_cursor_hide_generation.clone();
+        let cursor_hide_for_fullscreen = fullscreen_cursor_hide;
         self.ui.window.connect_fullscreened_notify(move |window| {
             let fullscreened = window.is_fullscreen();
-            cursor_hide_generation_for_fullscreen
-                .set(cursor_hide_generation_for_fullscreen.get().wrapping_add(1));
+            cursor_hide_for_fullscreen.cancel();
             window.set_cursor_from_name(if fullscreened { Some("none") } else { None });
             if fullscreen_switch.is_active() != fullscreened {
                 fullscreen_switch.set_active(fullscreened);
@@ -308,24 +300,21 @@ impl NowPlayingWindow {
     }
 
     /// Temporarily reveals the cursor in fullscreen, then hides it after the pointer is idle.
-    fn reveal_fullscreen_cursor(window: &gtk::Window, hide_generation: &Rc<Cell<u64>>) {
+    fn reveal_fullscreen_cursor(window: &gtk::Window, pending_hide: &DebouncedAction) {
         if !window.is_fullscreen() {
+            pending_hide.cancel();
             return;
         }
 
         window.set_cursor_from_name(None);
-        let generation = hide_generation.get().wrapping_add(1);
-        hide_generation.set(generation);
-
-        let window_for_cursor_timeout = window.clone();
-        let hide_generation_for_timeout = hide_generation.clone();
-        glib::timeout_add_local_once(
+        let window_for_cursor_timeout = window.downgrade();
+        pending_hide.schedule(
             Duration::from_millis(FULLSCREEN_CURSOR_HIDE_DELAY_MS),
             move || {
-                if hide_generation_for_timeout.get() == generation
-                    && window_for_cursor_timeout.is_fullscreen()
+                if let Some(window) = window_for_cursor_timeout.upgrade()
+                    && window.is_fullscreen()
                 {
-                    window_for_cursor_timeout.set_cursor_from_name(Some("none"));
+                    window.set_cursor_from_name(Some("none"));
                 }
             },
         );
@@ -380,7 +369,7 @@ impl NowPlayingWindow {
         duration_ms: u64,
         sensitive: bool,
     ) {
-        let label = gtk::Label::new(Some(&gettext("Transition duration")));
+        let label = gtk::Label::new(Some(&gettext("Transition duration (ms)")));
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
         menu_grid.attach(&label, 0, row, 1, 1);
@@ -434,7 +423,15 @@ impl NowPlayingWindow {
             .build();
         buttons.append(&self.controls.track_info_alignment_left);
         buttons.append(&self.controls.track_info_alignment_center);
-        buttons.set_sensitive(sensitive);
+        // Keep sensitivity on the retained controls themselves. If this local
+        // container is disabled, later preference updates cannot effectively
+        // re-enable its children because the container is not retained.
+        self.controls
+            .track_info_alignment_left
+            .set_sensitive(sensitive);
+        self.controls
+            .track_info_alignment_center
+            .set_sensitive(sensitive);
         match alignment {
             TrackInfoAlignment::Left => self.controls.track_info_alignment_left.set_active(true),
             TrackInfoAlignment::Center => {
@@ -475,8 +472,7 @@ impl NowPlayingWindow {
     /// Connects preference controls to GUI preference update messages.
     pub(super) fn connect_control_handlers(&self) {
         let applying_settings_for_round_corners = self.state.applying_settings.clone();
-        let settings_for_round_corners = self.state.settings.clone();
-        let gui_tx_for_round_corners = self.gui_tx.clone();
+        let controller_for_round_corners = self.controller.clone();
         let artwork_overlay_for_round_corners = self.ui.artwork_overlay.clone();
         self.controls
             .round_corners
@@ -486,23 +482,18 @@ impl NowPlayingWindow {
                 }
 
                 let active = switch.is_active();
-                let mut settings = settings_for_round_corners.get();
-                settings.round_corners = active;
-                settings_for_round_corners.set(settings);
+                controller_for_round_corners
+                    .update(NowPlayingPreferenceChange::RoundCorners(active));
                 if active {
                     artwork_overlay_for_round_corners.add_css_class("now-playing-artwork-rounded");
                 } else {
                     artwork_overlay_for_round_corners
                         .remove_css_class("now-playing-artwork-rounded");
                 }
-                Self::send_preference_update(&gui_tx_for_round_corners, |preference| {
-                    preference.now_playing_round_corners = Some(active);
-                });
             });
 
         let applying_settings_for_hide = self.state.applying_settings.clone();
-        let settings_for_hide = self.state.settings.clone();
-        let gui_tx_for_hide = self.gui_tx.clone();
+        let controller_for_hide = self.controller.clone();
         let info_box_for_hide = self.ui.info_box.clone();
         let alignment_left_for_hide = self.controls.track_info_alignment_left.clone();
         let alignment_center_for_hide = self.controls.track_info_alignment_center.clone();
@@ -514,20 +505,15 @@ impl NowPlayingWindow {
                 }
 
                 let hide_track_info = button.is_active();
-                let mut settings = settings_for_hide.get();
-                settings.hide_track_info = hide_track_info;
-                settings_for_hide.set(settings);
+                controller_for_hide
+                    .update(NowPlayingPreferenceChange::HideTrackInfo(hide_track_info));
                 info_box_for_hide.set_visible(!hide_track_info);
                 alignment_left_for_hide.set_sensitive(!hide_track_info);
                 alignment_center_for_hide.set_sensitive(!hide_track_info);
-                Self::send_preference_update(&gui_tx_for_hide, |preference| {
-                    preference.hide_now_playing_info = Some(hide_track_info);
-                });
             });
 
         let applying_settings_for_alignment_left = self.state.applying_settings.clone();
-        let settings_for_alignment_left = self.state.settings.clone();
-        let gui_tx_for_alignment_left = self.gui_tx.clone();
+        let controller_for_alignment_left = self.controller.clone();
         let info_box_for_alignment_left = self.ui.info_box.clone();
         let title_for_alignment_left = self.ui.title_label.clone();
         let artist_for_alignment_left = self.ui.artist_label.clone();
@@ -540,9 +526,9 @@ impl NowPlayingWindow {
                     return;
                 }
 
-                let mut settings = settings_for_alignment_left.get();
-                settings.track_info_alignment = TrackInfoAlignment::Left;
-                settings_for_alignment_left.set(settings);
+                controller_for_alignment_left.update(
+                    NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Left),
+                );
                 apply_track_info_alignment(
                     &info_box_for_alignment_left,
                     &title_for_alignment_left,
@@ -551,15 +537,10 @@ impl NowPlayingWindow {
                     &details_for_alignment_left,
                     TrackInfoAlignment::Left,
                 );
-                Self::send_preference_update(&gui_tx_for_alignment_left, |preference| {
-                    preference.now_playing_track_info_alignment =
-                        Some(TrackInfoAlignment::Left.as_preference_value().to_string());
-                });
             });
 
         let applying_settings_for_alignment_center = self.state.applying_settings.clone();
-        let settings_for_alignment_center = self.state.settings.clone();
-        let gui_tx_for_alignment_center = self.gui_tx.clone();
+        let controller_for_alignment_center = self.controller.clone();
         let info_box_for_alignment_center = self.ui.info_box.clone();
         let title_for_alignment_center = self.ui.title_label.clone();
         let artist_for_alignment_center = self.ui.artist_label.clone();
@@ -572,9 +553,9 @@ impl NowPlayingWindow {
                     return;
                 }
 
-                let mut settings = settings_for_alignment_center.get();
-                settings.track_info_alignment = TrackInfoAlignment::Center;
-                settings_for_alignment_center.set(settings);
+                controller_for_alignment_center.update(
+                    NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Center),
+                );
                 apply_track_info_alignment(
                     &info_box_for_alignment_center,
                     &title_for_alignment_center,
@@ -583,16 +564,11 @@ impl NowPlayingWindow {
                     &details_for_alignment_center,
                     TrackInfoAlignment::Center,
                 );
-                Self::send_preference_update(&gui_tx_for_alignment_center, |preference| {
-                    preference.now_playing_track_info_alignment =
-                        Some(TrackInfoAlignment::Center.as_preference_value().to_string());
-                });
             });
 
         let applying_settings_for_album_cover_size = self.state.applying_settings.clone();
-        let settings_for_album_cover_size = self.state.settings.clone();
         let album_cover_layout = self.ui.album_cover_layout.clone();
-        let gui_tx_for_album_cover_size = self.gui_tx.clone();
+        let controller_for_album_cover_size = self.controller.clone();
         self.controls
             .album_cover_size
             .connect_value_changed(move |scale| {
@@ -601,19 +577,13 @@ impl NowPlayingWindow {
                 }
 
                 let size = AlbumCoverSize::from_scale_value(scale.value());
-
-                let mut settings = settings_for_album_cover_size.get();
-                settings.album_cover_size = size;
-                settings_for_album_cover_size.set(settings);
                 album_cover_layout.set_size(size);
-                Self::send_preference_update(&gui_tx_for_album_cover_size, |preference| {
-                    preference.now_playing_album_cover_size = Some(size.as_preference_value());
-                });
+                controller_for_album_cover_size
+                    .update_debounced(NowPlayingPreferenceChange::AlbumCoverSize(size));
             });
 
         let applying_settings_for_always_display_last = self.state.applying_settings.clone();
-        let settings_for_always_display_last = self.state.settings.clone();
-        let gui_tx_for_always_display_last = self.gui_tx.clone();
+        let controller_for_always_display_last = self.controller.clone();
         self.controls
             .always_display_last_recognized_song
             .connect_active_notify(move |button| {
@@ -622,24 +592,16 @@ impl NowPlayingWindow {
                 }
 
                 let always_display_last_recognized_song = button.is_active();
-                let mut settings = settings_for_always_display_last.get();
-                settings.always_display_last_recognized_song = always_display_last_recognized_song;
-                settings_for_always_display_last.set(settings);
-                Self::send_preference_update(&gui_tx_for_always_display_last, |preference| {
-                    preference.always_display_last_recognized_song =
-                        Some(always_display_last_recognized_song);
-                });
+                controller_for_always_display_last.update(
+                    NowPlayingPreferenceChange::AlwaysDisplayLastRecognizedSong(
+                        always_display_last_recognized_song,
+                    ),
+                );
             });
 
         let applying_settings_for_transition = self.state.applying_settings.clone();
-        let settings_for_transition = self.state.settings.clone();
-        let gui_tx_for_transition = self.gui_tx.clone();
-        let transition_state = self.state.transition.clone();
+        let controller_for_transition = self.controller.clone();
         let transition_duration_control = self.controls.transition_duration.clone();
-        let transition_duration_update_generation_for_transition =
-            self.state.transition_duration_update_generation.clone();
-        let pending_transition_duration_for_transition =
-            self.state.pending_transition_duration_ms.clone();
         self.controls
             .transition_menu
             .connect_selected_notify(move |dropdown| {
@@ -648,32 +610,13 @@ impl NowPlayingWindow {
                 }
 
                 let effect = TransitionEffect::from_index(dropdown.selected());
-                let mut settings = settings_for_transition.get();
-                settings.transition = effect;
-                settings_for_transition.set(settings);
-                transition_state.set(effect);
-                pending_transition_duration_for_transition.set(None);
-                transition_duration_update_generation_for_transition.set(
-                    transition_duration_update_generation_for_transition
-                        .get()
-                        .wrapping_add(1),
-                );
+                controller_for_transition.update(NowPlayingPreferenceChange::Transition(effect));
                 transition_duration_control
                     .set_sensitive(!matches!(effect, TransitionEffect::None));
-                Self::send_preference_update(&gui_tx_for_transition, |preference| {
-                    preference.now_playing_transition =
-                        Some(effect.as_preference_value().to_string());
-                    preference.now_playing_transition_duration_ms =
-                        Some(settings.transition_duration_ms);
-                });
             });
 
         let applying_settings_for_duration = self.state.applying_settings.clone();
-        let settings_for_duration = self.state.settings.clone();
-        let transition_duration_state = self.state.transition_duration_ms.clone();
-        let gui_tx_for_transition_duration = self.gui_tx.clone();
-        let transition_duration_update = self.state.transition_duration_update_generation.clone();
-        let pending_transition_duration = self.state.pending_transition_duration_ms.clone();
+        let controller_for_transition_duration = self.controller.clone();
         self.controls
             .transition_duration
             .connect_value_changed(move |scale| {
@@ -682,27 +625,14 @@ impl NowPlayingWindow {
                 }
 
                 let duration_ms = transition_duration_from_scale(scale.value());
-                let mut settings = settings_for_duration.get();
-                settings.transition_duration_ms = duration_ms;
-                settings_for_duration.set(settings);
-                transition_duration_state.set(duration_ms);
-                pending_transition_duration.set(Some(duration_ms));
-
-                // Persist only the duration. Capturing the effect here caused
-                // an older debounce to overwrite a transition chosen later.
-                Self::schedule_transition_duration_update(
-                    gui_tx_for_transition_duration.clone(),
-                    transition_duration_update.clone(),
-                    pending_transition_duration.clone(),
-                    duration_ms,
+                controller_for_transition_duration.update_debounced(
+                    NowPlayingPreferenceChange::TransitionDurationMs(duration_ms),
                 );
             });
 
         let applying_settings_for_lights = self.state.applying_settings.clone();
-        let settings_for_lights = self.state.settings.clone();
-        let lights_off_state = self.state.lights_off.clone();
-        let showing_listening_for_lights = self.state.showing_listening.clone();
-        let gui_tx_for_lights = self.gui_tx.clone();
+        let controller_for_lights = self.controller.clone();
+        let track_state_for_lights = self.state.track_presentation.clone();
         let round_for_lights_menu = self.controls.round_corners.clone();
         let hide_for_lights_menu = self.controls.hide_track_info.clone();
         let alignment_left_for_lights_menu = self.controls.track_info_alignment_left.clone();
@@ -720,13 +650,8 @@ impl NowPlayingWindow {
                 }
 
                 let active = button.is_active();
-                let mut settings = settings_for_lights.get();
-                settings.lights_off = active;
-                if active {
-                    settings.hide_track_info = false;
-                }
-                settings_for_lights.set(settings);
-                lights_off_state.set(active);
+                controller_for_lights.update(NowPlayingPreferenceChange::LightsOff(active));
+                let settings = controller_for_lights.settings();
                 round_for_lights_menu.set_sensitive(!active);
                 hide_for_lights_menu.set_sensitive(!active);
                 album_cover_size_for_lights.set_sensitive(!active);
@@ -740,27 +665,16 @@ impl NowPlayingWindow {
                     info_box_for_lights.set_visible(true);
                 }
 
-                sync_artwork_visibility(
-                    &artwork_for_lights,
-                    &artwork_placeholder_for_lights,
-                    active,
-                    showing_listening_for_lights.get(),
-                );
+                let mode = track_state_for_lights.borrow().mode;
+                let (show_artwork, show_listening) = artwork_visibility(mode, active);
+                artwork_for_lights.set_visible(show_artwork);
+                artwork_placeholder_for_lights.set_visible(show_listening);
                 background_area_for_lights.queue_draw();
-
-                Self::send_preference_update(&gui_tx_for_lights, |preference| {
-                    preference.lights_off_enabled = Some(active);
-                    if active {
-                        preference.hide_now_playing_info = Some(false);
-                    }
-                });
             });
 
         let applying_settings_for_gradient = self.state.applying_settings.clone();
-        let settings_for_gradient = self.state.settings.clone();
-        let background_style_for_gradient = self.state.background_style.clone();
+        let controller_for_gradient = self.controller.clone();
         let background_area_for_gradient = self.ui.background_area.clone();
-        let gui_tx_for_gradient = self.gui_tx.clone();
         self.controls
             .background_style_gradient
             .connect_toggled(move |button| {
@@ -768,22 +682,15 @@ impl NowPlayingWindow {
                     return;
                 }
 
-                let mut settings = settings_for_gradient.get();
-                settings.background_style = BackgroundStyle::Gradient;
-                settings_for_gradient.set(settings);
-                background_style_for_gradient.set(BackgroundStyle::Gradient);
+                controller_for_gradient.update(NowPlayingPreferenceChange::BackgroundStyle(
+                    BackgroundStyle::Gradient,
+                ));
                 background_area_for_gradient.queue_draw();
-                Self::send_preference_update(&gui_tx_for_gradient, |preference| {
-                    preference.now_playing_background_style =
-                        Some(BackgroundStyle::Gradient.as_preference_value().to_string());
-                });
             });
 
         let applying_settings_for_solid = self.state.applying_settings.clone();
-        let settings_for_solid = self.state.settings.clone();
-        let background_style_for_solid = self.state.background_style.clone();
+        let controller_for_solid = self.controller.clone();
         let background_area_for_solid = self.ui.background_area.clone();
-        let gui_tx_for_solid = self.gui_tx.clone();
         self.controls
             .background_style_solid
             .connect_toggled(move |button| {
@@ -791,15 +698,10 @@ impl NowPlayingWindow {
                     return;
                 }
 
-                let mut settings = settings_for_solid.get();
-                settings.background_style = BackgroundStyle::Solid;
-                settings_for_solid.set(settings);
-                background_style_for_solid.set(BackgroundStyle::Solid);
+                controller_for_solid.update(NowPlayingPreferenceChange::BackgroundStyle(
+                    BackgroundStyle::Solid,
+                ));
                 background_area_for_solid.queue_draw();
-                Self::send_preference_update(&gui_tx_for_solid, |preference| {
-                    preference.now_playing_background_style =
-                        Some(BackgroundStyle::Solid.as_preference_value().to_string());
-                });
             });
     }
 }
@@ -822,26 +724,4 @@ fn apply_track_info_alignment(
     artist_label.set_halign(alignment);
     album_label.set_halign(alignment);
     details_label.set_halign(alignment);
-}
-
-/// Mirrors the artwork visibility portion of `NowPlayingWindow::sync_artwork_visibility`.
-fn sync_artwork_visibility(
-    artwork: &gtk::Picture,
-    placeholder: &gtk::Label,
-    lights_off: bool,
-    showing_listening: bool,
-) {
-    if lights_off {
-        artwork.set_visible(false);
-        placeholder.set_visible(showing_listening);
-    } else if showing_listening {
-        artwork.set_visible(false);
-        placeholder.set_visible(true);
-    } else if artwork.paintable().is_some() {
-        artwork.set_visible(true);
-        placeholder.set_visible(false);
-    } else {
-        artwork.set_visible(false);
-        placeholder.set_visible(true);
-    }
 }

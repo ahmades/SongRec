@@ -1,15 +1,30 @@
 use gettextrs::gettext;
+use gio::prelude::InputStreamExt;
 use glib::source::Priority;
 use log::{debug, error, trace};
 use rand::prelude::IndexedRandom;
 use serde_json::{Value, json};
 use soup::prelude::SessionExt;
 use std::error::Error;
+use std::fmt;
 use std::time::SystemTime;
 use uuid::Uuid;
 
+use crate::core::artwork::MAX_ARTWORK_BYTES;
 use crate::core::fingerprinting::signature_format::DecodedSignature;
 use crate::core::fingerprinting::user_agent::USER_AGENTS;
+
+/// Typed marker for Shazam's HTTP 429 response.
+#[derive(Debug)]
+pub struct RateLimitError;
+
+impl fmt::Display for RateLimitError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&gettext("Your IP has been rate-limited"))
+    }
+}
+
+impl Error for RateLimitError {}
 
 fn log_request(message: &soup::Message, post_data: &str) {
     if let Some(headers) = message.request_headers() {
@@ -119,10 +134,7 @@ pub async fn recognize_song_from_signature(
     log_response(&message, &decoded_resp);
 
     if message.status_code() == 429 {
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::QuotaExceeded,
-            gettext("Your IP has been rate-limited").as_str(),
-        )));
+        return Err(Box::new(RateLimitError));
     }
 
     Ok(serde_json::from_slice(&response[..])?)
@@ -142,19 +154,57 @@ pub async fn obtain_raw_cover_image(
 
     log_request(&message, "");
 
-    let response = session
-        .send_and_read_future(&message, Priority::DEFAULT)
-        .await?;
-
-    let resp_header = format!("{:?}...", &response[..response.len().min(32)]);
-    log_response(&message, &resp_header);
+    let stream = session.send_future(&message, Priority::DEFAULT).await?;
 
     if !(200..300).contains(&message.status_code()) {
+        log_response(&message, "");
         return Err(Box::new(std::io::Error::other(format!(
             "Cover artwork request failed with HTTP status {}",
             message.status_code()
         ))));
     }
 
-    Ok(response.to_vec())
+    let content_length = message
+        .response_headers()
+        .map(|headers| headers.content_length())
+        .unwrap_or(-1);
+    if content_length > MAX_ARTWORK_BYTES as i64 {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Cover artwork response is too large",
+        )));
+    }
+
+    let initial_capacity = usize::try_from(content_length)
+        .ok()
+        .filter(|length| *length <= MAX_ARTWORK_BYTES)
+        .unwrap_or_default();
+    let mut response = Vec::with_capacity(initial_capacity);
+    loop {
+        let chunk = stream
+            .read_bytes_future(64 * 1024, Priority::DEFAULT)
+            .await?;
+        if chunk.is_empty() {
+            break;
+        }
+        if response.len().saturating_add(chunk.len()) > MAX_ARTWORK_BYTES {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Cover artwork response is too large",
+            )));
+        }
+        response.extend_from_slice(&chunk);
+    }
+
+    let resp_header = format!("{:?}...", &response[..response.len().min(32)]);
+    log_response(&message, &resp_header);
+
+    if response.is_empty() {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Cover artwork response is empty",
+        )));
+    }
+
+    Ok(response)
 }

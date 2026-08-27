@@ -3,6 +3,7 @@
 pub mod cli_main;
 
 mod core {
+    pub mod artwork;
     pub mod http_task;
     pub mod logging;
     pub mod microphone_thread;
@@ -28,6 +29,7 @@ mod core {
 
 #[cfg(feature = "gui")]
 mod gui {
+    pub mod artwork;
     pub mod main_window;
     pub mod now_playing_window;
     pub mod song_history_interface;

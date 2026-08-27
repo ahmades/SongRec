@@ -6,11 +6,10 @@ use log::{debug, error, info, trace};
 use mpris_server::PlaybackStatus;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use serde_json::json;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::error::Error;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use crate::core::http_task::http_task;
 use crate::core::logging::Logging;
@@ -30,14 +29,14 @@ use crate::utils::filesystem_operations::{
     clear_cache, obtain_favorites_csv_path, obtain_recognition_history_csv_path,
 };
 
-use crate::core::preferences::{Preferences, PreferencesInterface};
+use crate::core::preferences::{Preferences, PreferencesInterface, PreferencesPatch};
 
+use crate::gui::artwork::texture as artwork_texture;
 use crate::gui::context_menu::ContextMenuUtil;
 use crate::gui::history_entry::HistoryEntry;
 use crate::gui::listed_device::ListedDevice;
 use crate::gui::now_playing_window::{
-    AlbumCoverSize, BackgroundStyle, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment,
-    TransitionEffect, reconcile_transition_duration, transition_duration_from_scale,
+    NowPlayingPreferencesView, NowPlayingWindow, SettingsController,
 };
 
 #[cfg(windows)]
@@ -80,22 +79,25 @@ struct App {
     http_rx: async_channel::Receiver<HTTPMessage>,
 
     now_playing_window: Rc<RefCell<Option<NowPlayingWindow>>>,
-    last_recognized_song: Rc<RefCell<Option<SongRecognizedMessage>>>,
+    now_playing_controller: SettingsController,
+    recognition_state: Rc<RefCell<RecognitionState>>,
 }
 
 fn open_now_playing_window(
     now_playing_window: &Rc<RefCell<Option<NowPlayingWindow>>>,
-    last_recognized_song: &Rc<RefCell<Option<SongRecognizedMessage>>>,
-    preferences_interface: &Arc<Mutex<PreferencesInterface>>,
-    gui_tx: &async_channel::Sender<GUIMessage>,
+    recognition_state: &Rc<RefCell<RecognitionState>>,
+    controller: &SettingsController,
 ) {
     if now_playing_window.borrow().is_none() {
-        let window = NowPlayingWindow::new_with_settings(
-            Some(gui_tx.clone()),
-            Some(preferences_interface.clone()),
-        );
-        if let Some(ref message) = *last_recognized_song.borrow() {
-            window.update(message);
+        let window = NowPlayingWindow::new_with_controller(controller.clone());
+        let settings = controller.settings();
+        if let Some(message) = recognition_state
+            .borrow()
+            .visible_track(settings.always_display_last_recognized_song)
+        {
+            window.update(&message);
+        } else {
+            window.set_listening_state();
         }
         *now_playing_window.borrow_mut() = Some(window);
     }
@@ -145,6 +147,8 @@ impl App {
 
         let preferences_interface: PreferencesInterface = PreferencesInterface::new();
         let old_preferences: Preferences = preferences_interface.preferences.clone();
+        let now_playing_controller =
+            SettingsController::new(old_preferences.now_playing, Some(gui_tx.clone()));
         let preferences_interface = Arc::new(Mutex::new(preferences_interface));
 
         Self::setup_callbacks(
@@ -195,7 +199,8 @@ impl App {
             http_rx,
 
             now_playing_window: Rc::new(RefCell::new(None)),
-            last_recognized_song: Rc::new(RefCell::new(None)),
+            now_playing_controller,
+            recognition_state: Rc::new(RefCell::new(RecognitionState::default())),
         }
     }
 
@@ -356,7 +361,7 @@ impl App {
             enable_mpris_cli,
             enable_pipewire_cli,
             self.now_playing_window.clone(),
-            self.last_recognized_song.clone(),
+            self.recognition_state.clone(),
         );
         self.setup_actions(application, enable_mpris_cli);
         #[cfg(target_os = "linux")]
@@ -461,7 +466,7 @@ impl App {
 
             let lock = preferences.lock().unwrap();
             if lock.preferences.website_search_text != Some(entry_row.text().to_string()) {
-                let mut new_preference = Preferences::new();
+                let mut new_preference = PreferencesPatch::new();
                 new_preference.website_search_text = Some(entry_row.text().to_string());
                 gui_tx
                     .try_send(GUIMessage::UpdatePreference(new_preference))
@@ -479,7 +484,7 @@ impl App {
 
             let lock = preferences.lock().unwrap();
             if lock.preferences.website_search_url != Some(entry_row.text().to_string()) {
-                let mut new_preference = Preferences::new();
+                let mut new_preference = PreferencesPatch::new();
                 new_preference.website_search_url = Some(entry_row.text().to_string());
                 gui_tx
                     .try_send(GUIMessage::UpdatePreference(new_preference))
@@ -689,7 +694,7 @@ impl App {
                 // Save the selected microphone device name so that it is
                 // remembered after relaunching the app
 
-                let mut new_preference = Preferences::new();
+                let mut new_preference = PreferencesPatch::new();
                 new_preference.current_device_name = Some(device_name.to_string());
                 gui_tx
                     .try_send(GUIMessage::UpdatePreference(new_preference))
@@ -718,7 +723,7 @@ impl App {
         builder_scope.add_callback("interval_changed", move |values| {
             let adjustment = values[0].get::<gtk::Adjustment>().unwrap();
             debug!("Request interval set to: {}", adjustment.value());
-            let mut new_preference = Preferences::new();
+            let mut new_preference = PreferencesPatch::new();
             new_preference.request_interval_secs_v3 = Some(adjustment.value() as u64);
             gui_tx
                 .try_send(GUIMessage::UpdatePreference(new_preference))
@@ -742,7 +747,7 @@ impl App {
         _enable_mpris_cli: bool,
         enable_pipewire_cli: bool,
         now_playing_window: Rc<RefCell<Option<NowPlayingWindow>>>,
-        last_recognized_song: Rc<RefCell<Option<SongRecognizedMessage>>>,
+        recognition_state: Rc<RefCell<RecognitionState>>,
     ) {
         // Setup communication using threads + smol-rs/async-channel::unbounded listener
 
@@ -780,6 +785,7 @@ impl App {
 
         let gui_rx = self.gui_rx.clone();
         let preferences_interface_ptr = self.preferences_interface.clone();
+        let now_playing_controller = self.now_playing_controller.clone();
 
         let old_device_name = self.old_preferences.current_device_name.clone();
 
@@ -798,38 +804,8 @@ impl App {
         let spinner_row: adw::PreferencesRow = self.builder.object("spinner_row").unwrap();
         let volume_row: adw::PreferencesRow = self.builder.object("volume_row").unwrap();
         let volume_gauge: gtk::ProgressBar = self.builder.object("volume_gauge").unwrap();
-        let round_corners_setting: adw::SwitchRow =
-            self.builder.object("round_corners_setting").unwrap();
-        let hide_track_info_setting: adw::SwitchRow =
-            self.builder.object("hide_track_info_setting").unwrap();
-        let track_info_alignment_setting: adw::ActionRow =
-            self.builder.object("track_info_alignment_setting").unwrap();
-        let track_info_alignment_left: gtk::ToggleButton =
-            self.builder.object("track_info_alignment_left").unwrap();
-        let track_info_alignment_center: gtk::ToggleButton =
-            self.builder.object("track_info_alignment_center").unwrap();
-        let album_cover_size_scale: gtk::Scale = self
-            .builder
-            .object("album_cover_size_setting_scale")
-            .unwrap();
-        let background_style_gradient: gtk::ToggleButton =
-            self.builder.object("background_style_gradient").unwrap();
-        let background_style_solid: gtk::ToggleButton =
-            self.builder.object("background_style_solid").unwrap();
-        let always_display_last_recognized_song_setting: adw::SwitchRow = self
-            .builder
-            .object("always_display_last_recognized_song_setting")
-            .unwrap();
-        let transition_setting: adw::ComboRow = self.builder.object("transition_setting").unwrap();
-        let transition_duration_scale: gtk::Scale = self
-            .builder
-            .object("transition_duration_setting_scale")
-            .unwrap();
-        let lights_off_setting: adw::SwitchRow = self.builder.object("lights_off_setting").unwrap();
-        let reset_now_playing_preferences_button: gtk::Button = self
-            .builder
-            .object("reset_now_playing_preferences_button")
-            .unwrap();
+        let now_playing_preferences_view =
+            NowPlayingPreferencesView::new(&self.builder, now_playing_controller.clone());
         let results_section: adw::PreferencesGroup =
             self.builder.object("results_section").unwrap();
         let no_network_message: gtk::Label = self.builder.object("no_network_message").unwrap();
@@ -837,266 +813,18 @@ impl App {
         let results_image: gtk::Image = self.builder.object("results_image").unwrap();
         let results_label: gtk::Label = self.builder.object("results_label").unwrap();
 
-        let initial_preferences = preferences_interface_ptr
-            .lock()
-            .unwrap()
-            .preferences
-            .clone();
-        let initial_now_playing_settings = NowPlayingSettings::from(&initial_preferences);
-        AlbumCoverSize::configure_scale(&album_cover_size_scale);
-        AlbumCoverSize::install_slider_snap(&album_cover_size_scale);
-        round_corners_setting.set_active(initial_now_playing_settings.round_corners);
-        hide_track_info_setting.set_active(initial_now_playing_settings.hide_track_info);
-        match initial_now_playing_settings.track_info_alignment {
-            TrackInfoAlignment::Left => {
-                track_info_alignment_left.set_active(true);
-                track_info_alignment_center.set_active(false);
-            }
-            TrackInfoAlignment::Center => {
-                track_info_alignment_left.set_active(false);
-                track_info_alignment_center.set_active(true);
-            }
-        }
-        album_cover_size_scale
-            .set_value(initial_now_playing_settings.album_cover_size.scale_value());
-        match initial_now_playing_settings.background_style {
-            BackgroundStyle::Gradient => background_style_gradient.set_active(true),
-            BackgroundStyle::Solid => background_style_solid.set_active(true),
-        }
-        always_display_last_recognized_song_setting
-            .set_active(initial_now_playing_settings.always_display_last_recognized_song);
-        let transition_labels = TransitionEffect::ALL
-            .into_iter()
-            .map(TransitionEffect::translated_label)
-            .collect::<Vec<_>>();
-        let transition_label_refs = transition_labels
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>();
-        let transition_model = gtk::StringList::new(&transition_label_refs);
-        transition_setting.set_model(Some(&transition_model));
-        transition_setting.set_selected(initial_now_playing_settings.transition.index());
-        transition_duration_scale
-            .set_value(initial_now_playing_settings.transition_duration_ms as f64);
-        transition_duration_scale.set_sensitive(!matches!(
-            initial_now_playing_settings.transition,
-            TransitionEffect::None
-        ));
-        lights_off_setting.set_active(initial_now_playing_settings.lights_off);
-        // When Lights Off is enabled, controls that affect the hidden artwork are not applicable.
-        hide_track_info_setting.set_sensitive(!initial_now_playing_settings.lights_off);
-        round_corners_setting.set_sensitive(!initial_now_playing_settings.lights_off);
-        album_cover_size_scale.set_sensitive(!initial_now_playing_settings.lights_off);
-        track_info_alignment_setting.set_sensitive(!initial_now_playing_settings.hide_track_info);
-
-        let applying_now_playing_settings = Rc::new(Cell::new(false));
-        let transition_duration_update_generation = Rc::new(Cell::new(0u64));
-        let pending_transition_duration_ms = Rc::new(Cell::new(None));
-
-        let gui_tx_for_reset_now_playing_preferences = self.gui_tx.clone();
-        let transition_duration_update_generation_for_reset =
-            transition_duration_update_generation.clone();
-        let pending_transition_duration_for_reset = pending_transition_duration_ms.clone();
-        reset_now_playing_preferences_button.connect_clicked(move |_| {
-            pending_transition_duration_for_reset.set(None);
-            transition_duration_update_generation_for_reset.set(
-                transition_duration_update_generation_for_reset
-                    .get()
-                    .wrapping_add(1),
-            );
-            if let Err(error) =
-                gui_tx_for_reset_now_playing_preferences.try_send(ResetNowPlayingPreferences)
-            {
-                error!("failed to reset Now Playing preferences: {error}");
-            }
-        });
-
-        let applying_now_playing_settings_for_round_corners = applying_now_playing_settings.clone();
-        let gui_tx_for_round_corners = self.gui_tx.clone();
-        round_corners_setting.connect_active_notify(move |switch_row| {
-            if applying_now_playing_settings_for_round_corners.get() {
-                return;
-            }
-            send_preference_update(&gui_tx_for_round_corners, |preference| {
-                preference.now_playing_round_corners = Some(switch_row.is_active());
-            });
-        });
-
-        let applying_now_playing_settings_for_alignment_left =
-            applying_now_playing_settings.clone();
-        let gui_tx_for_alignment_left = self.gui_tx.clone();
-        track_info_alignment_left.connect_toggled(move |button| {
-            if !applying_now_playing_settings_for_alignment_left.get() && button.is_active() {
-                send_preference_update(&gui_tx_for_alignment_left, |preference| {
-                    preference.now_playing_track_info_alignment =
-                        Some(TrackInfoAlignment::Left.as_preference_value().to_string());
-                });
-            }
-        });
-
-        let applying_now_playing_settings_for_alignment_center =
-            applying_now_playing_settings.clone();
-        let gui_tx_for_alignment_center = self.gui_tx.clone();
-        track_info_alignment_center.connect_toggled(move |button| {
-            if !applying_now_playing_settings_for_alignment_center.get() && button.is_active() {
-                send_preference_update(&gui_tx_for_alignment_center, |preference| {
-                    preference.now_playing_track_info_alignment =
-                        Some(TrackInfoAlignment::Center.as_preference_value().to_string());
-                });
-            }
-        });
-
-        let applying_now_playing_settings_for_hide = applying_now_playing_settings.clone();
-        let gui_tx_for_hide_info = self.gui_tx.clone();
-        let track_info_alignment_for_hide = track_info_alignment_setting.clone();
-        hide_track_info_setting.connect_active_notify(move |switch_row| {
-            if applying_now_playing_settings_for_hide.get() {
-                return;
-            }
-            track_info_alignment_for_hide.set_sensitive(!switch_row.is_active());
-            send_preference_update(&gui_tx_for_hide_info, |preference| {
-                preference.hide_now_playing_info = Some(switch_row.is_active());
-            });
-        });
-
-        let applying_now_playing_settings_for_album_cover_size =
-            applying_now_playing_settings.clone();
-        let gui_tx_for_album_cover_size = self.gui_tx.clone();
-        album_cover_size_scale.connect_value_changed(move |scale| {
-            if applying_now_playing_settings_for_album_cover_size.get() {
-                return;
-            }
-
-            let size = AlbumCoverSize::from_scale_value(scale.value());
-            send_preference_update(&gui_tx_for_album_cover_size, |preference| {
-                preference.now_playing_album_cover_size = Some(size.as_preference_value());
-            });
-        });
-
-        let applying_now_playing_settings_for_always_display_last =
-            applying_now_playing_settings.clone();
-        let gui_tx_for_always_display_last = self.gui_tx.clone();
-        always_display_last_recognized_song_setting.connect_active_notify(move |switch_row| {
-            if applying_now_playing_settings_for_always_display_last.get() {
-                return;
-            }
-            send_preference_update(&gui_tx_for_always_display_last, |preference| {
-                preference.always_display_last_recognized_song = Some(switch_row.is_active());
-            });
-        });
-
-        let applying_now_playing_settings_for_transition = applying_now_playing_settings.clone();
-        let gui_tx_for_transition = self.gui_tx.clone();
-        let transition_duration_for_effect = transition_duration_scale.clone();
-        let transition_duration_update_generation_for_transition =
-            transition_duration_update_generation.clone();
-        let pending_transition_duration_for_transition = pending_transition_duration_ms.clone();
-        transition_setting.connect_selected_notify(move |combo| {
-            if applying_now_playing_settings_for_transition.get() {
-                return;
-            }
-            let effect = TransitionEffect::from_index(combo.selected());
-            transition_duration_for_effect.set_sensitive(!matches!(effect, TransitionEffect::None));
-            pending_transition_duration_for_transition.set(None);
-            transition_duration_update_generation_for_transition.set(
-                transition_duration_update_generation_for_transition
-                    .get()
-                    .wrapping_add(1),
-            );
-            send_preference_update(&gui_tx_for_transition, |preference| {
-                preference.now_playing_transition = Some(effect.as_preference_value().to_string());
-                preference.now_playing_transition_duration_ms = Some(
-                    transition_duration_from_scale(transition_duration_for_effect.value()),
-                );
-            });
-        });
-
-        let applying_now_playing_settings_for_duration = applying_now_playing_settings.clone();
-        let gui_tx_for_transition_duration = self.gui_tx.clone();
-        let transition_duration_update_generation_for_refresh =
-            transition_duration_update_generation.clone();
-        let pending_transition_duration_for_refresh = pending_transition_duration_ms.clone();
-        let pending_transition_duration_for_duration = pending_transition_duration_ms.clone();
-        transition_duration_scale.connect_value_changed(move |scale| {
-            if applying_now_playing_settings_for_duration.get() {
-                return;
-            }
-            let duration_ms = transition_duration_from_scale(scale.value());
-            pending_transition_duration_for_duration.set(Some(duration_ms));
-            schedule_transition_duration_update(
-                gui_tx_for_transition_duration.clone(),
-                transition_duration_update_generation.clone(),
-                pending_transition_duration_for_duration.clone(),
-                duration_ms,
-            );
-        });
-
-        let applying_now_playing_settings_for_lights_off = applying_now_playing_settings.clone();
-        let gui_tx_for_lights_off = self.gui_tx.clone();
-        let hide_for_lights = hide_track_info_setting.clone();
-        let round_for_lights = round_corners_setting.clone();
-        let album_cover_size_for_lights = album_cover_size_scale.clone();
-        let track_info_alignment_for_lights = track_info_alignment_setting.clone();
-        lights_off_setting.connect_active_notify(move |switch_row| {
-            if applying_now_playing_settings_for_lights_off.get() {
-                return;
-            }
-
-            let lights_off = switch_row.is_active();
-            if lights_off {
-                let was_applying_settings =
-                    applying_now_playing_settings_for_lights_off.replace(true);
-                hide_for_lights.set_active(false);
-                applying_now_playing_settings_for_lights_off.set(was_applying_settings);
-            }
-            send_preference_update(&gui_tx_for_lights_off, |preference| {
-                preference.lights_off_enabled = Some(lights_off);
-                if lights_off {
-                    preference.hide_now_playing_info = Some(false);
-                }
-            });
-            hide_for_lights.set_sensitive(!lights_off);
-            round_for_lights.set_sensitive(!lights_off);
-            album_cover_size_for_lights.set_sensitive(!lights_off);
-            track_info_alignment_for_lights.set_sensitive(!hide_for_lights.is_active());
-        });
-
-        let applying_now_playing_settings_for_gradient = applying_now_playing_settings.clone();
-        let gui_tx_for_gradient = self.gui_tx.clone();
-        background_style_gradient.connect_toggled(move |check| {
-            if !applying_now_playing_settings_for_gradient.get() && check.is_active() {
-                send_preference_update(&gui_tx_for_gradient, |preference| {
-                    preference.now_playing_background_style =
-                        Some(BackgroundStyle::Gradient.as_preference_value().to_string());
-                });
-            }
-        });
-
-        let applying_now_playing_settings_for_solid = applying_now_playing_settings.clone();
-        let gui_tx_for_solid = self.gui_tx.clone();
-        background_style_solid.connect_toggled(move |check| {
-            if !applying_now_playing_settings_for_solid.get() && check.is_active() {
-                send_preference_update(&gui_tx_for_solid, |preference| {
-                    preference.now_playing_background_style =
-                        Some(BackgroundStyle::Solid.as_preference_value().to_string());
-                });
-            }
-        });
-
         // Double-clicking the small recognition artwork opens the dedicated artwork window.
         let now_playing_window_for_results = now_playing_window.clone();
-        let last_recognized_song_for_results = last_recognized_song.clone();
-        let preferences_for_results = preferences_interface_ptr.clone();
-        let gui_tx_for_results = self.gui_tx.clone();
+        let recognition_state_for_results = recognition_state.clone();
+        let now_playing_controller_for_results = now_playing_controller.clone();
         let results_click = gtk::GestureClick::new();
         results_click.set_button(1);
         results_click.connect_pressed(move |_, n_press, _, _| {
             if n_press == 2 {
                 open_now_playing_window(
                     &now_playing_window_for_results,
-                    &last_recognized_song_for_results,
-                    &preferences_for_results,
-                    &gui_tx_for_results,
+                    &recognition_state_for_results,
+                    &now_playing_controller_for_results,
                 );
             }
         });
@@ -1127,8 +855,6 @@ impl App {
         let _old_preferences = self.old_preferences.clone();
         let ctx_buffered_log = self.ctx_buffered_log.clone();
         let application = application.clone();
-        let applying_now_playing_settings_for_refresh = applying_now_playing_settings.clone();
-
         glib::spawn_future_local(async move {
             #[cfg(all(target_os = "linux", feature = "mpris"))]
             let mut mpris_obj = {
@@ -1185,7 +911,10 @@ impl App {
                                 "artist_name": msg.artist_name,
                                 "album_name": msg.album_name,
                                 "song_name": msg.song_name,
-                                "cover_image": msg.cover_image.as_ref().map(|data| format!("{:02x?}...", &data[..16])),
+                                "cover_image": msg.cover_image.as_ref().map(|artwork| {
+                                    let encoded = artwork.encoded();
+                                    format!("{:02x?}...", &encoded[..encoded.len().min(16)])
+                                }),
                                 "track_key": msg.track_key,
                                 "release_year": msg.release_year,
                                 "genre": msg.genre,
@@ -1197,112 +926,19 @@ impl App {
                     }
 
                     match gui_message {
-                        ErrorMessage(_) | NetworkStatus(_) | SongRecognized(_) => {
+                        ErrorMessage(_) | NoRecognition | NetworkStatus(_) | SongRecognized(_) => {
                             recognize_file_row.set_sensitive(true);
                             spinner_row.set_visible(false);
                         }
                         _ => {}
                     }
 
-                    let resetting_now_playing_preferences =
-                        matches!(&gui_message, ResetNowPlayingPreferences);
-                    let gui_message = if resetting_now_playing_preferences {
-                        UpdatePreference(Preferences::now_playing_defaults())
-                    } else {
-                        gui_message
-                    };
-
                     match gui_message {
                         UpdatePreference(new_preference) => {
-                            if resetting_now_playing_preferences {
-                                pending_transition_duration_for_refresh.set(None);
-                                transition_duration_update_generation_for_refresh.set(
-                                    transition_duration_update_generation_for_refresh
-                                        .get()
-                                        .wrapping_add(1),
-                                );
-                            }
-
                             preferences_interface_ptr
                                 .lock()
                                 .unwrap()
                                 .update(new_preference);
-
-                            let preferences = preferences_interface_ptr
-                                .lock()
-                                .unwrap()
-                                .preferences
-                                .clone();
-
-                            let mut now_playing_settings = NowPlayingSettings::from(&preferences);
-                            let pending_duration_ms = pending_transition_duration_for_refresh.get();
-                            let (duration_ms, pending_duration_ms_after_refresh) =
-                                reconcile_transition_duration(
-                                    now_playing_settings.transition_duration_ms,
-                                    pending_duration_ms,
-                                );
-                            now_playing_settings.transition_duration_ms = duration_ms;
-                            if pending_duration_ms_after_refresh != pending_duration_ms {
-                                pending_transition_duration_for_refresh
-                                    .set(pending_duration_ms_after_refresh);
-                                transition_duration_update_generation_for_refresh.set(
-                                    transition_duration_update_generation_for_refresh
-                                        .get()
-                                        .wrapping_add(1),
-                                );
-                            }
-                            let was_applying_settings =
-                                applying_now_playing_settings_for_refresh.replace(true);
-
-                            round_corners_setting.set_active(now_playing_settings.round_corners);
-                            hide_track_info_setting
-                                .set_active(now_playing_settings.hide_track_info);
-                            match now_playing_settings.track_info_alignment {
-                                TrackInfoAlignment::Left => {
-                                    track_info_alignment_left.set_active(true);
-                                }
-                                TrackInfoAlignment::Center => {
-                                    track_info_alignment_center.set_active(true);
-                                }
-                            }
-                            album_cover_size_scale
-                                .set_value(now_playing_settings.album_cover_size.scale_value());
-                            hide_track_info_setting.set_sensitive(!now_playing_settings.lights_off);
-                            round_corners_setting.set_sensitive(!now_playing_settings.lights_off);
-                            album_cover_size_scale.set_sensitive(!now_playing_settings.lights_off);
-                            track_info_alignment_setting
-                                .set_sensitive(!now_playing_settings.hide_track_info);
-                            always_display_last_recognized_song_setting.set_active(
-                                now_playing_settings.always_display_last_recognized_song,
-                            );
-                            transition_setting
-                                .set_selected(now_playing_settings.transition.index());
-                            transition_duration_scale
-                                .set_value(now_playing_settings.transition_duration_ms as f64);
-                            transition_duration_scale.set_sensitive(!matches!(
-                                now_playing_settings.transition,
-                                TransitionEffect::None
-                            ));
-                            lights_off_setting.set_active(now_playing_settings.lights_off);
-                            match now_playing_settings.background_style {
-                                BackgroundStyle::Gradient => {
-                                    background_style_gradient.set_active(true);
-                                    background_style_solid.set_active(false);
-                                }
-                                BackgroundStyle::Solid => {
-                                    background_style_gradient.set_active(false);
-                                    background_style_solid.set_active(true);
-                                }
-                            }
-                            applying_now_playing_settings_for_refresh.set(was_applying_settings);
-
-                            if let Some(ref now_playing_window) = *now_playing_window.borrow() {
-                                if resetting_now_playing_preferences {
-                                    now_playing_window.cancel_pending_transition_duration_update();
-                                }
-                                now_playing_window.refresh_from_preferences(&preferences);
-                            }
-
                             #[cfg(all(target_os = "linux", feature = "mpris"))]
                             if _enable_mpris_cli {
                                 let mpris_enabled = preferences_interface_ptr
@@ -1339,31 +975,64 @@ impl App {
                                 }
                             }
                         }
-                        ErrorMessage(string) => {
-                            if string == gettext("No match for this song") {
-                                if let Some(ref now_playing_window) = *now_playing_window.borrow() {
-                                    now_playing_window.handle_no_recognition();
+                        NowPlayingPreferenceChanged { change, persist } => {
+                            if persist {
+                                preferences_interface_ptr
+                                    .lock()
+                                    .unwrap()
+                                    .update_now_playing(change);
+                            }
+
+                            let settings = now_playing_controller.settings();
+                            now_playing_preferences_view.apply(settings);
+
+                            if let Some(ref window) = *now_playing_window.borrow() {
+                                window.refresh_from_controller();
+
+                                if matches!(
+                                    &*recognition_state.borrow(),
+                                    RecognitionState::NoMatch { .. }
+                                ) {
+                                    if let Some(track) = recognition_state
+                                        .borrow()
+                                        .visible_track(settings.always_display_last_recognized_song)
+                                    {
+                                        window.update(&track);
+                                    } else {
+                                        window.set_listening_state();
+                                    }
                                 }
                             }
-                            if !(string == gettext("No match for this song")
-                                && (microphone_switch.is_active() || loopback_switch.is_active()))
-                            {
-                                error!("Displaying error: {}", string);
+                        }
+                        ErrorMessage(string) => {
+                            error!("Displaying error: {}", string);
+                            let dialog = adw::AlertDialog::builder()
+                                .body(&string)
+                                .close_response("ok")
+                                .default_response("ok")
+                                .build();
+                            dialog.add_responses(&[("ok", &gettext("_Ok"))]);
+                            glib::spawn_future_local(dialog.choose_future(Some(&window)));
+                            Self::notify_application_error(
+                                preferences_interface_ptr.clone(),
+                                &string,
+                                &application,
+                            );
+                        }
+                        NoRecognition => {
+                            recognition_state.borrow_mut().record_no_match();
+                            if let Some(ref now_playing_window) = *now_playing_window.borrow() {
+                                now_playing_window.handle_no_recognition();
+                            }
+
+                            if !microphone_switch.is_active() && !loopback_switch.is_active() {
                                 let dialog = adw::AlertDialog::builder()
-                                    .body(&string)
+                                    .body(gettext("No match for this song"))
                                     .close_response("ok")
                                     .default_response("ok")
                                     .build();
                                 dialog.add_responses(&[("ok", &gettext("_Ok"))]);
                                 glib::spawn_future_local(dialog.choose_future(Some(&window)));
-
-                                if string != gettext("No match for this song") {
-                                    Self::notify_application_error(
-                                        preferences_interface_ptr.clone(),
-                                        &string,
-                                        &application,
-                                    );
-                                }
                             }
                         }
                         RateLimitState(is_rate_limited) => {
@@ -1414,19 +1083,14 @@ impl App {
                             }
                         }
                         SongRecognized(message) => {
-                            last_recognized_song.replace(Some((*message).clone()));
+                            recognition_state
+                                .borrow_mut()
+                                .record_recognition(message.clone());
                             if let Some(ref now_playing_window) = *now_playing_window.borrow() {
                                 now_playing_window.update(&message);
                             }
 
                             results_section.set_visible(true);
-
-                            // https://gtk-rs.org/gtk4-rs/git/docs/gdk4/struct.Texture.html#method.from_bytes
-                            // https://docs.gtk.org/gdk4/ctor.Texture.new_from_bytes.html
-                            // The file format is detected automatically. The supported formats are PNG, JPEG and TIFF, though more formats might be available.
-
-                            // + https://gtk-rs.org/gtk4-rs/git/docs/gtk4/struct.Image.html#method.set_paintable
-                            // + https://docs.gtk.org/gtk4/method.Image.set_from_paintable.html
 
                             let song_name =
                                 format!("{} - {}", message.artist_name, message.song_name);
@@ -1438,19 +1102,12 @@ impl App {
                                     gio::Notification::new(&gettext("Song recognized"));
                                 notification.set_body(Some(&song_name));
 
-                                if let Some(ref cover_image) = message.cover_image
-                                    && let Ok(texture) =
-                                        gdk::Texture::from_bytes(&glib::Bytes::from(cover_image))
-                                {
+                                if let Some(ref cover_image) = message.cover_image {
+                                    let texture = artwork_texture(cover_image);
                                     results_image.set_visible(true);
                                     results_image.set_paintable(Some(&texture));
 
-                                    match message.album_name {
-                                        Some(ref value) => {
-                                            results_image.set_tooltip_text(Some(value))
-                                        }
-                                        None => results_image.set_tooltip_text(None),
-                                    };
+                                    results_image.set_tooltip_text(message.album_name.as_deref());
                                     notification.set_icon(&texture);
                                 } else {
                                     results_image.set_visible(false);
@@ -1481,10 +1138,12 @@ impl App {
 
                                 let new_entry = SongHistoryRecord {
                                     song_name,
-                                    album: Some(message.album_name.unwrap_or_default()),
-                                    track_key: Some(message.track_key),
-                                    release_year: Some(message.release_year.unwrap_or_default()),
-                                    genre: Some(message.genre.unwrap_or_default()),
+                                    album: Some(message.album_name.clone().unwrap_or_default()),
+                                    track_key: Some(message.track_key.clone()),
+                                    release_year: Some(
+                                        message.release_year.clone().unwrap_or_default(),
+                                    ),
+                                    genre: Some(message.genre.clone().unwrap_or_default()),
                                     recognition_date: Local::now().format("%c").to_string(),
                                 };
 
@@ -1502,6 +1161,64 @@ impl App {
                                 song_history_interface
                                     .borrow_mut()
                                     .add_row_and_save(new_entry);
+                            }
+                        }
+                        ArtworkDownloaded { track_key, artwork } => {
+                            let (latest_track, visible_track) = {
+                                let mut state = recognition_state.borrow_mut();
+                                if !state.apply_artwork(&track_key, artwork) {
+                                    continue;
+                                }
+                                let settings = now_playing_controller.settings();
+                                (
+                                    state.last_recognized(),
+                                    state.visible_track(
+                                        settings.always_display_last_recognized_song,
+                                    ),
+                                )
+                            };
+
+                            if let Some(track) = visible_track
+                                && let Some(ref now_playing_window) = *now_playing_window.borrow()
+                            {
+                                now_playing_window.update(&track);
+                            }
+
+                            if let Some(track) = latest_track {
+                                if let Some(ref artwork) = track.cover_image {
+                                    let texture = artwork_texture(artwork);
+                                    results_image.set_visible(true);
+                                    results_image.set_paintable(Some(&texture));
+                                    results_image.set_tooltip_text(track.album_name.as_deref());
+                                }
+
+                                #[cfg(all(target_os = "linux", feature = "mpris"))]
+                                if preferences_interface_ptr
+                                    .lock()
+                                    .unwrap()
+                                    .preferences
+                                    .enable_mpris_v2
+                                    != Some(false)
+                                    && let Some(ref player) = mpris_obj
+                                {
+                                    update_song(player, &track, &mut last_cover_path).await;
+                                }
+                            }
+                        }
+                        ArtworkUnavailable { track_key } => {
+                            let visible_track = {
+                                let mut state = recognition_state.borrow_mut();
+                                if !state.apply_artwork_unavailable(&track_key) {
+                                    continue;
+                                }
+                                let settings = now_playing_controller.settings();
+                                state.visible_track(settings.always_display_last_recognized_song)
+                            };
+
+                            if let Some(track) = visible_track
+                                && let Some(ref now_playing_window) = *now_playing_window.borrow()
+                            {
+                                now_playing_window.update(&track);
                             }
                         }
                         DevicesList(devices) => {
@@ -1840,7 +1557,7 @@ impl App {
                 let new_state = !action_state; // toggle
                 action.set_state(&new_state.to_variant());
 
-                let mut new_preference: Preferences = Preferences::new();
+                let mut new_preference = PreferencesPatch::new();
                 new_preference.enable_mpris_v2 = Some(new_state);
                 gui_tx
                     .try_send(GUIMessage::UpdatePreference(new_preference))
@@ -1863,7 +1580,7 @@ impl App {
                 let new_state = !action_state; // toggle
                 action.set_state(&new_state.to_variant());
 
-                let mut new_preference: Preferences = Preferences::new();
+                let mut new_preference = PreferencesPatch::new();
                 new_preference.enable_notifications = Some(new_state);
                 gui_tx
                     .try_send(GUIMessage::UpdatePreference(new_preference))
@@ -1893,7 +1610,7 @@ impl App {
                         Self::unsetup_systray(ctx_systray_handle, window.clone());
                     }
 
-                    let mut new_preference: Preferences = Preferences::new();
+                    let mut new_preference = PreferencesPatch::new();
                     new_preference.enable_systray = Some(new_state);
                     _gui_tx
                         .try_send(GUIMessage::UpdatePreference(new_preference))
@@ -1912,7 +1629,7 @@ impl App {
                 let new_state = !action_state; // toggle
                 action.set_state(&new_state.to_variant());
 
-                let mut new_preference: Preferences = Preferences::new();
+                let mut new_preference = PreferencesPatch::new();
                 new_preference.no_duplicates = Some(new_state);
                 gui_tx
                     .try_send(GUIMessage::UpdatePreference(new_preference))
@@ -1943,17 +1660,15 @@ impl App {
             .build();
 
         let now_playing_window_for_action = self.now_playing_window.clone();
-        let last_recognized_song_for_action = self.last_recognized_song.clone();
-        let preferences_for_action = self.preferences_interface.clone();
-        let gui_tx_for_action = self.gui_tx.clone();
+        let recognition_state_for_action = self.recognition_state.clone();
+        let now_playing_controller_for_action = self.now_playing_controller.clone();
 
         let action_show_now_playing = gio::ActionEntry::builder("show-now-playing")
             .activate(move |_, _, _| {
                 open_now_playing_window(
                     &now_playing_window_for_action,
-                    &last_recognized_song_for_action,
-                    &preferences_for_action,
-                    &gui_tx_for_action,
+                    &recognition_state_for_action,
+                    &now_playing_controller_for_action,
                 );
             })
             .build();
@@ -2004,42 +1719,4 @@ impl App {
 
         window.present();
     }
-}
-
-fn send_preference_update(
-    gui_tx: &async_channel::Sender<GUIMessage>,
-    configure: impl FnOnce(&mut Preferences),
-) {
-    let mut preference = Preferences::new();
-    configure(&mut preference);
-
-    if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
-        error!("failed to send preference update: {error}");
-    }
-}
-
-fn schedule_transition_duration_update(
-    gui_tx: async_channel::Sender<GUIMessage>,
-    generation: Rc<Cell<u64>>,
-    pending_duration_ms: Rc<Cell<Option<u64>>>,
-    duration_ms: u64,
-) {
-    let current_generation = generation.get().wrapping_add(1);
-    generation.set(current_generation);
-
-    glib::timeout_add_local_once(Duration::from_millis(150), move || {
-        if generation.get() != current_generation || pending_duration_ms.get() != Some(duration_ms)
-        {
-            return;
-        }
-
-        let mut preference = Preferences::new();
-        preference.now_playing_transition_duration_ms = Some(duration_ms);
-        if let Err(error) = gui_tx.try_send(GUIMessage::UpdatePreference(preference)) {
-            error!("failed to send preference update: {error}");
-            if pending_duration_ms.get() == Some(duration_ms) {
-                pending_duration_ms.set(None);
-            }
-        }
-    });
 }
