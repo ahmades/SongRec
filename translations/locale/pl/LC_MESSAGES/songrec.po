@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-27 16:46+0200\n"
+"POT-Creation-Date: 2026-08-28 00:02+0200\n"
 "PO-Revision-Date: 2021-12-26 11:36+0100\n"
 "Last-Translator: Rafał Mikrut <qarminkrut@gmail.com>\n"
 "Language-Team: \n"
@@ -331,7 +331,7 @@ msgstr ""
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:87 src/gui/now_playing_window/ui.rs:138
+#: src/gui/now_playing_window/track.rs:89 src/gui/now_playing_window/ui.rs:138
 msgid "Listening..."
 msgstr ""
 

@@ -1,14 +1,16 @@
 //! Recognition-result presentation and transition handling.
 
 use super::background::{CachedGradient, redraw_background};
-use super::palette::{Background, prepare_artwork};
+use super::palette::{Background, background_from_artwork, prepare_artwork};
 use super::state::{PresentationAction, PresentationMode, PresentedTrack, TrackPresentationState};
 use super::{NowPlayingSettings, NowPlayingWindow, TransitionEffect};
+use crate::core::artwork::Artwork;
 use crate::core::thread_messages::SongRecognizedMessage;
 use adw::prelude::*;
 use gettextrs::gettext;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::Arc;
 
 /// Converts the user-facing total transition duration into one hide/reveal leg.
 pub(super) fn transition_leg_duration_ms(total_duration_ms: u64) -> u32 {
@@ -162,8 +164,18 @@ impl NowPlayingWindow {
 
     /// Refreshes the displayed song metadata and artwork from a recognition result.
     pub fn update(&self, message: &SongRecognizedMessage) {
-        let artwork = message.cover_image.as_deref().map(prepare_artwork);
-        let track = Rc::new(PresentedTrack::from_message(message, artwork));
+        let prepared_artwork = message.cover_image.as_ref().and_then(|artwork| {
+            self.state
+                .track_presentation
+                .borrow()
+                .prepared_artwork_for(&message.track_key, artwork)
+        });
+        let palette_pending = message.cover_image.is_some() && prepared_artwork.is_none();
+        let track = Rc::new(PresentedTrack::from_message(
+            message,
+            prepared_artwork,
+            palette_pending,
+        ));
         if !track.has_visible_information() {
             self.handle_no_recognition();
             return;
@@ -198,6 +210,60 @@ impl NowPlayingWindow {
             }
             PresentationAction::None | PresentationAction::RenderListening => {}
         }
+
+        if palette_pending {
+            self.prepare_artwork_palette(
+                message.track_key.clone(),
+                message
+                    .cover_image
+                    .as_ref()
+                    .expect("palette preparation requires artwork")
+                    .clone(),
+            );
+        }
+    }
+
+    /// Prepares the Now Playing-only palette away from GTK's main thread.
+    fn prepare_artwork_palette(&self, track_key: String, artwork: Arc<Artwork>) {
+        if !self
+            .state
+            .artwork_preparations
+            .borrow_mut()
+            .start(&track_key, &artwork)
+        {
+            return;
+        }
+
+        let preparation_jobs = self.state.artwork_preparations.clone();
+        let track_state = self.state.track_presentation.clone();
+        let presentation = TrackPresentation::from_window(self);
+        let revealer = self.ui.content_revealer.clone();
+        glib::spawn_future_local(async move {
+            let artwork_for_worker = artwork.clone();
+            let background =
+                match gio::spawn_blocking(move || background_from_artwork(&artwork_for_worker))
+                    .await
+                {
+                    Ok(background) => background,
+                    Err(_) => {
+                        log::warn!("Now Playing palette preparation task panicked");
+                        Background::fallback()
+                    }
+                };
+
+            if !preparation_jobs.borrow_mut().finish(&track_key, &artwork) {
+                return;
+            }
+
+            let prepared = prepare_artwork(&artwork, background);
+            let action = track_state
+                .borrow_mut()
+                .apply_prepared_artwork(&track_key, &artwork, prepared);
+            if let PresentationAction::RenderTrack(track) = action {
+                presentation.apply_action(PresentationAction::RenderTrack(track));
+                revealer.set_reveal_child(true);
+            }
+        });
     }
 
     /// Clears the current track and shows the listening placeholder.
@@ -263,7 +329,7 @@ pub(super) fn artwork_visibility(mode: PresentationMode, lights_off: bool) -> (b
 #[cfg(test)]
 mod tests {
     use super::{artwork_visibility, background_after_track_update, transition_leg_duration_ms};
-    use crate::core::artwork::ArtworkBackground as Background;
+    use crate::gui::now_playing_window::palette::Background;
     use crate::gui::now_playing_window::state::PresentationMode;
 
     #[test]

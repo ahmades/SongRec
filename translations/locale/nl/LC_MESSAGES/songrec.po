@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-27 16:46+0200\n"
+"POT-Creation-Date: 2026-08-28 00:02+0200\n"
 "PO-Revision-Date: 2026-03-09 02:16+0000\n"
 "Last-Translator: Marin <25437947+marin-m@users.noreply.github.com>\n"
 "Language-Team: Dutch <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -337,7 +337,7 @@ msgstr ""
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:87 src/gui/now_playing_window/ui.rs:138
+#: src/gui/now_playing_window/track.rs:89 src/gui/now_playing_window/ui.rs:138
 msgid "Listening..."
 msgstr ""
 

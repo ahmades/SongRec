@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-27 16:46+0200\n"
+"POT-Creation-Date: 2026-08-28 00:02+0200\n"
 "PO-Revision-Date: 2026-07-06 14:05+0000\n"
 "Last-Translator: Arda Aydın <arda.aydin@operationsilkscarf.com>\n"
 "Language-Team: Turkish <https://weblate.fossplant.re/projects/songrec/"
@@ -339,7 +339,7 @@ msgstr ""
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:87 src/gui/now_playing_window/ui.rs:138
+#: src/gui/now_playing_window/track.rs:89 src/gui/now_playing_window/ui.rs:138
 msgid "Listening..."
 msgstr ""
 

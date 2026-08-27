@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-27 16:46+0200\n"
+"POT-Creation-Date: 2026-08-28 00:02+0200\n"
 "PO-Revision-Date: 2022-07-24 13:29+0200\n"
 "Last-Translator: Ismael Ferreras Morezuelas <swyterzone+songrec@gmail.com>\n"
 "Language-Team: Swyter <swyterzone@gmail.com>\n"
@@ -342,7 +342,7 @@ msgstr ""
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:87 src/gui/now_playing_window/ui.rs:138
+#: src/gui/now_playing_window/track.rs:89 src/gui/now_playing_window/ui.rs:138
 msgid "Listening..."
 msgstr ""
 
