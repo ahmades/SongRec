@@ -142,6 +142,17 @@ impl RecognitionState {
         }
     }
 
+    /// Whether the main window has a successful recognition result available.
+    pub fn has_recognition_result(&self) -> bool {
+        matches!(
+            self,
+            Self::Recognized(_)
+                | Self::NoMatch {
+                    last_recognized: Some(_)
+                }
+        )
+    }
+
     pub fn last_recognized(&self) -> Option<Arc<SongRecognizedMessage>> {
         match self {
             Self::Recognized(track) => Some(track.clone()),
@@ -245,8 +256,10 @@ mod tests {
     fn no_match_retains_last_track_without_making_it_unconditionally_visible() {
         let mut state = RecognitionState::default();
         state.record_recognition(track("a"));
+        assert!(state.has_recognition_result());
         state.record_no_match();
 
+        assert!(state.has_recognition_result());
         assert!(state.visible_track(false).is_none());
         assert_eq!(
             state
@@ -261,7 +274,9 @@ mod tests {
     fn never_attempted_and_no_match_are_distinct() {
         let mut state = RecognitionState::default();
         assert!(matches!(state, RecognitionState::NeverAttempted));
+        assert!(!state.has_recognition_result());
         state.record_no_match();
+        assert!(!state.has_recognition_result());
         assert!(matches!(
             state,
             RecognitionState::NoMatch {

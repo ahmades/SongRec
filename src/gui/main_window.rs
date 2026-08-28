@@ -88,6 +88,10 @@ fn open_now_playing_window(
     recognition_state: &Rc<RefCell<RecognitionState>>,
     controller: &SettingsController,
 ) {
+    if !recognition_state.borrow().has_recognition_result() {
+        return;
+    }
+
     if now_playing_window.borrow().is_none() {
         let window = NowPlayingWindow::new_with_controller(controller.clone());
         let settings = controller.settings();

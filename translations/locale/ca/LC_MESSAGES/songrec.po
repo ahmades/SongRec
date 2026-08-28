@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 00:02+0200\n"
+"POT-Creation-Date: 2026-08-28 14:43+0200\n"
 "PO-Revision-Date: 2024-01-21 20:01+0100\n"
 "Last-Translator: Pau Giuli <pau@giuli.cat>\n"
 "Language-Team: \n"
@@ -47,7 +47,7 @@ msgstr "Avís: Xarxa no connectada"
 msgid "Error:"
 msgstr "Error:"
 
-#: src/cli_main.rs:190 src/gui/main_window.rs:1030
+#: src/cli_main.rs:190 src/gui/main_window.rs:1034
 msgid "No match for this song"
 msgstr "No hi ha coincidències per aquesta cançó"
 
@@ -186,7 +186,7 @@ msgstr ""
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:525 src/gui/main_window.rs:338
+#: src/core/preferences.rs:525 src/gui/main_window.rs:342
 #: src/gui/interface.blp:129 src/gui/interface.blp:698
 #: src/gui/interface.blp:748
 msgid "Search on YouTube"
@@ -216,39 +216,39 @@ msgstr "Banda de freqüència invàlida en el paquet Shazam descodificat"
 msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr "Freqüència de mostreig invàlida en codificar el paquet Shazam"
 
-#: src/gui/main_window.rs:296
+#: src/gui/main_window.rs:300
 msgid "Application error"
 msgstr ""
 
-#: src/gui/main_window.rs:317
+#: src/gui/main_window.rs:321
 msgid "Network error"
 msgstr ""
 
-#: src/gui/main_window.rs:393
+#: src/gui/main_window.rs:397
 msgid "Unable to enable notification icon"
 msgstr ""
 
-#: src/gui/main_window.rs:882 src/gui/main_window.rs:966
+#: src/gui/main_window.rs:886 src/gui/main_window.rs:970
 msgid "Unable to enable MPRIS support"
 msgstr "No s'ha pogut activar el suport per MPRIS"
 
-#: src/gui/main_window.rs:1014 src/gui/main_window.rs:1034
+#: src/gui/main_window.rs:1018 src/gui/main_window.rs:1038
 msgid "_Ok"
 msgstr ""
 
-#: src/gui/main_window.rs:1102
+#: src/gui/main_window.rs:1106
 msgid "Song recognized"
 msgstr "Cançó reconeguda"
 
-#: src/gui/main_window.rs:1292
+#: src/gui/main_window.rs:1296
 msgid "Are you sure you want to wipe history?"
 msgstr "Esteu segur que voleu esborrar l'historial?"
 
-#: src/gui/main_window.rs:1298
+#: src/gui/main_window.rs:1302
 msgid "_Yes"
 msgstr "_Sí"
 
-#: src/gui/main_window.rs:1299
+#: src/gui/main_window.rs:1303
 msgid "_Cancel"
 msgstr "_Cancel·lar"
 

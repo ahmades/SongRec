@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 00:02+0200\n"
+"POT-Creation-Date: 2026-08-28 14:43+0200\n"
 "PO-Revision-Date: 2026-03-09 02:16+0000\n"
 "Last-Translator: Marin <25437947+marin-m@users.noreply.github.com>\n"
 "Language-Team: Dutch <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -47,7 +47,7 @@ msgstr "Waarschuwing: geen internetverbinding"
 msgid "Error:"
 msgstr "Foutmelding:"
 
-#: src/cli_main.rs:190 src/gui/main_window.rs:1030
+#: src/cli_main.rs:190 src/gui/main_window.rs:1034
 msgid "No match for this song"
 msgstr "Er is geen overeenkomst gevonden"
 
@@ -190,7 +190,7 @@ msgstr "Audiofout:"
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:525 src/gui/main_window.rs:338
+#: src/core/preferences.rs:525 src/gui/main_window.rs:342
 #: src/gui/interface.blp:129 src/gui/interface.blp:698
 #: src/gui/interface.blp:748
 msgid "Search on YouTube"
@@ -221,39 +221,39 @@ msgid "Invalid sample rate passed when encoding Shazam packet"
 msgstr ""
 "Ongeldige samplesnelheid doorgegeven tijdens encoderen van Shazam-pakket"
 
-#: src/gui/main_window.rs:296
+#: src/gui/main_window.rs:300
 msgid "Application error"
 msgstr "Programmafout"
 
-#: src/gui/main_window.rs:317
+#: src/gui/main_window.rs:321
 msgid "Network error"
 msgstr "Netwerkfout"
 
-#: src/gui/main_window.rs:393
+#: src/gui/main_window.rs:397
 msgid "Unable to enable notification icon"
 msgstr "Het systeemvakpictogram kan niet worden ingeschakeld"
 
-#: src/gui/main_window.rs:882 src/gui/main_window.rs:966
+#: src/gui/main_window.rs:886 src/gui/main_window.rs:970
 msgid "Unable to enable MPRIS support"
 msgstr "De MPRIS-ondersteuning kan niet worden ingeschakeld"
 
-#: src/gui/main_window.rs:1014 src/gui/main_window.rs:1034
+#: src/gui/main_window.rs:1018 src/gui/main_window.rs:1038
 msgid "_Ok"
 msgstr "_Ok"
 
-#: src/gui/main_window.rs:1102
+#: src/gui/main_window.rs:1106
 msgid "Song recognized"
 msgstr "Het nummer is herkend"
 
-#: src/gui/main_window.rs:1292
+#: src/gui/main_window.rs:1296
 msgid "Are you sure you want to wipe history?"
 msgstr "Weet je zeker dat je de geschiedenis wilt wissen?"
 
-#: src/gui/main_window.rs:1298
+#: src/gui/main_window.rs:1302
 msgid "_Yes"
 msgstr "_Ja"
 
-#: src/gui/main_window.rs:1299
+#: src/gui/main_window.rs:1303
 msgid "_Cancel"
 msgstr "_Annuleren"
 
