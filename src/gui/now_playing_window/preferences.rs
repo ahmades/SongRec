@@ -1,8 +1,9 @@
 //! Applying persisted Now Playing preferences to the active window.
 
+use super::track::TrackPresentation;
 use super::{
-    AlbumCoverSize, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment, TransitionEffect,
-    clamp_transition_duration_ms,
+    AlbumCoverSize, DisplayMode, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment,
+    TransitionEffect, clamp_transition_duration_ms,
 };
 use adw::prelude::*;
 
@@ -23,17 +24,17 @@ impl NowPlayingWindow {
         self.with_preference_updates_suspended(|| {
             self.state.settings.set(settings);
 
-            self.set_round_corners(settings.round_corners);
-            self.set_show_track_info(!settings.hide_track_info);
-            self.set_track_info_alignment(settings.track_info_alignment);
-            self.set_album_cover_size(settings.album_cover_size);
+            self.set_display_mode(settings.display_mode);
+            self.set_round_corners(settings.classic.round_corners);
+            self.set_show_track_info(!settings.classic.hide_track_info);
+            self.set_track_info_alignment(settings.classic.track_info_alignment);
+            self.set_album_cover_size(settings.classic.album_cover_size);
             self.set_always_display_last_recognized_song(
-                settings.always_display_last_recognized_song,
+                settings.shared.always_display_last_recognized_song,
             );
-            self.set_transition(settings.transition);
-            self.set_transition_duration(settings.transition_duration_ms);
-            self.set_lights_off(settings.lights_off);
-            self.set_background_style(settings.background_style);
+            self.set_transition(settings.shared.transition);
+            self.set_transition_duration(settings.shared.transition_duration_ms);
+            self.set_background_style(settings.classic.background_style);
         });
     }
 
@@ -42,6 +43,20 @@ impl NowPlayingWindow {
         let was_applying_settings = self.state.applying_settings.replace(true);
         update();
         self.state.applying_settings.set(was_applying_settings);
+    }
+
+    /// Selects the overall presentation while retaining every mode's stored settings.
+    pub(super) fn set_display_mode(&self, display_mode: DisplayMode) {
+        self.with_preference_updates_suspended(|| {
+            let selected = display_mode.index();
+            if self.controls.display_mode_menu.selected() != selected {
+                self.controls.display_mode_menu.set_selected(selected);
+            }
+            self.controls
+                .classic_settings
+                .set_visible(display_mode.shows_classic_settings());
+        });
+        TrackPresentation::from_window(self).refresh_mode();
     }
 
     /// Selects and applies the transition effect used when a new track replaces the current one.

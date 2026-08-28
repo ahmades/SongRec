@@ -1,9 +1,10 @@
 //! Recognition-result presentation and transition handling.
 
 use super::background::{CachedGradient, redraw_background};
-use super::palette::{Background, background_from_artwork, prepare_artwork};
+use super::palette::{ArtworkVisuals, Background, prepare_artwork, visuals_from_artwork};
 use super::state::{PresentationAction, PresentationMode, PresentedTrack, TrackPresentationState};
-use super::{NowPlayingSettings, NowPlayingWindow, TransitionEffect};
+use super::ui::{AmbientArtworkLayout, CinemaArtworkLayout, configure_immersive_info};
+use super::{DisplayMode, NowPlayingSettings, NowPlayingWindow, TransitionEffect};
 use crate::core::artwork::Artwork;
 use crate::core::thread_messages::SongRecognizedMessage;
 use adw::prelude::*;
@@ -21,13 +22,22 @@ pub(super) fn transition_leg_duration_ms(total_duration_ms: u64) -> u32 {
 ///
 /// GTK callbacks own this lightweight clone instead of borrowing the window.
 #[derive(Clone)]
-struct TrackPresentation {
+pub(super) struct TrackPresentation {
+    classic_content: gtk::Box,
     artwork: gtk::Picture,
+    cinema_artwork: CinemaArtworkLayout,
+    ambient_artwork: AmbientArtworkLayout,
+    scrim_area: gtk::DrawingArea,
     artwork_placeholder: gtk::Label,
     title_label: gtk::Label,
     artist_label: gtk::Label,
     album_label: gtk::Label,
     details_label: gtk::Label,
+    immersive_info_box: gtk::Box,
+    immersive_title_label: gtk::Label,
+    immersive_artist_label: gtk::Label,
+    immersive_album_label: gtk::Label,
+    immersive_details_label: gtk::Label,
     background_area: gtk::DrawingArea,
     gradient_surface: Rc<RefCell<Option<CachedGradient>>>,
     settings: Rc<Cell<NowPlayingSettings>>,
@@ -36,14 +46,23 @@ struct TrackPresentation {
 }
 
 impl TrackPresentation {
-    fn from_window(window: &NowPlayingWindow) -> Self {
+    pub(super) fn from_window(window: &NowPlayingWindow) -> Self {
         Self {
+            classic_content: window.ui.classic_content.clone(),
             artwork: window.ui.artwork.clone(),
+            cinema_artwork: window.ui.cinema_artwork.clone(),
+            ambient_artwork: window.ui.ambient_artwork.clone(),
+            scrim_area: window.ui.scrim_area.clone(),
             artwork_placeholder: window.ui.artwork_placeholder.clone(),
             title_label: window.ui.title_label.clone(),
             artist_label: window.ui.artist_label.clone(),
             album_label: window.ui.album_label.clone(),
             details_label: window.ui.details_label.clone(),
+            immersive_info_box: window.ui.immersive_info_box.clone(),
+            immersive_title_label: window.ui.immersive_title_label.clone(),
+            immersive_artist_label: window.ui.immersive_artist_label.clone(),
+            immersive_album_label: window.ui.immersive_album_label.clone(),
+            immersive_details_label: window.ui.immersive_details_label.clone(),
             background_area: window.ui.background_area.clone(),
             gradient_surface: window.state.gradient_surface.clone(),
             settings: window.state.settings.clone(),
@@ -69,9 +88,18 @@ impl TrackPresentation {
 
         let artwork_background = if let Some(artwork) = track.artwork.as_ref() {
             self.artwork.set_paintable(Some(&artwork.texture));
+            self.cinema_artwork
+                .set_artwork(Some(&artwork.texture), Some(&artwork.ambient_texture));
+            self.ambient_artwork
+                .set_artwork(Some(&artwork.texture), Some(&artwork.ambient_texture));
             Some(artwork.background)
         } else {
-            self.artwork.set_paintable(Option::<&gdk::Texture>::None);
+            // Recognition metadata arrives before its separately downloaded
+            // cover. Keep the outgoing visuals until the new preparation is
+            // ready so immersive modes never flash through an empty frame.
+            if !track.artwork_pending {
+                self.clear_artwork();
+            }
             None
         };
         self.current_background.set(background_after_track_update(
@@ -87,11 +115,15 @@ impl TrackPresentation {
     /// Renders the deterministic empty/listening state while preserving the background.
     fn render_listening(&self) {
         self.artwork_placeholder.set_label(&gettext("Listening..."));
-        self.artwork.set_paintable(Option::<&gdk::Texture>::None);
+        self.clear_artwork();
         self.title_label.set_label("");
         self.artist_label.set_label("");
         self.album_label.set_label("");
         self.details_label.set_label("");
+        self.immersive_title_label.set_label("");
+        self.immersive_artist_label.set_label("");
+        self.immersive_album_label.set_label("");
+        self.immersive_details_label.set_label("");
         self.sync_artwork_visibility();
     }
 
@@ -102,14 +134,64 @@ impl TrackPresentation {
             .set_label(optional_metadata(&track.album_name));
         self.details_label
             .set_label(optional_metadata(&track.release_year));
+        self.immersive_title_label.set_label(&track.song_name);
+        self.immersive_artist_label.set_label(&track.artist_name);
+        self.immersive_album_label
+            .set_label(optional_metadata(&track.album_name));
+        self.immersive_details_label
+            .set_label(optional_metadata(&track.release_year));
+    }
+
+    fn clear_artwork(&self) {
+        self.artwork.set_paintable(Option::<&gdk::Texture>::None);
+        self.cinema_artwork.set_artwork(None, None);
+        self.ambient_artwork.set_artwork(None, None);
     }
 
     fn sync_artwork_visibility(&self) {
-        let mode = self.track_state.borrow().mode;
-        let (show_artwork, show_listening) =
-            artwork_visibility(mode, self.settings.get().lights_off);
-        self.artwork.set_visible(show_artwork);
-        self.artwork_placeholder.set_visible(show_listening);
+        let state = self.track_state.borrow();
+        let current_artwork_available = matches!(state.mode, PresentationMode::TrackWithArtwork);
+        let retained_artwork_available = current_artwork_available
+            || state.displayed_track.as_ref().is_some_and(|track| {
+                track.artwork_pending && !matches!(state.mode, PresentationMode::Listening)
+            });
+        let settings = self.settings.get();
+        let visibility = presentation_visibility(
+            state.mode,
+            settings.display_mode,
+            current_artwork_available,
+            retained_artwork_available,
+        );
+        drop(state);
+
+        let width = self.background_area.width();
+        let height = self.background_area.height();
+        configure_immersive_info(
+            &self.immersive_info_box,
+            [
+                &self.immersive_title_label,
+                &self.immersive_artist_label,
+                &self.immersive_album_label,
+                &self.immersive_details_label,
+            ],
+            settings.display_mode,
+            self.cinema_artwork.framing(width, height),
+            width,
+            height,
+        );
+
+        self.classic_content.set_visible(visibility.classic_content);
+        self.artwork.set_visible(visibility.classic_artwork);
+        self.cinema_artwork
+            .container
+            .set_visible(visibility.cinema_artwork);
+        self.ambient_artwork
+            .container
+            .set_visible(visibility.ambient_artwork);
+        self.scrim_area.set_visible(visibility.immersive_scrim);
+        self.immersive_info_box
+            .set_visible(visibility.immersive_info);
+        self.artwork_placeholder.set_visible(visibility.listening);
     }
 
     fn apply_background(&self) {
@@ -118,18 +200,20 @@ impl TrackPresentation {
             &self.background_area,
             &self.gradient_surface,
             self.current_background.get(),
-            settings.background_style,
-            settings.lights_off,
+            settings.classic.background_style,
+            settings.display_mode,
         );
+        self.scrim_area.queue_draw();
+    }
+
+    /// Re-resolves all mode-dependent layers after a display-mode change.
+    pub(super) fn refresh_mode(&self) {
+        self.sync_artwork_visibility();
+        self.apply_background();
     }
 }
 
 impl NowPlayingWindow {
-    /// Synchronizes artwork and Listening visibility with the explicit presentation mode.
-    pub(super) fn sync_artwork_visibility(&self) {
-        TrackPresentation::from_window(self).sync_artwork_visibility();
-    }
-
     /// Installs one completion callback for every track transition made by this window.
     pub(super) fn setup_track_transition_handlers(&self) {
         let track_state_for_completion = self.state.track_presentation.clone();
@@ -170,11 +254,11 @@ impl NowPlayingWindow {
                 .borrow()
                 .prepared_artwork_for(&message.track_key, artwork)
         });
-        let palette_pending = message.cover_image.is_some() && prepared_artwork.is_none();
+        let visuals_pending = message.cover_image.is_some() && prepared_artwork.is_none();
         let track = Rc::new(PresentedTrack::from_message(
             message,
             prepared_artwork,
-            palette_pending,
+            visuals_pending,
         ));
         if !track.has_visible_information() {
             self.handle_no_recognition();
@@ -182,7 +266,7 @@ impl NowPlayingWindow {
         }
 
         let settings = self.state.settings.get();
-        let can_animate = !matches!(settings.transition, TransitionEffect::None)
+        let can_animate = !matches!(settings.shared.transition, TransitionEffect::None)
             && self.ui.window.is_mapped()
             && self.ui.content_revealer.is_child_revealed();
         let action = self
@@ -196,11 +280,11 @@ impl NowPlayingWindow {
                 self.ui
                     .content_revealer
                     .set_transition_duration(transition_leg_duration_ms(
-                        settings.transition_duration_ms,
+                        settings.shared.transition_duration_ms,
                     ));
                 self.ui
                     .content_revealer
-                    .set_transition_type(settings.transition.revealer_type());
+                    .set_transition_type(settings.shared.transition.revealer_type());
                 self.ui.content_revealer.set_reveal_child(false);
             }
             PresentationAction::RenderTrack(track) => {
@@ -211,20 +295,20 @@ impl NowPlayingWindow {
             PresentationAction::None | PresentationAction::RenderListening => {}
         }
 
-        if palette_pending {
-            self.prepare_artwork_palette(
+        if visuals_pending {
+            self.prepare_artwork_visuals(
                 message.track_key.clone(),
                 message
                     .cover_image
                     .as_ref()
-                    .expect("palette preparation requires artwork")
+                    .expect("artwork visual preparation requires artwork")
                     .clone(),
             );
         }
     }
 
-    /// Prepares the Now Playing-only palette away from GTK's main thread.
-    fn prepare_artwork_palette(&self, track_key: String, artwork: Arc<Artwork>) {
+    /// Prepares Now Playing-only palettes and Ambient pixels away from GTK's main thread.
+    fn prepare_artwork_visuals(&self, track_key: String, artwork: Arc<Artwork>) {
         if !self
             .state
             .artwork_preparations
@@ -240,22 +324,23 @@ impl NowPlayingWindow {
         let revealer = self.ui.content_revealer.clone();
         glib::spawn_future_local(async move {
             let artwork_for_worker = artwork.clone();
-            let background =
-                match gio::spawn_blocking(move || background_from_artwork(&artwork_for_worker))
-                    .await
-                {
-                    Ok(background) => background,
-                    Err(_) => {
-                        log::warn!("Now Playing palette preparation task panicked");
-                        Background::fallback()
-                    }
-                };
+            let visuals = match gio::spawn_blocking(move || {
+                visuals_from_artwork(&artwork_for_worker)
+            })
+            .await
+            {
+                Ok(visuals) => visuals,
+                Err(_) => {
+                    log::warn!("Now Playing artwork preparation task panicked");
+                    ArtworkVisuals::fallback()
+                }
+            };
 
             if !preparation_jobs.borrow_mut().finish(&track_key, &artwork) {
                 return;
             }
 
-            let prepared = prepare_artwork(&artwork, background);
+            let prepared = prepare_artwork(&artwork, visuals);
             let action = track_state
                 .borrow_mut()
                 .apply_prepared_artwork(&track_key, &artwork, prepared);
@@ -279,6 +364,7 @@ impl NowPlayingWindow {
             .state
             .settings
             .get()
+            .shared
             .always_display_last_recognized_song;
         let action = self
             .state
@@ -315,20 +401,60 @@ fn background_after_track_update(
     }
 }
 
-/// Returns widget visibility for each explicit presentation state.
-pub(super) fn artwork_visibility(mode: PresentationMode, lights_off: bool) -> (bool, bool) {
-    match (mode, lights_off) {
-        (PresentationMode::Listening, _) => (false, true),
-        (PresentationMode::TrackWithArtwork, false) => (true, false),
-        (PresentationMode::TrackWithArtwork, true) | (PresentationMode::TrackWithoutArtwork, _) => {
-            (false, false)
-        }
+/// Visibility decisions for the independent Classic and immersive layers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PresentationVisibility {
+    classic_content: bool,
+    classic_artwork: bool,
+    cinema_artwork: bool,
+    ambient_artwork: bool,
+    immersive_scrim: bool,
+    immersive_info: bool,
+    listening: bool,
+}
+
+/// Returns widget visibility for each explicit content and display mode.
+fn presentation_visibility(
+    presentation_mode: PresentationMode,
+    display_mode: DisplayMode,
+    current_artwork_available: bool,
+    retained_artwork_available: bool,
+) -> PresentationVisibility {
+    if matches!(presentation_mode, PresentationMode::Listening) {
+        return PresentationVisibility {
+            classic_content: false,
+            classic_artwork: false,
+            cinema_artwork: false,
+            ambient_artwork: false,
+            immersive_scrim: false,
+            immersive_info: false,
+            listening: true,
+        };
+    }
+
+    PresentationVisibility {
+        classic_content: matches!(display_mode, DisplayMode::Classic),
+        // A retained cover is useful as an immersive backdrop while the next
+        // cover is prepared, but beside the new metadata in Classic it reads as
+        // belonging to the new song. Keep that Classic slot empty until its
+        // matching PreparedArtwork is ready.
+        classic_artwork: matches!(display_mode, DisplayMode::Classic) && current_artwork_available,
+        cinema_artwork: matches!(display_mode, DisplayMode::FullBleed)
+            && retained_artwork_available,
+        ambient_artwork: matches!(display_mode, DisplayMode::Ambient) && retained_artwork_available,
+        immersive_scrim: matches!(display_mode, DisplayMode::FullBleed | DisplayMode::Ambient),
+        immersive_info: !matches!(display_mode, DisplayMode::Classic),
+        listening: false,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{artwork_visibility, background_after_track_update, transition_leg_duration_ms};
+    use super::{
+        PresentationVisibility, background_after_track_update, presentation_visibility,
+        transition_leg_duration_ms,
+    };
+    use crate::gui::now_playing_window::DisplayMode;
     use crate::gui::now_playing_window::palette::Background;
     use crate::gui::now_playing_window::state::PresentationMode;
 
@@ -342,21 +468,104 @@ mod tests {
     #[test]
     fn missing_artwork_never_displays_the_listening_placeholder() {
         assert_eq!(
-            artwork_visibility(PresentationMode::TrackWithoutArtwork, false),
-            (false, false)
-        );
-        assert_eq!(
-            artwork_visibility(PresentationMode::TrackWithoutArtwork, true),
-            (false, false)
+            presentation_visibility(
+                PresentationMode::TrackWithoutArtwork,
+                DisplayMode::Ambient,
+                false,
+                false,
+            ),
+            PresentationVisibility {
+                classic_content: false,
+                classic_artwork: false,
+                cinema_artwork: false,
+                ambient_artwork: false,
+                immersive_scrim: true,
+                immersive_info: true,
+                listening: false,
+            }
         );
     }
 
     #[test]
-    fn listening_remains_visible_in_lights_off_mode() {
-        assert_eq!(
-            artwork_visibility(PresentationMode::Listening, true),
-            (false, true)
+    fn listening_is_mode_independent() {
+        for display_mode in DisplayMode::ALL {
+            let visibility =
+                presentation_visibility(PresentationMode::Listening, display_mode, true, true);
+            assert!(visibility.listening);
+            assert!(!visibility.classic_content);
+            assert!(!visibility.cinema_artwork);
+            assert!(!visibility.ambient_artwork);
+            assert!(!visibility.immersive_info);
+        }
+    }
+
+    #[test]
+    fn artwork_is_routed_to_the_selected_mode_only() {
+        let classic = presentation_visibility(
+            PresentationMode::TrackWithArtwork,
+            DisplayMode::Classic,
+            true,
+            true,
         );
+        assert!(classic.classic_content);
+        assert!(classic.classic_artwork);
+        assert!(!classic.immersive_info);
+
+        let cinema = presentation_visibility(
+            PresentationMode::TrackWithArtwork,
+            DisplayMode::FullBleed,
+            true,
+            true,
+        );
+        assert!(cinema.cinema_artwork);
+        assert!(cinema.immersive_info);
+
+        let ambient = presentation_visibility(
+            PresentationMode::TrackWithArtwork,
+            DisplayMode::Ambient,
+            true,
+            true,
+        );
+        assert!(ambient.ambient_artwork);
+        assert!(ambient.immersive_info);
+
+        let lights_off = presentation_visibility(
+            PresentationMode::TrackWithArtwork,
+            DisplayMode::LightsOff,
+            true,
+            true,
+        );
+        assert!(!lights_off.classic_artwork);
+        assert!(!lights_off.cinema_artwork);
+        assert!(!lights_off.ambient_artwork);
+        assert!(lights_off.immersive_info);
+    }
+
+    #[test]
+    fn pending_artwork_is_retained_only_as_an_immersive_backdrop() {
+        let classic = presentation_visibility(
+            PresentationMode::TrackWithoutArtwork,
+            DisplayMode::Classic,
+            false,
+            true,
+        );
+        assert!(!classic.classic_artwork);
+
+        let cinema = presentation_visibility(
+            PresentationMode::TrackWithoutArtwork,
+            DisplayMode::FullBleed,
+            false,
+            true,
+        );
+        assert!(cinema.cinema_artwork);
+
+        let ambient = presentation_visibility(
+            PresentationMode::TrackWithoutArtwork,
+            DisplayMode::Ambient,
+            false,
+            true,
+        );
+        assert!(ambient.ambient_artwork);
     }
 
     #[test]

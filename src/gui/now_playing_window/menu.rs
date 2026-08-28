@@ -1,20 +1,51 @@
 //! Context-menu construction and preference-update signal bindings.
 
-use super::track::artwork_visibility;
+use super::track::TrackPresentation;
 use super::{
-    AlbumCoverSize, BackgroundStyle, NowPlayingSettings, NowPlayingWindow,
+    AlbumCoverSize, BackgroundStyle, DisplayMode, NowPlayingSettings, NowPlayingWindow,
     TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
     TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
 use crate::core::preferences::NowPlayingPreferenceChange;
 use adw::prelude::*;
 use gettextrs::gettext;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
 const TRANSITION_DURATION_STEP_MS: f64 = 100.0;
 const FULLSCREEN_CURSOR_HIDE_DELAY_MS: u64 = 1_500;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ContextMenuPointerAction {
+    Open,
+    Dismiss,
+    Consume,
+    Ignore,
+}
+
+fn context_menu_pointer_action(
+    menu_visible: bool,
+    clicked_inside: bool,
+    button: u32,
+    suppress_secondary_open: bool,
+) -> ContextMenuPointerAction {
+    if menu_visible {
+        return if clicked_inside {
+            ContextMenuPointerAction::Ignore
+        } else {
+            ContextMenuPointerAction::Dismiss
+        };
+    }
+
+    if button == gdk::BUTTON_SECONDARY && suppress_secondary_open {
+        ContextMenuPointerAction::Consume
+    } else if button == gdk::BUTTON_SECONDARY {
+        ContextMenuPointerAction::Open
+    } else {
+        ContextMenuPointerAction::Ignore
+    }
+}
 
 /// Owns one reschedulable GLib timeout.
 ///
@@ -44,8 +75,26 @@ impl DebouncedAction {
     }
 }
 
+fn menu_grid() -> gtk::Grid {
+    gtk::Grid::builder()
+        .row_spacing(6)
+        .column_spacing(12)
+        .hexpand(true)
+        .build()
+}
+
+fn section_heading(title: &str) -> gtk::Label {
+    gtk::Label::builder()
+        .label(title)
+        .halign(gtk::Align::Start)
+        .css_classes(["heading"])
+        .build()
+}
+
 /// The context-menu controls whose state mirrors the active presentation settings.
 pub(super) struct NowPlayingControls {
+    pub(super) display_mode_menu: gtk::DropDown,
+    pub(super) classic_settings: gtk::Box,
     pub(super) round_corners: gtk::Switch,
     pub(super) hide_track_info: gtk::Switch,
     pub(super) background_style_gradient: gtk::ToggleButton,
@@ -56,12 +105,24 @@ pub(super) struct NowPlayingControls {
     pub(super) always_display_last_recognized_song: gtk::Switch,
     pub(super) transition_menu: gtk::DropDown,
     pub(super) transition_duration: gtk::Scale,
-    pub(super) lights_off_menu: gtk::Switch,
     pub(super) fullscreen: gtk::Switch,
 }
 
 /// Creates the switches and segmented controls used by the Now Playing context menu.
 pub(super) fn build_controls() -> NowPlayingControls {
+    let display_mode_labels = DisplayMode::ALL
+        .into_iter()
+        .map(DisplayMode::translated_label)
+        .collect::<Vec<_>>();
+    let display_mode_label_references = display_mode_labels
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    let display_mode_menu = gtk::DropDown::from_strings(&display_mode_label_references);
+    let classic_settings = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(6)
+        .build();
     let round_corners = gtk::Switch::new();
     let hide_track_info = gtk::Switch::new();
     let album_cover_size = gtk::Scale::with_range(
@@ -93,7 +154,6 @@ pub(super) fn build_controls() -> NowPlayingControls {
     transition_duration.set_draw_value(true);
     transition_duration.set_hexpand(true);
     transition_duration.set_width_request(190);
-    let lights_off_menu = gtk::Switch::new();
     let fullscreen = gtk::Switch::new();
     let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
     let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
@@ -103,6 +163,8 @@ pub(super) fn build_controls() -> NowPlayingControls {
     track_info_alignment_center.set_group(Some(&track_info_alignment_left));
 
     NowPlayingControls {
+        display_mode_menu,
+        classic_settings,
         round_corners,
         hide_track_info,
         background_style_gradient,
@@ -113,7 +175,6 @@ pub(super) fn build_controls() -> NowPlayingControls {
         always_display_last_recognized_song,
         transition_menu,
         transition_duration,
-        lights_off_menu,
         fullscreen,
     }
 }
@@ -123,136 +184,178 @@ impl NowPlayingWindow {
     pub(super) fn setup_context_menu(&self, settings: NowPlayingSettings) {
         let popover = gtk::Popover::new();
         popover.set_has_arrow(false);
-        let menu_grid = gtk::Grid::builder()
-            .row_spacing(6)
-            .column_spacing(12)
-            .halign(gtk::Align::Start)
+        let menu_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(10)
             .build();
+        menu_box.set_margin_top(12);
+        menu_box.set_margin_bottom(12);
+        menu_box.set_margin_start(12);
+        menu_box.set_margin_end(12);
 
         let reset_button = gtk::Button::with_label(&gettext("Reset"));
         reset_button.set_halign(gtk::Align::End);
-        menu_grid.attach(&reset_button, 0, 0, 2, 1);
+        menu_box.append(&reset_button);
         let controller_for_reset = self.controller.clone();
         reset_button.connect_clicked(move |_| {
             controller_for_reset.reset();
         });
 
+        let display_mode_grid = menu_grid();
+        self.add_display_mode_menu_row(
+            &display_mode_grid,
+            &self.controls.display_mode_menu,
+            settings.display_mode,
+        );
+        menu_box.append(&display_mode_grid);
+
+        let classic_heading = section_heading(&gettext("Classic settings"));
+        self.controls.classic_settings.append(&classic_heading);
+        let classic_grid = menu_grid();
         self.add_switch_menu_row(
-            &menu_grid,
-            1,
+            &classic_grid,
+            0,
             &gettext("Round corners of album cover"),
             &self.controls.round_corners,
-            settings.round_corners,
-            !settings.lights_off,
+            settings.classic.round_corners,
+            true,
         );
         self.add_switch_menu_row(
-            &menu_grid,
-            2,
+            &classic_grid,
+            1,
             &gettext("Hide track info"),
             &self.controls.hide_track_info,
-            settings.hide_track_info,
-            !settings.lights_off,
+            settings.classic.hide_track_info,
+            true,
         );
         self.add_alignment_menu_row(
-            &menu_grid,
-            3,
-            settings.track_info_alignment,
-            !settings.hide_track_info,
+            &classic_grid,
+            2,
+            settings.classic.track_info_alignment,
+            !settings.classic.hide_track_info,
         );
         self.add_album_cover_size_menu_row(
-            &menu_grid,
-            4,
-            settings.album_cover_size,
-            !settings.lights_off,
+            &classic_grid,
+            3,
+            settings.classic.album_cover_size,
+            true,
         );
-        self.add_background_style_menu_row(&menu_grid, 5, settings.background_style);
+        self.add_background_style_menu_row(&classic_grid, 4, settings.classic.background_style);
+        self.controls.classic_settings.append(&classic_grid);
+        self.controls
+            .classic_settings
+            .set_visible(settings.display_mode.shows_classic_settings());
+        menu_box.append(&self.controls.classic_settings);
+
+        let general_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(6)
+            .build();
+        general_box.append(&section_heading(&gettext("General")));
+        let general_grid = menu_grid();
         self.add_switch_menu_row(
-            &menu_grid,
-            6,
+            &general_grid,
+            0,
             &gettext("Always display last recognized song"),
             &self.controls.always_display_last_recognized_song,
-            settings.always_display_last_recognized_song,
+            settings.shared.always_display_last_recognized_song,
             true,
         );
         self.add_transition_menu_row(
-            &menu_grid,
-            7,
+            &general_grid,
+            1,
             &self.controls.transition_menu,
-            settings.transition,
+            settings.shared.transition,
         );
         self.add_transition_duration_menu_row(
-            &menu_grid,
-            8,
+            &general_grid,
+            2,
             &self.controls.transition_duration,
-            settings.transition_duration_ms,
-            !matches!(settings.transition, TransitionEffect::None),
+            settings.shared.transition_duration_ms,
+            !matches!(settings.shared.transition, TransitionEffect::None),
         );
+        general_box.append(&general_grid);
+        menu_box.append(&general_box);
+
+        let fullscreen_grid = menu_grid();
         self.add_switch_menu_row(
-            &menu_grid,
-            9,
-            &gettext("Lights off"),
-            &self.controls.lights_off_menu,
-            settings.lights_off,
-            true,
-        );
-        self.add_switch_menu_row(
-            &menu_grid,
-            10,
+            &fullscreen_grid,
+            0,
             &gettext("Full screen"),
             &self.controls.fullscreen,
             self.ui.window.is_fullscreen(),
             true,
         );
+        menu_box.append(&fullscreen_grid);
 
-        popover.set_child(Some(&menu_grid));
+        let menu_scroll = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vscrollbar_policy(gtk::PolicyType::Automatic)
+            .propagate_natural_width(true)
+            .propagate_natural_height(true)
+            .max_content_height(520)
+            .child(&menu_box)
+            .build();
+        popover.set_child(Some(&menu_scroll));
         popover.set_parent(&self.ui.window);
-        // Keep GTK's modal popover grab enabled. It normally handles outside
-        // clicks by itself, while the capture-phase controller below covers
-        // pointer sequences that were started by one of the interactive menu
-        // controls (notably scales and dropdowns).
+        // Keep GTK's modal grab for Escape and focus handling. Resolve pointer
+        // clicks in capture phase so autohide cannot race a secondary click and
+        // reinterpret the same sequence as a request to reopen the menu.
         popover.set_autohide(true);
-        let popover_for_click = popover.downgrade();
+        let suppress_secondary_open = Rc::new(Cell::new(false));
+        let suppress_secondary_open_for_closed = suppress_secondary_open.clone();
+        popover.connect_closed(move |_| {
+            suppress_secondary_open_for_closed.set(true);
+            let suppress_secondary_open_for_idle = suppress_secondary_open_for_closed.clone();
+            glib::idle_add_local_once(move || {
+                suppress_secondary_open_for_idle.set(false);
+            });
+        });
 
-        let gesture = gtk::GestureClick::new();
-        gesture.set_button(3);
-        gesture.connect_pressed(move |_, _, x, y| {
-            let Some(popover) = popover_for_click.upgrade() else {
+        let popover_for_pointer = popover.downgrade();
+        let suppress_secondary_open_for_pointer = suppress_secondary_open;
+        let pointer = gtk::GestureClick::new();
+        pointer.set_button(0);
+        pointer.set_propagation_phase(gtk::PropagationPhase::Capture);
+        pointer.connect_pressed(move |gesture, _, x, y| {
+            let Some(popover) = popover_for_pointer.upgrade() else {
                 return;
             };
-            if popover.is_visible() {
-                popover.popdown();
-                return;
+            let menu_visible = popover.is_visible();
+            let clicked_inside = menu_visible
+                && gesture
+                    .widget()
+                    .and_then(|window| {
+                        window
+                            .compute_point(&popover, &gtk::graphene::Point::new(x as f32, y as f32))
+                    })
+                    .is_some_and(|point| {
+                        popover.contains(f64::from(point.x()), f64::from(point.y()))
+                    });
+
+            match context_menu_pointer_action(
+                menu_visible,
+                clicked_inside,
+                gesture.current_button(),
+                suppress_secondary_open_for_pointer.get(),
+            ) {
+                ContextMenuPointerAction::Open => {
+                    let pointing_rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
+                    popover.set_pointing_to(Some(&pointing_rect));
+                    popover.popup();
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                }
+                ContextMenuPointerAction::Dismiss => {
+                    popover.popdown();
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                }
+                ContextMenuPointerAction::Consume => {
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                }
+                ContextMenuPointerAction::Ignore => {}
             }
-            let pointing_rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
-            popover.set_pointing_to(Some(&pointing_rect));
-            popover.popup();
         });
-        self.ui.window.add_controller(gesture);
-
-        let popover_for_outside_click = popover.downgrade();
-        let outside_click = gtk::GestureClick::new();
-        outside_click.set_button(1);
-        outside_click.set_propagation_phase(gtk::PropagationPhase::Capture);
-        outside_click.connect_pressed(move |gesture, _, x, y| {
-            let Some(popover) = popover_for_outside_click.upgrade() else {
-                return;
-            };
-            if !popover.is_visible() {
-                return;
-            }
-
-            let clicked_inside = gesture
-                .widget()
-                .and_then(|window| {
-                    window.compute_point(&popover, &gtk::graphene::Point::new(x as f32, y as f32))
-                })
-                .is_some_and(|point| popover.contains(f64::from(point.x()), f64::from(point.y())));
-
-            if !clicked_inside {
-                popover.popdown();
-            }
-        });
-        self.ui.window.add_controller(outside_click);
+        self.ui.window.add_controller(pointer);
 
         let window_for_fullscreen = self.ui.window.downgrade();
         self.controls
@@ -320,6 +423,24 @@ impl NowPlayingWindow {
         );
     }
 
+    /// Adds the first-class display-mode selector to the context menu.
+    fn add_display_mode_menu_row(
+        &self,
+        menu_grid: &gtk::Grid,
+        dropdown: &gtk::DropDown,
+        display_mode: DisplayMode,
+    ) {
+        let label = gtk::Label::new(Some(&gettext("Display mode")));
+        label.set_halign(gtk::Align::Start);
+        label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
+        menu_grid.attach(&label, 0, 0, 1, 1);
+        dropdown.set_selected(display_mode.index());
+        dropdown.set_halign(gtk::Align::End);
+        dropdown.set_valign(gtk::Align::Center);
+        menu_grid.attach(dropdown, 1, 0, 1, 1);
+    }
+
     /// Adds a label-and-switch row to the context menu.
     fn add_switch_menu_row(
         &self,
@@ -333,6 +454,7 @@ impl NowPlayingWindow {
         let label = gtk::Label::new(Some(title));
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
         menu_grid.attach(&label, 0, row, 1, 1);
         switch.set_halign(gtk::Align::End);
         switch.set_valign(gtk::Align::Center);
@@ -352,6 +474,7 @@ impl NowPlayingWindow {
         let label = gtk::Label::new(Some(&gettext("Transition effect")));
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
         menu_grid.attach(&label, 0, row, 1, 1);
         dropdown.set_selected(effect.index());
         dropdown.set_halign(gtk::Align::End);
@@ -372,6 +495,7 @@ impl NowPlayingWindow {
         let label = gtk::Label::new(Some(&gettext("Transition duration (ms)")));
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
         menu_grid.attach(&label, 0, row, 1, 1);
         scale.set_value(duration_ms as f64);
         scale.set_sensitive(sensitive);
@@ -392,6 +516,7 @@ impl NowPlayingWindow {
         let label = gtk::Label::new(Some(&gettext("Album cover size")));
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
         menu_grid.attach(&label, 0, row, 1, 1);
         self.controls.album_cover_size.set_value(size.scale_value());
         self.controls.album_cover_size.set_sensitive(sensitive);
@@ -413,6 +538,7 @@ impl NowPlayingWindow {
         let label = gtk::Label::new(Some(&gettext("Track info alignment")));
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
         menu_grid.attach(&label, 0, row, 1, 1);
         let buttons = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -451,6 +577,7 @@ impl NowPlayingWindow {
         let label = gtk::Label::new(Some(&gettext("Background style")));
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
         menu_grid.attach(&label, 0, row, 1, 1);
         let buttons = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -471,6 +598,25 @@ impl NowPlayingWindow {
 
     /// Connects preference controls to GUI preference update messages.
     pub(super) fn connect_control_handlers(&self) {
+        let applying_settings_for_display_mode = self.state.applying_settings.clone();
+        let controller_for_display_mode = self.controller.clone();
+        let classic_settings_for_display_mode = self.controls.classic_settings.clone();
+        let presentation_for_display_mode = TrackPresentation::from_window(self);
+        self.controls
+            .display_mode_menu
+            .connect_selected_notify(move |dropdown| {
+                if applying_settings_for_display_mode.get() {
+                    return;
+                }
+
+                let display_mode = DisplayMode::from_index(dropdown.selected());
+                controller_for_display_mode
+                    .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
+                classic_settings_for_display_mode
+                    .set_visible(display_mode.shows_classic_settings());
+                presentation_for_display_mode.refresh_mode();
+            });
+
         let applying_settings_for_round_corners = self.state.applying_settings.clone();
         let controller_for_round_corners = self.controller.clone();
         let artwork_overlay_for_round_corners = self.ui.artwork_overlay.clone();
@@ -630,48 +776,6 @@ impl NowPlayingWindow {
                 );
             });
 
-        let applying_settings_for_lights = self.state.applying_settings.clone();
-        let controller_for_lights = self.controller.clone();
-        let track_state_for_lights = self.state.track_presentation.clone();
-        let round_for_lights_menu = self.controls.round_corners.clone();
-        let hide_for_lights_menu = self.controls.hide_track_info.clone();
-        let alignment_left_for_lights_menu = self.controls.track_info_alignment_left.clone();
-        let alignment_center_for_lights_menu = self.controls.track_info_alignment_center.clone();
-        let info_box_for_lights = self.ui.info_box.clone();
-        let album_cover_size_for_lights = self.controls.album_cover_size.clone();
-        let artwork_for_lights = self.ui.artwork.clone();
-        let artwork_placeholder_for_lights = self.ui.artwork_placeholder.clone();
-        let background_area_for_lights = self.ui.background_area.clone();
-        self.controls
-            .lights_off_menu
-            .connect_active_notify(move |button| {
-                if applying_settings_for_lights.get() {
-                    return;
-                }
-
-                let active = button.is_active();
-                controller_for_lights.update(NowPlayingPreferenceChange::LightsOff(active));
-                let settings = controller_for_lights.settings();
-                round_for_lights_menu.set_sensitive(!active);
-                hide_for_lights_menu.set_sensitive(!active);
-                album_cover_size_for_lights.set_sensitive(!active);
-                alignment_left_for_lights_menu.set_sensitive(!settings.hide_track_info);
-                alignment_center_for_lights_menu.set_sensitive(!settings.hide_track_info);
-
-                if active {
-                    let was_applying_settings = applying_settings_for_lights.replace(true);
-                    hide_for_lights_menu.set_active(false);
-                    applying_settings_for_lights.set(was_applying_settings);
-                    info_box_for_lights.set_visible(true);
-                }
-
-                let mode = track_state_for_lights.borrow().mode;
-                let (show_artwork, show_listening) = artwork_visibility(mode, active);
-                artwork_for_lights.set_visible(show_artwork);
-                artwork_placeholder_for_lights.set_visible(show_listening);
-                background_area_for_lights.queue_draw();
-            });
-
         let applying_settings_for_gradient = self.state.applying_settings.clone();
         let controller_for_gradient = self.controller.clone();
         let background_area_for_gradient = self.ui.background_area.clone();
@@ -724,4 +828,41 @@ fn apply_track_info_alignment(
     artist_label.set_halign(alignment);
     album_label.set_halign(alignment);
     details_label.set_halign(alignment);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ContextMenuPointerAction, context_menu_pointer_action};
+
+    #[test]
+    fn context_menu_pointer_actions_do_not_reopen_an_outside_secondary_click() {
+        assert_eq!(
+            context_menu_pointer_action(false, false, gdk::BUTTON_SECONDARY, false),
+            ContextMenuPointerAction::Open
+        );
+        assert_eq!(
+            context_menu_pointer_action(true, false, gdk::BUTTON_SECONDARY, false),
+            ContextMenuPointerAction::Dismiss
+        );
+        assert_eq!(
+            context_menu_pointer_action(true, false, gdk::BUTTON_PRIMARY, false),
+            ContextMenuPointerAction::Dismiss
+        );
+        assert_eq!(
+            context_menu_pointer_action(true, true, gdk::BUTTON_SECONDARY, false),
+            ContextMenuPointerAction::Ignore
+        );
+        assert_eq!(
+            context_menu_pointer_action(true, true, gdk::BUTTON_PRIMARY, false),
+            ContextMenuPointerAction::Ignore
+        );
+        assert_eq!(
+            context_menu_pointer_action(false, false, gdk::BUTTON_PRIMARY, false),
+            ContextMenuPointerAction::Ignore
+        );
+        assert_eq!(
+            context_menu_pointer_action(false, false, gdk::BUTTON_SECONDARY, true),
+            ContextMenuPointerAction::Consume
+        );
+    }
 }

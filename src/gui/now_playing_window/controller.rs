@@ -13,6 +13,7 @@ const PERSISTENCE_DEBOUNCE_MS: u64 = 150;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum SettingKey {
     Reset,
+    DisplayMode,
     RoundCorners,
     HideTrackInfo,
     TrackInfoAlignment,
@@ -21,13 +22,13 @@ enum SettingKey {
     AlwaysDisplayLastRecognizedSong,
     Transition,
     TransitionDuration,
-    LightsOff,
 }
 
 impl From<NowPlayingPreferenceChange> for SettingKey {
     fn from(change: NowPlayingPreferenceChange) -> Self {
         match change {
             NowPlayingPreferenceChange::Reset => Self::Reset,
+            NowPlayingPreferenceChange::DisplayMode(_) => Self::DisplayMode,
             NowPlayingPreferenceChange::RoundCorners(_) => Self::RoundCorners,
             NowPlayingPreferenceChange::HideTrackInfo(_) => Self::HideTrackInfo,
             NowPlayingPreferenceChange::TrackInfoAlignment(_) => Self::TrackInfoAlignment,
@@ -38,7 +39,6 @@ impl From<NowPlayingPreferenceChange> for SettingKey {
             }
             NowPlayingPreferenceChange::Transition(_) => Self::Transition,
             NowPlayingPreferenceChange::TransitionDurationMs(_) => Self::TransitionDuration,
-            NowPlayingPreferenceChange::LightsOff(_) => Self::LightsOff,
         }
     }
 }
@@ -148,19 +148,31 @@ impl NowPlayingSettingsController {
 #[cfg(test)]
 mod tests {
     use super::NowPlayingSettingsController;
-    use crate::core::preferences::{NowPlayingPreferenceChange, NowPlayingPreferences};
+    use crate::core::preferences::{
+        DisplayMode, NowPlayingPreferenceChange, NowPlayingPreferences,
+    };
 
     #[test]
     fn immediate_updates_and_reset_share_one_normalized_model() {
         let controller = NowPlayingSettingsController::new(NowPlayingPreferences::default(), None);
 
         controller.update(NowPlayingPreferenceChange::HideTrackInfo(true));
-        assert!(controller.settings().hide_track_info);
+        assert!(controller.settings().classic.hide_track_info);
 
-        controller.update(NowPlayingPreferenceChange::LightsOff(true));
-        assert!(controller.settings().lights_off);
-        assert!(!controller.settings().hide_track_info);
+        controller.update(NowPlayingPreferenceChange::DisplayMode(
+            DisplayMode::LightsOff,
+        ));
+        assert_eq!(controller.settings().display_mode, DisplayMode::LightsOff);
+        assert!(controller.settings().classic.hide_track_info);
 
+        controller.update(NowPlayingPreferenceChange::DisplayMode(
+            DisplayMode::Classic,
+        ));
+        assert!(controller.settings().classic.hide_track_info);
+
+        controller.update(NowPlayingPreferenceChange::DisplayMode(
+            DisplayMode::Ambient,
+        ));
         controller.reset();
         assert_eq!(controller.settings(), NowPlayingPreferences::default());
     }

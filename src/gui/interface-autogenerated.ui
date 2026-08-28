@@ -537,6 +537,17 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           </object>
                         </property>
                         <child>
+                          <object class="AdwComboRow" id="display_mode_setting">
+                            <property name="subtitle" translatable="yes">Choose how the recognized song is presented</property>
+                            <property name="title" translatable="yes">Display mode</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup" id="classic_now_playing_preferences">
+                        <property name="title" translatable="yes">Classic settings</property>
+                        <child>
                           <object class="AdwSwitchRow" id="round_corners_setting">
                             <property name="subtitle" translatable="yes">Round the corners of the album artwork</property>
                             <property name="title" translatable="yes">Round corners of album cover</property>
@@ -619,6 +630,11 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             </child>
                           </object>
                         </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup" id="general_now_playing_preferences">
+                        <property name="title" translatable="yes">General</property>
                         <child>
                           <object class="AdwSwitchRow" id="always_display_last_recognized_song_setting">
                             <property name="subtitle" translatable="yes">Keep showing the last recognized song when there is no current match</property>
@@ -653,12 +669,6 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                 </property>
                               </object>
                             </child>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="AdwSwitchRow" id="lights_off_setting">
-                            <property name="subtitle" translatable="yes">Show only the track on a black background</property>
-                            <property name="title" translatable="yes">Lights Off</property>
                           </object>
                         </child>
                       </object>

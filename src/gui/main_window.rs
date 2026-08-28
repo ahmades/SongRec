@@ -97,7 +97,7 @@ fn open_now_playing_window(
         let settings = controller.settings();
         if let Some(message) = recognition_state
             .borrow()
-            .visible_track(settings.always_display_last_recognized_song)
+            .visible_track(settings.shared.always_display_last_recognized_song)
         {
             window.update(&message);
         } else {
@@ -997,10 +997,9 @@ impl App {
                                     &*recognition_state.borrow(),
                                     RecognitionState::NoMatch { .. }
                                 ) {
-                                    if let Some(track) = recognition_state
-                                        .borrow()
-                                        .visible_track(settings.always_display_last_recognized_song)
-                                    {
+                                    if let Some(track) = recognition_state.borrow().visible_track(
+                                        settings.shared.always_display_last_recognized_song,
+                                    ) {
                                         window.update(&track);
                                     } else {
                                         window.set_listening_state();
@@ -1177,7 +1176,7 @@ impl App {
                                 (
                                     state.last_recognized(),
                                     state.visible_track(
-                                        settings.always_display_last_recognized_song,
+                                        settings.shared.always_display_last_recognized_song,
                                     ),
                                 )
                             };
@@ -1216,7 +1215,9 @@ impl App {
                                     continue;
                                 }
                                 let settings = now_playing_controller.settings();
-                                state.visible_track(settings.always_display_last_recognized_song)
+                                state.visible_track(
+                                    settings.shared.always_display_last_recognized_song,
+                                )
                             };
 
                             if let Some(track) = visible_track

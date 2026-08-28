@@ -298,6 +298,68 @@ impl<'de> Deserialize<'de> for TrackInfoAlignment {
     }
 }
 
+/// Selects the overall presentation used by the Now Playing window.
+///
+/// Settings that are meaningful only to one mode remain persisted when a
+/// different mode is selected, so returning to that mode restores its prior
+/// configuration.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayMode {
+    #[default]
+    Classic,
+    FullBleed,
+    Ambient,
+    LightsOff,
+}
+
+impl DisplayMode {
+    /// All display modes in the order used by selector controls.
+    pub const ALL: [Self; 4] = [
+        Self::Classic,
+        Self::FullBleed,
+        Self::Ambient,
+        Self::LightsOff,
+    ];
+
+    /// Returns the persisted string representation of this display mode.
+    pub fn as_preference_value(self) -> &'static str {
+        match self {
+            Self::Classic => "classic",
+            Self::FullBleed => "full-bleed",
+            Self::Ambient => "ambient",
+            Self::LightsOff => "lights-off",
+        }
+    }
+
+    /// Parses a persisted display mode, defaulting to the classic layout.
+    pub fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("full-bleed") => Self::FullBleed,
+            Some("ambient") => Self::Ambient,
+            Some("lights-off") => Self::LightsOff,
+            _ => Self::Classic,
+        }
+    }
+}
+
+impl Serialize for DisplayMode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_preference_value())
+    }
+}
+
+impl<'de> Deserialize<'de> for DisplayMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(|value| Self::from_preference(Some(&value)))
+    }
+}
+
 /// Controls the visual treatment of the Now Playing background.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum BackgroundStyle {
@@ -342,13 +404,9 @@ impl<'de> Deserialize<'de> for BackgroundStyle {
     }
 }
 
-/// The complete persisted presentation state for the Now Playing window.
-///
-/// This is a concrete, normalized model rather than a collection of optional
-/// string fields. Its serde names preserve the existing flat preferences-file
-/// format even though the Rust model is nested under [`Preferences`].
+/// Settings that apply only to the Classic Now Playing presentation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub struct NowPlayingPreferences {
+pub struct ClassicNowPlayingPreferences {
     #[serde(rename = "now_playing_round_corners")]
     pub round_corners: bool,
     #[serde(rename = "hide_now_playing_info")]
@@ -359,16 +417,9 @@ pub struct NowPlayingPreferences {
     pub album_cover_size: AlbumCoverSize,
     #[serde(rename = "now_playing_background_style")]
     pub background_style: BackgroundStyle,
-    pub always_display_last_recognized_song: bool,
-    #[serde(rename = "now_playing_transition")]
-    pub transition: TransitionEffect,
-    #[serde(rename = "now_playing_transition_duration_ms")]
-    pub transition_duration_ms: u64,
-    #[serde(rename = "lights_off_enabled")]
-    pub lights_off: bool,
 }
 
-impl Default for NowPlayingPreferences {
+impl Default for ClassicNowPlayingPreferences {
     fn default() -> Self {
         Self {
             round_corners: true,
@@ -376,16 +427,58 @@ impl Default for NowPlayingPreferences {
             track_info_alignment: TrackInfoAlignment::default(),
             album_cover_size: AlbumCoverSize::default(),
             background_style: BackgroundStyle::default(),
+        }
+    }
+}
+
+/// Recognition and transition behavior shared by every display mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct SharedNowPlayingPreferences {
+    pub always_display_last_recognized_song: bool,
+    #[serde(rename = "now_playing_transition")]
+    pub transition: TransitionEffect,
+    #[serde(rename = "now_playing_transition_duration_ms")]
+    pub transition_duration_ms: u64,
+}
+
+impl Default for SharedNowPlayingPreferences {
+    fn default() -> Self {
+        Self {
             always_display_last_recognized_song: true,
             transition: TransitionEffect::default(),
             transition_duration_ms: TRANSITION_DURATION_DEFAULT_MS,
-            lights_off: false,
+        }
+    }
+}
+
+/// The complete persisted presentation state for the Now Playing window.
+///
+/// The Rust model separates mode applicability, while the flattened serde
+/// fields preserve the existing top-level preferences-file format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct NowPlayingPreferences {
+    #[serde(rename = "now_playing_display_mode")]
+    pub display_mode: DisplayMode,
+    #[serde(flatten)]
+    pub classic: ClassicNowPlayingPreferences,
+    #[serde(flatten)]
+    pub shared: SharedNowPlayingPreferences,
+}
+
+impl Default for NowPlayingPreferences {
+    fn default() -> Self {
+        Self {
+            display_mode: DisplayMode::default(),
+            classic: ClassicNowPlayingPreferences::default(),
+            shared: SharedNowPlayingPreferences::default(),
         }
     }
 }
 
 #[derive(Default, Deserialize)]
 struct NowPlayingPreferencesWire {
+    #[serde(rename = "now_playing_display_mode")]
+    display_mode: Option<DisplayMode>,
     #[serde(rename = "now_playing_round_corners")]
     round_corners: Option<bool>,
     #[serde(rename = "hide_now_playing_info")]
@@ -402,7 +495,7 @@ struct NowPlayingPreferencesWire {
     #[serde(rename = "now_playing_transition_duration_ms")]
     transition_duration_ms: Option<u64>,
     #[serde(rename = "lights_off_enabled")]
-    lights_off: Option<bool>,
+    legacy_lights_off: Option<bool>,
 }
 
 impl<'de> Deserialize<'de> for NowPlayingPreferences {
@@ -413,21 +506,37 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
         let wire = NowPlayingPreferencesWire::deserialize(deserializer)?;
         let defaults = Self::default();
         let mut preferences = Self {
-            round_corners: wire.round_corners.unwrap_or(defaults.round_corners),
-            hide_track_info: wire.hide_track_info.unwrap_or(defaults.hide_track_info),
-            track_info_alignment: wire
-                .track_info_alignment
-                .unwrap_or(defaults.track_info_alignment),
-            album_cover_size: wire.album_cover_size.unwrap_or(defaults.album_cover_size),
-            background_style: wire.background_style.unwrap_or(defaults.background_style),
-            always_display_last_recognized_song: wire
-                .always_display_last_recognized_song
-                .unwrap_or(defaults.always_display_last_recognized_song),
-            transition: wire.transition.unwrap_or(defaults.transition),
-            transition_duration_ms: wire
-                .transition_duration_ms
-                .unwrap_or(defaults.transition_duration_ms),
-            lights_off: wire.lights_off.unwrap_or(defaults.lights_off),
+            display_mode: wire.display_mode.unwrap_or_else(|| {
+                if wire.legacy_lights_off.unwrap_or(false) {
+                    DisplayMode::LightsOff
+                } else {
+                    defaults.display_mode
+                }
+            }),
+            classic: ClassicNowPlayingPreferences {
+                round_corners: wire.round_corners.unwrap_or(defaults.classic.round_corners),
+                hide_track_info: wire
+                    .hide_track_info
+                    .unwrap_or(defaults.classic.hide_track_info),
+                track_info_alignment: wire
+                    .track_info_alignment
+                    .unwrap_or(defaults.classic.track_info_alignment),
+                album_cover_size: wire
+                    .album_cover_size
+                    .unwrap_or(defaults.classic.album_cover_size),
+                background_style: wire
+                    .background_style
+                    .unwrap_or(defaults.classic.background_style),
+            },
+            shared: SharedNowPlayingPreferences {
+                always_display_last_recognized_song: wire
+                    .always_display_last_recognized_song
+                    .unwrap_or(defaults.shared.always_display_last_recognized_song),
+                transition: wire.transition.unwrap_or(defaults.shared.transition),
+                transition_duration_ms: wire
+                    .transition_duration_ms
+                    .unwrap_or(defaults.shared.transition_duration_ms),
+            },
         };
         preferences.normalize();
         Ok(preferences)
@@ -436,30 +545,34 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
 
 impl NowPlayingPreferences {
     fn normalize(&mut self) {
-        self.transition_duration_ms = clamp_transition_duration_ms(self.transition_duration_ms);
-        if self.lights_off {
-            self.hide_track_info = false;
-        }
+        self.shared.transition_duration_ms =
+            clamp_transition_duration_ms(self.shared.transition_duration_ms);
     }
 
     pub(crate) fn apply_change(&mut self, change: NowPlayingPreferenceChange) {
         match change {
             NowPlayingPreferenceChange::Reset => *self = Self::default(),
-            NowPlayingPreferenceChange::RoundCorners(value) => self.round_corners = value,
-            NowPlayingPreferenceChange::HideTrackInfo(value) => self.hide_track_info = value,
+            NowPlayingPreferenceChange::DisplayMode(value) => self.display_mode = value,
+            NowPlayingPreferenceChange::RoundCorners(value) => self.classic.round_corners = value,
+            NowPlayingPreferenceChange::HideTrackInfo(value) => {
+                self.classic.hide_track_info = value;
+            }
             NowPlayingPreferenceChange::TrackInfoAlignment(value) => {
-                self.track_info_alignment = value;
+                self.classic.track_info_alignment = value;
             }
-            NowPlayingPreferenceChange::AlbumCoverSize(value) => self.album_cover_size = value,
-            NowPlayingPreferenceChange::BackgroundStyle(value) => self.background_style = value,
+            NowPlayingPreferenceChange::AlbumCoverSize(value) => {
+                self.classic.album_cover_size = value;
+            }
+            NowPlayingPreferenceChange::BackgroundStyle(value) => {
+                self.classic.background_style = value;
+            }
             NowPlayingPreferenceChange::AlwaysDisplayLastRecognizedSong(value) => {
-                self.always_display_last_recognized_song = value;
+                self.shared.always_display_last_recognized_song = value;
             }
-            NowPlayingPreferenceChange::Transition(value) => self.transition = value,
+            NowPlayingPreferenceChange::Transition(value) => self.shared.transition = value,
             NowPlayingPreferenceChange::TransitionDurationMs(value) => {
-                self.transition_duration_ms = value;
+                self.shared.transition_duration_ms = value;
             }
-            NowPlayingPreferenceChange::LightsOff(value) => self.lights_off = value,
         }
         self.normalize();
     }
@@ -469,6 +582,7 @@ impl NowPlayingPreferences {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NowPlayingPreferenceChange {
     Reset,
+    DisplayMode(DisplayMode),
     RoundCorners(bool),
     HideTrackInfo(bool),
     TrackInfoAlignment(TrackInfoAlignment),
@@ -477,7 +591,6 @@ pub enum NowPlayingPreferenceChange {
     AlwaysDisplayLastRecognizedSong(bool),
     Transition(TransitionEffect),
     TransitionDurationMs(u64),
-    LightsOff(bool),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -648,8 +761,9 @@ impl PreferencesInterface {
 #[cfg(test)]
 mod tests {
     use super::{
-        AlbumCoverSize, BackgroundStyle, NowPlayingPreferenceChange, NowPlayingPreferences,
-        Preferences, PreferencesInterface, PreferencesPatch, TRANSITION_DURATION_DEFAULT_MS,
+        AlbumCoverSize, BackgroundStyle, ClassicNowPlayingPreferences, DisplayMode,
+        NowPlayingPreferenceChange, NowPlayingPreferences, Preferences, PreferencesInterface,
+        PreferencesPatch, SharedNowPlayingPreferences, TRANSITION_DURATION_DEFAULT_MS,
         TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TrackInfoAlignment,
         TransitionEffect,
     };
@@ -658,21 +772,24 @@ mod tests {
     fn now_playing_defaults_have_one_typed_source() {
         let defaults = NowPlayingPreferences::default();
 
-        assert!(defaults.round_corners);
-        assert!(!defaults.hide_track_info);
-        assert_eq!(defaults.track_info_alignment, TrackInfoAlignment::Center);
+        assert_eq!(defaults.display_mode, DisplayMode::Classic);
+        assert!(defaults.classic.round_corners);
+        assert!(!defaults.classic.hide_track_info);
         assert_eq!(
-            defaults.album_cover_size,
+            defaults.classic.track_info_alignment,
+            TrackInfoAlignment::Center
+        );
+        assert_eq!(
+            defaults.classic.album_cover_size,
             AlbumCoverSize::MEDIUM_LARGE_MIDPOINT
         );
-        assert_eq!(defaults.background_style, BackgroundStyle::Gradient);
-        assert!(defaults.always_display_last_recognized_song);
-        assert_eq!(defaults.transition, TransitionEffect::None);
+        assert_eq!(defaults.classic.background_style, BackgroundStyle::Gradient);
+        assert!(defaults.shared.always_display_last_recognized_song);
+        assert_eq!(defaults.shared.transition, TransitionEffect::None);
         assert_eq!(
-            defaults.transition_duration_ms,
+            defaults.shared.transition_duration_ms,
             TRANSITION_DURATION_DEFAULT_MS
         );
-        assert!(!defaults.lights_off);
         assert_eq!(Preferences::default().now_playing, defaults);
     }
 
@@ -682,6 +799,7 @@ mod tests {
         let table = serialized.parse::<toml::Table>().unwrap();
 
         assert!(!table.contains_key("now_playing"));
+        assert_eq!(table["now_playing_display_mode"].as_str(), Some("classic"));
         assert_eq!(table["now_playing_round_corners"].as_bool(), Some(true));
         assert_eq!(table["hide_now_playing_info"].as_bool(), Some(false));
         assert_eq!(
@@ -701,7 +819,7 @@ mod tests {
             table["now_playing_transition_duration_ms"].as_integer(),
             Some(2_000)
         );
-        assert_eq!(table["lights_off_enabled"].as_bool(), Some(false));
+        assert!(!table.contains_key("lights_off_enabled"));
     }
 
     #[test]
@@ -724,43 +842,101 @@ lights_off_enabled = false
         assert_eq!(
             preferences.now_playing,
             NowPlayingPreferences {
-                round_corners: false,
-                hide_track_info: true,
-                track_info_alignment: TrackInfoAlignment::Left,
-                album_cover_size: AlbumCoverSize::SMALL,
-                background_style: BackgroundStyle::Solid,
-                always_display_last_recognized_song: false,
-                transition: TransitionEffect::SlideUp,
-                transition_duration_ms: 3_500,
-                lights_off: false,
+                display_mode: DisplayMode::Classic,
+                classic: ClassicNowPlayingPreferences {
+                    round_corners: false,
+                    hide_track_info: true,
+                    track_info_alignment: TrackInfoAlignment::Left,
+                    album_cover_size: AlbumCoverSize::SMALL,
+                    background_style: BackgroundStyle::Solid,
+                },
+                shared: SharedNowPlayingPreferences {
+                    always_display_last_recognized_song: false,
+                    transition: TransitionEffect::SlideUp,
+                    transition_duration_ms: 3_500,
+                },
             }
         );
     }
 
     #[test]
-    fn loaded_now_playing_preferences_are_normalized() {
+    fn legacy_lights_off_is_migrated_without_discarding_classic_settings() {
         let preferences: Preferences = toml::from_str(
             r#"
 hide_now_playing_info = true
+now_playing_round_corners = false
 now_playing_transition_duration_ms = 1
 lights_off_enabled = true
 "#,
         )
         .unwrap();
 
-        assert!(preferences.now_playing.lights_off);
-        assert!(!preferences.now_playing.hide_track_info);
+        assert_eq!(preferences.now_playing.display_mode, DisplayMode::LightsOff);
+        assert!(preferences.now_playing.classic.hide_track_info);
+        assert!(!preferences.now_playing.classic.round_corners);
         assert_eq!(
-            preferences.now_playing.transition_duration_ms,
+            preferences.now_playing.shared.transition_duration_ms,
             TRANSITION_DURATION_MIN_MS
         );
+
+        let migrated = toml::to_string(&preferences).unwrap();
+        let migrated_table = migrated.parse::<toml::Table>().unwrap();
+        assert_eq!(
+            migrated_table["now_playing_display_mode"].as_str(),
+            Some("lights-off")
+        );
+        assert_eq!(
+            migrated_table["hide_now_playing_info"].as_bool(),
+            Some(true)
+        );
+        assert!(!migrated_table.contains_key("lights_off_enabled"));
+    }
+
+    #[test]
+    fn explicit_display_mode_takes_precedence_over_legacy_lights_off() {
+        let preferences: Preferences = toml::from_str(
+            r#"
+now_playing_display_mode = "ambient"
+lights_off_enabled = true
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(preferences.now_playing.display_mode, DisplayMode::Ambient);
+    }
+
+    #[test]
+    fn display_mode_and_classic_settings_round_trip_together() {
+        for display_mode in DisplayMode::ALL {
+            let preferences = Preferences {
+                now_playing: NowPlayingPreferences {
+                    display_mode,
+                    classic: ClassicNowPlayingPreferences {
+                        round_corners: false,
+                        hide_track_info: true,
+                        background_style: BackgroundStyle::Solid,
+                        ..ClassicNowPlayingPreferences::default()
+                    },
+                    ..NowPlayingPreferences::default()
+                },
+                ..Preferences::default()
+            };
+
+            let serialized = toml::to_string(&preferences).unwrap();
+            let deserialized: Preferences = toml::from_str(&serialized).unwrap();
+
+            assert_eq!(deserialized.now_playing, preferences.now_playing);
+        }
     }
 
     #[test]
     fn general_patch_preserves_now_playing_preferences() {
         let preferences = Preferences {
             now_playing: NowPlayingPreferences {
-                background_style: BackgroundStyle::Solid,
+                classic: ClassicNowPlayingPreferences {
+                    background_style: BackgroundStyle::Solid,
+                    ..ClassicNowPlayingPreferences::default()
+                },
                 ..NowPlayingPreferences::default()
             },
             ..Preferences::default()
@@ -784,9 +960,16 @@ lights_off_enabled = true
         let preferences = Preferences {
             enable_notifications: Some(false),
             now_playing: NowPlayingPreferences {
-                round_corners: false,
-                album_cover_size: AlbumCoverSize::SMALL,
-                transition_duration_ms: TRANSITION_DURATION_MAX_MS,
+                display_mode: DisplayMode::LightsOff,
+                classic: ClassicNowPlayingPreferences {
+                    round_corners: false,
+                    album_cover_size: AlbumCoverSize::SMALL,
+                    ..ClassicNowPlayingPreferences::default()
+                },
+                shared: SharedNowPlayingPreferences {
+                    transition_duration_ms: TRANSITION_DURATION_MAX_MS,
+                    ..SharedNowPlayingPreferences::default()
+                },
                 ..NowPlayingPreferences::default()
             },
             ..Preferences::default()
@@ -813,26 +996,48 @@ lights_off_enabled = true
         };
 
         interface.update_now_playing(NowPlayingPreferenceChange::HideTrackInfo(true));
-        interface.update_now_playing(NowPlayingPreferenceChange::LightsOff(true));
-        assert!(!interface.preferences.now_playing.hide_track_info);
-
-        interface.update_now_playing(NowPlayingPreferenceChange::HideTrackInfo(true));
-        assert!(!interface.preferences.now_playing.hide_track_info);
+        interface.update_now_playing(NowPlayingPreferenceChange::RoundCorners(false));
+        interface.update_now_playing(NowPlayingPreferenceChange::DisplayMode(
+            DisplayMode::Ambient,
+        ));
+        interface.update_now_playing(NowPlayingPreferenceChange::DisplayMode(
+            DisplayMode::LightsOff,
+        ));
+        interface.update_now_playing(NowPlayingPreferenceChange::DisplayMode(
+            DisplayMode::Classic,
+        ));
+        assert!(interface.preferences.now_playing.classic.hide_track_info);
+        assert!(!interface.preferences.now_playing.classic.round_corners);
 
         interface.update_now_playing(NowPlayingPreferenceChange::TransitionDurationMs(1));
         assert_eq!(
-            interface.preferences.now_playing.transition_duration_ms,
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .transition_duration_ms,
             TRANSITION_DURATION_MIN_MS
         );
         interface.update_now_playing(NowPlayingPreferenceChange::TransitionDurationMs(u64::MAX));
         assert_eq!(
-            interface.preferences.now_playing.transition_duration_ms,
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .transition_duration_ms,
             TRANSITION_DURATION_MAX_MS
         );
     }
 
     #[test]
     fn persisted_display_options_round_trip() {
+        for mode in DisplayMode::ALL {
+            assert_eq!(
+                DisplayMode::from_preference(Some(mode.as_preference_value())),
+                mode
+            );
+        }
+
         for effect in TransitionEffect::ALL {
             assert_eq!(
                 TransitionEffect::from_preference(Some(effect.as_preference_value())),

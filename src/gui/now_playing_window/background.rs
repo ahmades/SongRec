@@ -2,13 +2,17 @@
 
 use super::palette::Background;
 use super::style::font_css_for_size;
-use super::{BackgroundStyle, NowPlayingWindow};
+use super::ui::{CinemaFraming, configure_classic_content, configure_immersive_info};
+use super::{BackgroundStyle, DisplayMode, NowPlayingWindow};
 use adw::prelude::*;
-use cairo::{Context, Format, ImageSurface};
+use cairo::{Context, Format, ImageSurface, LinearGradient};
 use std::cell::RefCell;
 
 const GRADIENT_SURFACE_WIDTH: i32 = 256;
 const TRANSITION_START: f64 = 0.20;
+const AMBIENT_BASE_SCRIM_ALPHA: f64 = 0.22;
+const AMBIENT_TOP_SCRIM_ALPHA: f64 = 0.08;
+const AMBIENT_BOTTOM_SCRIM_ALPHA: f64 = 0.14;
 
 #[derive(Debug, Clone)]
 pub(super) struct CachedGradient {
@@ -32,9 +36,23 @@ impl NowPlayingWindow {
                     width,
                     height,
                     background_state_for_draw.get(),
-                    settings.background_style,
-                    settings.lights_off,
+                    settings.classic.background_style,
+                    settings.display_mode,
                     &gradient_surface_for_draw,
+                );
+            });
+
+        let settings_for_scrim = self.state.settings.clone();
+        let cinema_for_scrim = self.ui.cinema_artwork.clone();
+        self.ui
+            .scrim_area
+            .set_draw_func(move |_, context, width, height| {
+                draw_immersive_scrim(
+                    context,
+                    width,
+                    height,
+                    settings_for_scrim.get().display_mode,
+                    cinema_for_scrim.framing(width, height),
                 );
             });
 
@@ -42,6 +60,14 @@ impl NowPlayingWindow {
         let gradient_surface_for_resize = self.state.gradient_surface.clone();
         let background_state_for_resize = self.state.current_background.clone();
         let settings_for_resize = self.state.settings.clone();
+        let cinema_for_resize = self.ui.cinema_artwork.clone();
+        let scrim_for_resize = self.ui.scrim_area.clone();
+        let classic_content_for_resize = self.ui.classic_content.clone();
+        let immersive_info_for_resize = self.ui.immersive_info_box.clone();
+        let immersive_title_for_resize = self.ui.immersive_title_label.clone();
+        let immersive_artist_for_resize = self.ui.immersive_artist_label.clone();
+        let immersive_album_for_resize = self.ui.immersive_album_label.clone();
+        let immersive_details_for_resize = self.ui.immersive_details_label.clone();
         self.ui
             .background_area
             .connect_resize(move |area, width, height| {
@@ -50,54 +76,47 @@ impl NowPlayingWindow {
                 }
 
                 text_css_for_resize.load_from_string(&font_css_for_size((width, height)));
+                configure_classic_content(&classic_content_for_resize, width, height);
 
                 let settings = settings_for_resize.get();
-                if matches!(settings.background_style, BackgroundStyle::Gradient) {
-                    rebuild_gradient_surface(
-                        &gradient_surface_for_resize,
-                        effective_background(
-                            background_state_for_resize.get(),
-                            settings.background_style,
-                            settings.lights_off,
-                        ),
-                        height,
-                    );
+                let (background, style) = effective_background(
+                    background_state_for_resize.get(),
+                    settings.classic.background_style,
+                    settings.display_mode,
+                );
+                if matches!(style, BackgroundStyle::Gradient) {
+                    rebuild_gradient_surface(&gradient_surface_for_resize, background, height);
                     area.queue_draw();
                 }
+                cinema_for_resize.container.queue_allocate();
+                configure_immersive_info(
+                    &immersive_info_for_resize,
+                    [
+                        &immersive_title_for_resize,
+                        &immersive_artist_for_resize,
+                        &immersive_album_for_resize,
+                        &immersive_details_for_resize,
+                    ],
+                    settings.display_mode,
+                    cinema_for_resize.framing(width, height),
+                    width,
+                    height,
+                );
+                scrim_for_resize.queue_draw();
             });
     }
 
-    /// Enables or disables Lights Off mode and updates artwork/background visibility.
-    pub(super) fn set_lights_off(&self, enabled: bool) {
-        self.with_preference_updates_suspended(|| {
-            if self.controls.lights_off_menu.is_active() != enabled {
-                self.controls.lights_off_menu.set_active(enabled);
-            }
-            self.controls.hide_track_info.set_sensitive(!enabled);
-            self.controls.round_corners.set_sensitive(!enabled);
-            self.controls.album_cover_size.set_sensitive(!enabled);
-
-            if enabled {
-                if self.controls.hide_track_info.is_active() {
-                    self.controls.hide_track_info.set_active(false);
-                }
-                self.ui.info_box.set_visible(true);
-            }
-        });
-        self.apply_background();
-        self.sync_artwork_visibility();
-    }
-
-    /// Applies the active background style, including the Lights Off override.
+    /// Applies the mode-aware background underneath artwork layers.
     pub(super) fn apply_background(&self) {
         let settings = self.state.settings.get();
         redraw_background(
             &self.ui.background_area,
             &self.state.gradient_surface,
             self.state.current_background.get(),
-            settings.background_style,
-            settings.lights_off,
+            settings.classic.background_style,
+            settings.display_mode,
         );
+        self.ui.scrim_area.queue_draw();
     }
 
     /// Selects the solid or gradient background rendering style.
@@ -121,43 +140,37 @@ impl NowPlayingWindow {
 /// Rebuilds the gradient cache when needed and requests the next background paint.
 ///
 /// Both direct preference changes and delayed track updates use this operation so
-/// they apply the same Lights Off override and gradient-cache invalidation rules.
+/// they apply the same mode override and gradient-cache invalidation rules.
 pub(super) fn redraw_background(
     area: &gtk::DrawingArea,
     cache: &RefCell<Option<CachedGradient>>,
     background: Background,
     style: BackgroundStyle,
-    lights_off: bool,
+    display_mode: DisplayMode,
 ) {
+    let (background, style) = effective_background(background, style, display_mode);
     if matches!(style, BackgroundStyle::Gradient) {
-        rebuild_gradient_surface(
-            cache,
-            effective_background(background, style, lights_off),
-            area.height(),
-        );
+        rebuild_gradient_surface(cache, background, area.height());
     }
     area.queue_draw();
 }
 
-/// Resolves the background colors used for rendering, overriding them for Lights Off.
+/// Resolves the fallback beneath each presentation mode.
 fn effective_background(
     background: Background,
     style: BackgroundStyle,
-    lights_off: bool,
-) -> Background {
-    if lights_off {
-        match style {
-            BackgroundStyle::Gradient => Background {
-                top: (38, 38, 38),
-                bottom: (0, 0, 0),
-            },
-            BackgroundStyle::Solid => Background {
+    display_mode: DisplayMode,
+) -> (Background, BackgroundStyle) {
+    match display_mode {
+        DisplayMode::Classic => (background, style),
+        DisplayMode::FullBleed | DisplayMode::Ambient => (background, BackgroundStyle::Gradient),
+        DisplayMode::LightsOff => (
+            Background {
                 top: (0, 0, 0),
                 bottom: (0, 0, 0),
             },
-        }
-    } else {
-        background
+            BackgroundStyle::Solid,
+        ),
     }
 }
 
@@ -168,14 +181,14 @@ fn draw_background(
     height: i32,
     background: Background,
     style: BackgroundStyle,
-    lights_off: bool,
+    display_mode: DisplayMode,
     cache: &RefCell<Option<CachedGradient>>,
 ) {
     if width <= 0 || height <= 0 {
         return;
     }
 
-    let background = effective_background(background, style, lights_off);
+    let (background, style) = effective_background(background, style, display_mode);
 
     if matches!(style, BackgroundStyle::Solid) {
         context.set_source_rgb(
@@ -219,6 +232,60 @@ fn draw_background(
         log::warn!("Failed to paint cached gradient surface: {error}");
     }
     let _ = context.restore();
+}
+
+/// Paints neutral black scrims that keep white metadata readable without tinting it.
+fn draw_immersive_scrim(
+    context: &Context,
+    width: i32,
+    height: i32,
+    display_mode: DisplayMode,
+    framing: CinemaFraming,
+) {
+    if width <= 0 || height <= 0 {
+        return;
+    }
+
+    match display_mode {
+        DisplayMode::Classic | DisplayMode::LightsOff => return,
+        DisplayMode::Ambient => {
+            context.set_source_rgba(0.0, 0.0, 0.0, AMBIENT_BASE_SCRIM_ALPHA);
+            let _ = context.paint();
+
+            let gradient = LinearGradient::new(0.0, 0.0, 0.0, f64::from(height));
+            gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, AMBIENT_TOP_SCRIM_ALPHA);
+            gradient.add_color_stop_rgba(0.5, 0.0, 0.0, 0.0, 0.0);
+            gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, AMBIENT_BOTTOM_SCRIM_ALPHA);
+            if context.set_source(gradient).is_ok() {
+                let _ = context.paint();
+            }
+        }
+        DisplayMode::FullBleed => {
+            context.set_source_rgba(0.0, 0.0, 0.0, 0.12);
+            let _ = context.paint();
+
+            let gradient = match framing {
+                CinemaFraming::Wide => {
+                    let gradient = LinearGradient::new(0.0, 0.0, f64::from(width) * 0.68, 0.0);
+                    gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.78);
+                    gradient.add_color_stop_rgba(0.72, 0.0, 0.0, 0.0, 0.30);
+                    gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0);
+                    gradient
+                }
+                CinemaFraming::Cover | CinemaFraming::Tall => {
+                    let gradient =
+                        LinearGradient::new(0.0, f64::from(height) * 0.40, 0.0, f64::from(height));
+                    gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.0);
+                    gradient.add_color_stop_rgba(0.60, 0.0, 0.0, 0.0, 0.34);
+                    gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.82);
+                    gradient
+                }
+            };
+            if context.set_source(gradient).is_ok() {
+                let _ = context.paint();
+            }
+        }
+    }
 }
 
 /// Rebuilds and caches the vertical gradient surface when its inputs change.
@@ -349,9 +416,13 @@ fn argb32_pixel_bytes(red: u8, green: u8, blue: u8) -> [u8; 4] {
 
 #[cfg(test)]
 mod tests {
-    use super::{argb32_pixel_bytes, effective_background};
-    use crate::gui::now_playing_window::BackgroundStyle;
+    use super::{
+        AMBIENT_BASE_SCRIM_ALPHA, argb32_pixel_bytes, draw_immersive_scrim, effective_background,
+        srgb_to_linear,
+    };
     use crate::gui::now_playing_window::palette::Background;
+    use crate::gui::now_playing_window::ui::AMBIENT_FOREGROUND_OPACITY;
+    use crate::gui::now_playing_window::{BackgroundStyle, DisplayMode};
 
     #[test]
     fn argb32_pixels_follow_cairos_native_endian_layout() {
@@ -362,33 +433,100 @@ mod tests {
     }
 
     #[test]
-    fn lights_off_uses_the_expected_background_for_each_style() {
+    fn modes_resolve_only_the_background_styles_that_apply_to_them() {
         let artwork_background = Background {
             top: (10, 20, 30),
             bottom: (40, 50, 60),
         };
 
         assert_eq!(
-            effective_background(artwork_background, BackgroundStyle::Gradient, false),
-            artwork_background
+            effective_background(
+                artwork_background,
+                BackgroundStyle::Gradient,
+                DisplayMode::Classic
+            ),
+            (artwork_background, BackgroundStyle::Gradient)
         );
         assert_eq!(
-            effective_background(artwork_background, BackgroundStyle::Solid, false),
-            artwork_background
+            effective_background(
+                artwork_background,
+                BackgroundStyle::Solid,
+                DisplayMode::Classic
+            ),
+            (artwork_background, BackgroundStyle::Solid)
         );
         assert_eq!(
-            effective_background(artwork_background, BackgroundStyle::Gradient, true),
-            Background {
-                top: (38, 38, 38),
-                bottom: (0, 0, 0),
+            effective_background(
+                artwork_background,
+                BackgroundStyle::Solid,
+                DisplayMode::Ambient
+            ),
+            (artwork_background, BackgroundStyle::Gradient)
+        );
+        assert_eq!(
+            effective_background(
+                artwork_background,
+                BackgroundStyle::Gradient,
+                DisplayMode::LightsOff
+            ),
+            (
+                Background {
+                    top: (0, 0, 0),
+                    bottom: (0, 0, 0),
+                },
+                BackgroundStyle::Solid
+            )
+        );
+    }
+
+    #[test]
+    fn ambient_uniform_scrim_keeps_white_text_readable_over_white_artwork() {
+        let toned_white = 0.50;
+        let original_white = 1.0;
+        let artwork = toned_white * (1.0 - AMBIENT_FOREGROUND_OPACITY)
+            + original_white * AMBIENT_FOREGROUND_OPACITY;
+        let composited = artwork * (1.0 - AMBIENT_BASE_SCRIM_ALPHA);
+        let luminance = srgb_to_linear(composited);
+        let contrast = 1.05 / (luminance + 0.05);
+
+        assert!(
+            contrast >= 4.5,
+            "Ambient primary metadata contrast was {contrast:.2}:1"
+        );
+    }
+
+    #[test]
+    fn ambient_scrim_has_no_horizontal_shape() {
+        for (width, height) in [(320, 180), (180, 320)] {
+            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                .expect("test surface");
+            let context = cairo::Context::new(&surface).expect("test context");
+            draw_immersive_scrim(
+                &context,
+                width,
+                height,
+                DisplayMode::Ambient,
+                super::CinemaFraming::Cover,
+            );
+            drop(context);
+            surface.flush();
+
+            let stride = surface.stride() as usize;
+            let data = surface.data().expect("test surface data");
+            let y = height as usize / 2;
+            let pixel_at = |x: usize| {
+                let offset = y * stride + x * 4;
+                u32::from_ne_bytes(data[offset..offset + 4].try_into().unwrap())
+            };
+            let expected_pixel = pixel_at(0);
+            let rendered_alpha = (expected_pixel >> 24) as i32;
+            let expected_alpha = (AMBIENT_BASE_SCRIM_ALPHA * 255.0).round() as i32;
+
+            assert!((rendered_alpha - expected_alpha).abs() <= 1);
+
+            for x in 1..width {
+                assert_eq!(pixel_at(x as usize), expected_pixel);
             }
-        );
-        assert_eq!(
-            effective_background(artwork_background, BackgroundStyle::Solid, true),
-            Background {
-                top: (0, 0, 0),
-                bottom: (0, 0, 0),
-            }
-        );
+        }
     }
 }

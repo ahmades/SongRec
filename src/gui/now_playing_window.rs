@@ -8,6 +8,7 @@
 mod album_cover_size;
 mod background;
 mod controller;
+mod display_mode;
 mod main_preferences;
 mod menu;
 mod palette;
@@ -25,7 +26,7 @@ use state::NowPlayingState;
 use ui::NowPlayingWidgets;
 
 pub use crate::core::preferences::{
-    AlbumCoverSize, BackgroundStyle, TrackInfoAlignment, TransitionEffect,
+    AlbumCoverSize, BackgroundStyle, DisplayMode, TrackInfoAlignment, TransitionEffect,
 };
 pub(crate) use crate::core::preferences::{
     NowPlayingPreferences as NowPlayingSettings, TRANSITION_DURATION_DEFAULT_MS,

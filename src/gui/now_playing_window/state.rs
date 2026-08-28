@@ -38,7 +38,7 @@ impl PresentedTrack {
     pub(super) fn from_message(
         message: &SongRecognizedMessage,
         artwork: Option<PreparedArtwork>,
-        palette_pending: bool,
+        visuals_pending: bool,
     ) -> Self {
         Self {
             track_key: message.track_key.clone(),
@@ -47,7 +47,7 @@ impl PresentedTrack {
             album_name: message.album_name.clone(),
             release_year: message.release_year.clone(),
             artwork,
-            artwork_pending: message.artwork_pending || palette_pending,
+            artwork_pending: message.artwork_pending || visuals_pending,
             expected_artwork_source: message.cover_image.as_ref().map(Arc::downgrade),
         }
     }

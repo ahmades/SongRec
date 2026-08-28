@@ -459,6 +459,15 @@ Adw.ApplicationWindow main_window {
               label: _("Reset");
             };
 
+            Adw.ComboRow display_mode_setting {
+              subtitle: _("Choose how the recognized song is presented");
+              title: _("Display mode");
+            }
+          }
+
+          Adw.PreferencesGroup classic_now_playing_preferences {
+            title: _("Classic settings");
+
             Adw.SwitchRow round_corners_setting {
               subtitle: _("Round the corners of the album artwork");
               title: _("Round corners of album cover");
@@ -532,6 +541,10 @@ Adw.ApplicationWindow main_window {
                 }
               }
             }
+          }
+
+          Adw.PreferencesGroup general_now_playing_preferences {
+            title: _("General");
 
             Adw.SwitchRow always_display_last_recognized_song_setting {
               subtitle: _("Keep showing the last recognized song when there is no current match");
@@ -562,11 +575,6 @@ Adw.ApplicationWindow main_window {
                   value: 2000;
                 };
               }
-            }
-
-            Adw.SwitchRow lights_off_setting {
-              subtitle: _("Show only the track on a black background");
-              title: _("Lights Off");
             }
           }
 

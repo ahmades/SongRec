@@ -4,7 +4,7 @@ use super::{
     AlbumCoverSize, BackgroundStyle, NowPlayingSettings, SettingsController, TrackInfoAlignment,
     TransitionEffect, transition_duration_from_scale,
 };
-use crate::core::preferences::NowPlayingPreferenceChange;
+use crate::core::preferences::{DisplayMode, NowPlayingPreferenceChange};
 use adw::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -12,6 +12,8 @@ use std::rc::Rc;
 #[derive(Clone)]
 struct PreferencesWidgets {
     reset: gtk::Button,
+    display_mode: adw::ComboRow,
+    classic_settings: adw::PreferencesGroup,
     round_corners: adw::SwitchRow,
     hide_track_info: adw::SwitchRow,
     track_info_alignment: adw::ActionRow,
@@ -23,7 +25,6 @@ struct PreferencesWidgets {
     always_display_last_recognized_song: adw::SwitchRow,
     transition: adw::ComboRow,
     transition_duration: gtk::Scale,
-    lights_off: adw::SwitchRow,
 }
 
 /// Owns the widgets and signal bindings for the main Now Playing preferences.
@@ -38,6 +39,8 @@ impl NowPlayingPreferencesView {
             reset: builder
                 .object("reset_now_playing_preferences_button")
                 .unwrap(),
+            display_mode: builder.object("display_mode_setting").unwrap(),
+            classic_settings: builder.object("classic_now_playing_preferences").unwrap(),
             round_corners: builder.object("round_corners_setting").unwrap(),
             hide_track_info: builder.object("hide_track_info_setting").unwrap(),
             track_info_alignment: builder.object("track_info_alignment_setting").unwrap(),
@@ -51,11 +54,22 @@ impl NowPlayingPreferencesView {
                 .unwrap(),
             transition: builder.object("transition_setting").unwrap(),
             transition_duration: builder.object("transition_duration_setting_scale").unwrap(),
-            lights_off: builder.object("lights_off_setting").unwrap(),
         };
 
         AlbumCoverSize::configure_scale(&widgets.album_cover_size);
         AlbumCoverSize::install_slider_snap(&widgets.album_cover_size);
+
+        let display_mode_labels = DisplayMode::ALL
+            .into_iter()
+            .map(DisplayMode::translated_label)
+            .collect::<Vec<_>>();
+        let display_mode_label_references = display_mode_labels
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        widgets
+            .display_mode
+            .set_model(Some(&gtk::StringList::new(&display_mode_label_references)));
 
         let transition_labels = TransitionEffect::ALL
             .into_iter()
@@ -83,63 +97,60 @@ impl NowPlayingPreferencesView {
         let was_applying = self.applying.replace(true);
 
         self.widgets
+            .display_mode
+            .set_selected(settings.display_mode.index());
+        self.widgets
+            .classic_settings
+            .set_visible(settings.display_mode.shows_classic_settings());
+        self.widgets
             .round_corners
-            .set_active(settings.round_corners);
+            .set_active(settings.classic.round_corners);
         self.widgets
             .hide_track_info
-            .set_active(settings.hide_track_info);
+            .set_active(settings.classic.hide_track_info);
         self.widgets.track_info_alignment_left.set_active(matches!(
-            settings.track_info_alignment,
+            settings.classic.track_info_alignment,
             TrackInfoAlignment::Left
         ));
         self.widgets
             .track_info_alignment_center
             .set_active(matches!(
-                settings.track_info_alignment,
+                settings.classic.track_info_alignment,
                 TrackInfoAlignment::Center
             ));
         self.widgets
             .album_cover_size
-            .set_value(settings.album_cover_size.scale_value());
+            .set_value(settings.classic.album_cover_size.scale_value());
         self.widgets.background_style_gradient.set_active(matches!(
-            settings.background_style,
+            settings.classic.background_style,
             BackgroundStyle::Gradient
         ));
-        self.widgets
-            .background_style_solid
-            .set_active(matches!(settings.background_style, BackgroundStyle::Solid));
+        self.widgets.background_style_solid.set_active(matches!(
+            settings.classic.background_style,
+            BackgroundStyle::Solid
+        ));
         self.widgets
             .always_display_last_recognized_song
-            .set_active(settings.always_display_last_recognized_song);
+            .set_active(settings.shared.always_display_last_recognized_song);
         self.widgets
             .transition
-            .set_selected(settings.transition.index());
+            .set_selected(settings.shared.transition.index());
         self.widgets
             .transition_duration
-            .set_value(settings.transition_duration_ms as f64);
-        self.widgets.lights_off.set_active(settings.lights_off);
+            .set_value(settings.shared.transition_duration_ms as f64);
 
         self.apply_sensitivity(settings);
         self.applying.set(was_applying);
     }
 
     fn apply_sensitivity(&self, settings: NowPlayingSettings) {
-        let artwork_controls_enabled = !settings.lights_off;
-        self.widgets
-            .round_corners
-            .set_sensitive(artwork_controls_enabled);
-        self.widgets
-            .hide_track_info
-            .set_sensitive(artwork_controls_enabled);
-        self.widgets
-            .album_cover_size
-            .set_sensitive(artwork_controls_enabled);
         self.widgets
             .track_info_alignment
-            .set_sensitive(!settings.hide_track_info);
-        self.widgets
-            .transition_duration
-            .set_sensitive(!matches!(settings.transition, TransitionEffect::None));
+            .set_sensitive(!settings.classic.hide_track_info);
+        self.widgets.transition_duration.set_sensitive(!matches!(
+            settings.shared.transition,
+            TransitionEffect::None
+        ));
     }
 
     fn connect_handlers(&self, controller: SettingsController) {
@@ -147,6 +158,22 @@ impl NowPlayingPreferencesView {
         self.widgets.reset.connect_clicked(move |_| {
             controller_for_reset.reset();
         });
+
+        let applying = self.applying.clone();
+        let controller_for_display_mode = controller.clone();
+        let classic_settings = self.widgets.classic_settings.clone();
+        self.widgets
+            .display_mode
+            .connect_selected_notify(move |combo| {
+                if applying.get() {
+                    return;
+                }
+
+                let display_mode = DisplayMode::from_index(combo.selected());
+                controller_for_display_mode
+                    .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
+                classic_settings.set_visible(display_mode.shows_classic_settings());
+            });
 
         let applying = self.applying.clone();
         let controller_for_round_corners = controller.clone();
@@ -279,34 +306,6 @@ impl NowPlayingPreferencesView {
                         ),
                     );
                 }
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_lights_off = controller;
-        let hide_track_info = self.widgets.hide_track_info.clone();
-        let round_corners = self.widgets.round_corners.clone();
-        let album_cover_size = self.widgets.album_cover_size.clone();
-        let track_info_alignment = self.widgets.track_info_alignment.clone();
-        self.widgets
-            .lights_off
-            .connect_active_notify(move |switch| {
-                if applying.get() {
-                    return;
-                }
-
-                controller_for_lights_off
-                    .update(NowPlayingPreferenceChange::LightsOff(switch.is_active()));
-                let settings = controller_for_lights_off.settings();
-
-                let was_applying = applying.replace(true);
-                hide_track_info.set_active(settings.hide_track_info);
-                applying.set(was_applying);
-
-                let artwork_controls_enabled = !settings.lights_off;
-                hide_track_info.set_sensitive(artwork_controls_enabled);
-                round_corners.set_sensitive(artwork_controls_enabled);
-                album_cover_size.set_sensitive(artwork_controls_enabled);
-                track_info_alignment.set_sensitive(!settings.hide_track_info);
             });
     }
 }
