@@ -19,6 +19,7 @@ struct PreferencesWidgets {
     track_info_alignment: adw::ActionRow,
     track_info_alignment_left: gtk::ToggleButton,
     track_info_alignment_center: gtk::ToggleButton,
+    track_info_alignment_right: gtk::ToggleButton,
     album_cover_size: gtk::Scale,
     background_style_gradient: gtk::ToggleButton,
     background_style_solid: gtk::ToggleButton,
@@ -46,6 +47,7 @@ impl NowPlayingPreferencesView {
             track_info_alignment: builder.object("track_info_alignment_setting").unwrap(),
             track_info_alignment_left: builder.object("track_info_alignment_left").unwrap(),
             track_info_alignment_center: builder.object("track_info_alignment_center").unwrap(),
+            track_info_alignment_right: builder.object("track_info_alignment_right").unwrap(),
             album_cover_size: builder.object("album_cover_size_setting_scale").unwrap(),
             background_style_gradient: builder.object("background_style_gradient").unwrap(),
             background_style_solid: builder.object("background_style_solid").unwrap(),
@@ -107,7 +109,7 @@ impl NowPlayingPreferencesView {
             .set_active(settings.classic.round_corners);
         self.widgets
             .hide_track_info
-            .set_active(settings.classic.hide_track_info);
+            .set_active(settings.shared.hide_track_info);
         self.widgets.track_info_alignment_left.set_active(matches!(
             settings.classic.track_info_alignment,
             TrackInfoAlignment::Left
@@ -118,6 +120,10 @@ impl NowPlayingPreferencesView {
                 settings.classic.track_info_alignment,
                 TrackInfoAlignment::Center
             ));
+        self.widgets.track_info_alignment_right.set_active(matches!(
+            settings.classic.track_info_alignment,
+            TrackInfoAlignment::Right
+        ));
         self.widgets
             .album_cover_size
             .set_value(settings.classic.album_cover_size.scale_value());
@@ -145,8 +151,11 @@ impl NowPlayingPreferencesView {
 
     fn apply_sensitivity(&self, settings: NowPlayingSettings) {
         self.widgets
+            .hide_track_info
+            .set_sensitive(settings.display_mode.supports_hiding_track_info());
+        self.widgets
             .track_info_alignment
-            .set_sensitive(!settings.classic.hide_track_info);
+            .set_sensitive(!settings.shared.hide_track_info);
         self.widgets.transition_duration.set_sensitive(!matches!(
             settings.shared.transition,
             TransitionEffect::None
@@ -162,6 +171,7 @@ impl NowPlayingPreferencesView {
         let applying = self.applying.clone();
         let controller_for_display_mode = controller.clone();
         let classic_settings = self.widgets.classic_settings.clone();
+        let hide_track_info = self.widgets.hide_track_info.clone();
         self.widgets
             .display_mode
             .connect_selected_notify(move |combo| {
@@ -173,6 +183,7 @@ impl NowPlayingPreferencesView {
                 controller_for_display_mode
                     .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
                 classic_settings.set_visible(display_mode.shows_classic_settings());
+                hide_track_info.set_sensitive(display_mode.supports_hiding_track_info());
             });
 
         let applying = self.applying.clone();
@@ -222,6 +233,18 @@ impl NowPlayingPreferencesView {
                 if !applying.get() && button.is_active() {
                     controller_for_alignment_center.update(
                         NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Center),
+                    );
+                }
+            });
+
+        let applying = self.applying.clone();
+        let controller_for_alignment_right = controller.clone();
+        self.widgets
+            .track_info_alignment_right
+            .connect_toggled(move |button| {
+                if !applying.get() && button.is_active() {
+                    controller_for_alignment_right.update(
+                        NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Right),
                     );
                 }
             });

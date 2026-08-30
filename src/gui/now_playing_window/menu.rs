@@ -1,6 +1,7 @@
 //! Context-menu construction and preference-update signal bindings.
 
 use super::track::TrackPresentation;
+use super::ui::apply_classic_track_info_alignment;
 use super::{
     AlbumCoverSize, BackgroundStyle, DisplayMode, NowPlayingSettings, NowPlayingWindow,
     TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
@@ -101,6 +102,7 @@ pub(super) struct NowPlayingControls {
     pub(super) background_style_solid: gtk::ToggleButton,
     pub(super) track_info_alignment_left: gtk::ToggleButton,
     pub(super) track_info_alignment_center: gtk::ToggleButton,
+    pub(super) track_info_alignment_right: gtk::ToggleButton,
     pub(super) album_cover_size: gtk::Scale,
     pub(super) always_display_last_recognized_song: gtk::Switch,
     pub(super) transition_menu: gtk::DropDown,
@@ -160,7 +162,9 @@ pub(super) fn build_controls() -> NowPlayingControls {
     background_style_solid.set_group(Some(&background_style_gradient));
     let track_info_alignment_left = gtk::ToggleButton::with_label(&gettext("Left"));
     let track_info_alignment_center = gtk::ToggleButton::with_label(&gettext("Center"));
+    let track_info_alignment_right = gtk::ToggleButton::with_label(&gettext("Right"));
     track_info_alignment_center.set_group(Some(&track_info_alignment_left));
+    track_info_alignment_right.set_group(Some(&track_info_alignment_left));
 
     NowPlayingControls {
         display_mode_menu,
@@ -171,6 +175,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         background_style_solid,
         track_info_alignment_left,
         track_info_alignment_center,
+        track_info_alignment_right,
         album_cover_size,
         always_display_last_recognized_song,
         transition_menu,
@@ -201,13 +206,42 @@ impl NowPlayingWindow {
             controller_for_reset.reset();
         });
 
-        let display_mode_grid = menu_grid();
+        let shared_grid = menu_grid();
         self.add_display_mode_menu_row(
-            &display_mode_grid,
+            &shared_grid,
             &self.controls.display_mode_menu,
             settings.display_mode,
         );
-        menu_box.append(&display_mode_grid);
+        self.add_switch_menu_row(
+            &shared_grid,
+            1,
+            &gettext("Hide track info"),
+            &self.controls.hide_track_info,
+            settings.shared.hide_track_info,
+            settings.display_mode.supports_hiding_track_info(),
+        );
+        self.add_switch_menu_row(
+            &shared_grid,
+            2,
+            &gettext("Always display last recognized song"),
+            &self.controls.always_display_last_recognized_song,
+            settings.shared.always_display_last_recognized_song,
+            true,
+        );
+        self.add_transition_menu_row(
+            &shared_grid,
+            3,
+            &self.controls.transition_menu,
+            settings.shared.transition,
+        );
+        self.add_transition_duration_menu_row(
+            &shared_grid,
+            4,
+            &self.controls.transition_duration,
+            settings.shared.transition_duration_ms,
+            !matches!(settings.shared.transition, TransitionEffect::None),
+        );
+        menu_box.append(&shared_grid);
 
         let classic_heading = section_heading(&gettext("Classic settings"));
         self.controls.classic_settings.append(&classic_heading);
@@ -220,62 +254,24 @@ impl NowPlayingWindow {
             settings.classic.round_corners,
             true,
         );
-        self.add_switch_menu_row(
-            &classic_grid,
-            1,
-            &gettext("Hide track info"),
-            &self.controls.hide_track_info,
-            settings.classic.hide_track_info,
-            true,
-        );
         self.add_alignment_menu_row(
             &classic_grid,
-            2,
+            1,
             settings.classic.track_info_alignment,
-            !settings.classic.hide_track_info,
+            !settings.shared.hide_track_info,
         );
         self.add_album_cover_size_menu_row(
             &classic_grid,
-            3,
+            2,
             settings.classic.album_cover_size,
             true,
         );
-        self.add_background_style_menu_row(&classic_grid, 4, settings.classic.background_style);
+        self.add_background_style_menu_row(&classic_grid, 3, settings.classic.background_style);
         self.controls.classic_settings.append(&classic_grid);
         self.controls
             .classic_settings
             .set_visible(settings.display_mode.shows_classic_settings());
         menu_box.append(&self.controls.classic_settings);
-
-        let general_box = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(6)
-            .build();
-        general_box.append(&section_heading(&gettext("General")));
-        let general_grid = menu_grid();
-        self.add_switch_menu_row(
-            &general_grid,
-            0,
-            &gettext("Always display last recognized song"),
-            &self.controls.always_display_last_recognized_song,
-            settings.shared.always_display_last_recognized_song,
-            true,
-        );
-        self.add_transition_menu_row(
-            &general_grid,
-            1,
-            &self.controls.transition_menu,
-            settings.shared.transition,
-        );
-        self.add_transition_duration_menu_row(
-            &general_grid,
-            2,
-            &self.controls.transition_duration,
-            settings.shared.transition_duration_ms,
-            !matches!(settings.shared.transition, TransitionEffect::None),
-        );
-        general_box.append(&general_grid);
-        menu_box.append(&general_box);
 
         let fullscreen_grid = menu_grid();
         self.add_switch_menu_row(
@@ -549,6 +545,7 @@ impl NowPlayingWindow {
             .build();
         buttons.append(&self.controls.track_info_alignment_left);
         buttons.append(&self.controls.track_info_alignment_center);
+        buttons.append(&self.controls.track_info_alignment_right);
         // Keep sensitivity on the retained controls themselves. If this local
         // container is disabled, later preference updates cannot effectively
         // re-enable its children because the container is not retained.
@@ -558,11 +555,15 @@ impl NowPlayingWindow {
         self.controls
             .track_info_alignment_center
             .set_sensitive(sensitive);
+        self.controls
+            .track_info_alignment_right
+            .set_sensitive(sensitive);
         match alignment {
             TrackInfoAlignment::Left => self.controls.track_info_alignment_left.set_active(true),
             TrackInfoAlignment::Center => {
                 self.controls.track_info_alignment_center.set_active(true)
             }
+            TrackInfoAlignment::Right => self.controls.track_info_alignment_right.set_active(true),
         }
         menu_grid.attach(&buttons, 1, row, 1, 1);
     }
@@ -601,6 +602,7 @@ impl NowPlayingWindow {
         let applying_settings_for_display_mode = self.state.applying_settings.clone();
         let controller_for_display_mode = self.controller.clone();
         let classic_settings_for_display_mode = self.controls.classic_settings.clone();
+        let hide_track_info_for_display_mode = self.controls.hide_track_info.clone();
         let presentation_for_display_mode = TrackPresentation::from_window(self);
         self.controls
             .display_mode_menu
@@ -614,6 +616,8 @@ impl NowPlayingWindow {
                     .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
                 classic_settings_for_display_mode
                     .set_visible(display_mode.shows_classic_settings());
+                hide_track_info_for_display_mode
+                    .set_sensitive(display_mode.supports_hiding_track_info());
                 presentation_for_display_mode.refresh_mode();
             });
 
@@ -643,6 +647,8 @@ impl NowPlayingWindow {
         let info_box_for_hide = self.ui.info_box.clone();
         let alignment_left_for_hide = self.controls.track_info_alignment_left.clone();
         let alignment_center_for_hide = self.controls.track_info_alignment_center.clone();
+        let alignment_right_for_hide = self.controls.track_info_alignment_right.clone();
+        let presentation_for_hide = TrackPresentation::from_window(self);
         self.controls
             .hide_track_info
             .connect_active_notify(move |button| {
@@ -656,6 +662,8 @@ impl NowPlayingWindow {
                 info_box_for_hide.set_visible(!hide_track_info);
                 alignment_left_for_hide.set_sensitive(!hide_track_info);
                 alignment_center_for_hide.set_sensitive(!hide_track_info);
+                alignment_right_for_hide.set_sensitive(!hide_track_info);
+                presentation_for_hide.refresh_mode();
             });
 
         let applying_settings_for_alignment_left = self.state.applying_settings.clone();
@@ -675,12 +683,14 @@ impl NowPlayingWindow {
                 controller_for_alignment_left.update(
                     NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Left),
                 );
-                apply_track_info_alignment(
+                apply_classic_track_info_alignment(
                     &info_box_for_alignment_left,
-                    &title_for_alignment_left,
-                    &artist_for_alignment_left,
-                    &album_for_alignment_left,
-                    &details_for_alignment_left,
+                    [
+                        &title_for_alignment_left,
+                        &artist_for_alignment_left,
+                        &album_for_alignment_left,
+                        &details_for_alignment_left,
+                    ],
                     TrackInfoAlignment::Left,
                 );
             });
@@ -702,13 +712,44 @@ impl NowPlayingWindow {
                 controller_for_alignment_center.update(
                     NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Center),
                 );
-                apply_track_info_alignment(
+                apply_classic_track_info_alignment(
                     &info_box_for_alignment_center,
-                    &title_for_alignment_center,
-                    &artist_for_alignment_center,
-                    &album_for_alignment_center,
-                    &details_for_alignment_center,
+                    [
+                        &title_for_alignment_center,
+                        &artist_for_alignment_center,
+                        &album_for_alignment_center,
+                        &details_for_alignment_center,
+                    ],
                     TrackInfoAlignment::Center,
+                );
+            });
+
+        let applying_settings_for_alignment_right = self.state.applying_settings.clone();
+        let controller_for_alignment_right = self.controller.clone();
+        let info_box_for_alignment_right = self.ui.info_box.clone();
+        let title_for_alignment_right = self.ui.title_label.clone();
+        let artist_for_alignment_right = self.ui.artist_label.clone();
+        let album_for_alignment_right = self.ui.album_label.clone();
+        let details_for_alignment_right = self.ui.details_label.clone();
+        self.controls
+            .track_info_alignment_right
+            .connect_toggled(move |button| {
+                if applying_settings_for_alignment_right.get() || !button.is_active() {
+                    return;
+                }
+
+                controller_for_alignment_right.update(
+                    NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Right),
+                );
+                apply_classic_track_info_alignment(
+                    &info_box_for_alignment_right,
+                    [
+                        &title_for_alignment_right,
+                        &artist_for_alignment_right,
+                        &album_for_alignment_right,
+                        &details_for_alignment_right,
+                    ],
+                    TrackInfoAlignment::Right,
                 );
             });
 
@@ -808,26 +849,6 @@ impl NowPlayingWindow {
                 background_area_for_solid.queue_draw();
             });
     }
-}
-
-/// Applies a metadata alignment without needing to retain a window reference in a GTK callback.
-fn apply_track_info_alignment(
-    info_box: &gtk::Box,
-    title_label: &gtk::Label,
-    artist_label: &gtk::Label,
-    album_label: &gtk::Label,
-    details_label: &gtk::Label,
-    alignment: TrackInfoAlignment,
-) {
-    let alignment = match alignment {
-        TrackInfoAlignment::Left => gtk::Align::Start,
-        TrackInfoAlignment::Center => gtk::Align::Center,
-    };
-    info_box.set_halign(alignment);
-    title_label.set_halign(alignment);
-    artist_label.set_halign(alignment);
-    album_label.set_halign(alignment);
-    details_label.set_halign(alignment);
 }
 
 #[cfg(test)]

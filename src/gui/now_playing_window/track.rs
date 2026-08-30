@@ -161,6 +161,7 @@ impl TrackPresentation {
             settings.display_mode,
             current_artwork_available,
             retained_artwork_available,
+            settings.shared.hide_track_info,
         );
         drop(state);
 
@@ -419,6 +420,7 @@ fn presentation_visibility(
     display_mode: DisplayMode,
     current_artwork_available: bool,
     retained_artwork_available: bool,
+    hide_track_info: bool,
 ) -> PresentationVisibility {
     if matches!(presentation_mode, PresentationMode::Listening) {
         return PresentationVisibility {
@@ -432,6 +434,8 @@ fn presentation_visibility(
         };
     }
 
+    let show_track_info = !hide_track_info || !display_mode.supports_hiding_track_info();
+
     PresentationVisibility {
         classic_content: matches!(display_mode, DisplayMode::Classic),
         // A retained cover is useful as an immersive backdrop while the next
@@ -443,7 +447,7 @@ fn presentation_visibility(
             && retained_artwork_available,
         ambient_artwork: matches!(display_mode, DisplayMode::Ambient) && retained_artwork_available,
         immersive_scrim: matches!(display_mode, DisplayMode::FullBleed | DisplayMode::Ambient),
-        immersive_info: !matches!(display_mode, DisplayMode::Classic),
+        immersive_info: show_track_info && !matches!(display_mode, DisplayMode::Classic),
         listening: false,
     }
 }
@@ -473,6 +477,7 @@ mod tests {
                 DisplayMode::Ambient,
                 false,
                 false,
+                false,
             ),
             PresentationVisibility {
                 classic_content: false,
@@ -489,8 +494,14 @@ mod tests {
     #[test]
     fn listening_is_mode_independent() {
         for display_mode in DisplayMode::ALL {
-            let visibility =
-                presentation_visibility(PresentationMode::Listening, display_mode, true, true);
+            let visibility = presentation_visibility(
+                PresentationMode::Listening,
+                display_mode,
+                true,
+                true,
+                // Listening hides all metadata regardless of this preference.
+                true,
+            );
             assert!(visibility.listening);
             assert!(!visibility.classic_content);
             assert!(!visibility.cinema_artwork);
@@ -506,6 +517,7 @@ mod tests {
             DisplayMode::Classic,
             true,
             true,
+            false,
         );
         assert!(classic.classic_content);
         assert!(classic.classic_artwork);
@@ -516,6 +528,7 @@ mod tests {
             DisplayMode::FullBleed,
             true,
             true,
+            false,
         );
         assert!(cinema.cinema_artwork);
         assert!(cinema.immersive_info);
@@ -525,6 +538,7 @@ mod tests {
             DisplayMode::Ambient,
             true,
             true,
+            false,
         );
         assert!(ambient.ambient_artwork);
         assert!(ambient.immersive_info);
@@ -534,6 +548,7 @@ mod tests {
             DisplayMode::LightsOff,
             true,
             true,
+            false,
         );
         assert!(!lights_off.classic_artwork);
         assert!(!lights_off.cinema_artwork);
@@ -548,6 +563,7 @@ mod tests {
             DisplayMode::Classic,
             false,
             true,
+            false,
         );
         assert!(!classic.classic_artwork);
 
@@ -556,6 +572,7 @@ mod tests {
             DisplayMode::FullBleed,
             false,
             true,
+            false,
         );
         assert!(cinema.cinema_artwork);
 
@@ -564,8 +581,35 @@ mod tests {
             DisplayMode::Ambient,
             false,
             true,
+            false,
         );
         assert!(ambient.ambient_artwork);
+    }
+
+    #[test]
+    fn hidden_track_info_suppresses_metadata_in_visual_immersive_modes() {
+        for display_mode in [DisplayMode::FullBleed, DisplayMode::Ambient] {
+            let visibility = presentation_visibility(
+                PresentationMode::TrackWithArtwork,
+                display_mode,
+                true,
+                true,
+                true,
+            );
+            assert!(!visibility.immersive_info);
+        }
+    }
+
+    #[test]
+    fn lights_off_always_keeps_track_info_visible() {
+        let visibility = presentation_visibility(
+            PresentationMode::TrackWithArtwork,
+            DisplayMode::LightsOff,
+            true,
+            true,
+            true,
+        );
+        assert!(visibility.immersive_info);
     }
 
     #[test]

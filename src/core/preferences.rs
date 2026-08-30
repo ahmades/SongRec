@@ -260,6 +260,7 @@ pub enum TrackInfoAlignment {
     Left,
     #[default]
     Center,
+    Right,
 }
 
 impl TrackInfoAlignment {
@@ -268,6 +269,7 @@ impl TrackInfoAlignment {
         match self {
             Self::Left => "left",
             Self::Center => "center",
+            Self::Right => "right",
         }
     }
 
@@ -275,6 +277,7 @@ impl TrackInfoAlignment {
     pub fn from_preference(value: Option<&str>) -> Self {
         match value {
             Some("left") => Self::Left,
+            Some("right") => Self::Right,
             _ => Self::Center,
         }
     }
@@ -409,8 +412,6 @@ impl<'de> Deserialize<'de> for BackgroundStyle {
 pub struct ClassicNowPlayingPreferences {
     #[serde(rename = "now_playing_round_corners")]
     pub round_corners: bool,
-    #[serde(rename = "hide_now_playing_info")]
-    pub hide_track_info: bool,
     #[serde(rename = "now_playing_track_info_alignment")]
     pub track_info_alignment: TrackInfoAlignment,
     #[serde(rename = "now_playing_album_cover_size")]
@@ -423,7 +424,6 @@ impl Default for ClassicNowPlayingPreferences {
     fn default() -> Self {
         Self {
             round_corners: true,
-            hide_track_info: false,
             track_info_alignment: TrackInfoAlignment::default(),
             album_cover_size: AlbumCoverSize::default(),
             background_style: BackgroundStyle::default(),
@@ -431,9 +431,11 @@ impl Default for ClassicNowPlayingPreferences {
     }
 }
 
-/// Recognition and transition behavior shared by every display mode.
+/// Settings and behavior shared by every display mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SharedNowPlayingPreferences {
+    #[serde(rename = "hide_now_playing_info")]
+    pub hide_track_info: bool,
     pub always_display_last_recognized_song: bool,
     #[serde(rename = "now_playing_transition")]
     pub transition: TransitionEffect,
@@ -444,6 +446,7 @@ pub struct SharedNowPlayingPreferences {
 impl Default for SharedNowPlayingPreferences {
     fn default() -> Self {
         Self {
+            hide_track_info: false,
             always_display_last_recognized_song: true,
             transition: TransitionEffect::default(),
             transition_duration_ms: TRANSITION_DURATION_DEFAULT_MS,
@@ -515,9 +518,6 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
             }),
             classic: ClassicNowPlayingPreferences {
                 round_corners: wire.round_corners.unwrap_or(defaults.classic.round_corners),
-                hide_track_info: wire
-                    .hide_track_info
-                    .unwrap_or(defaults.classic.hide_track_info),
                 track_info_alignment: wire
                     .track_info_alignment
                     .unwrap_or(defaults.classic.track_info_alignment),
@@ -529,6 +529,9 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
                     .unwrap_or(defaults.classic.background_style),
             },
             shared: SharedNowPlayingPreferences {
+                hide_track_info: wire
+                    .hide_track_info
+                    .unwrap_or(defaults.shared.hide_track_info),
                 always_display_last_recognized_song: wire
                     .always_display_last_recognized_song
                     .unwrap_or(defaults.shared.always_display_last_recognized_song),
@@ -555,7 +558,7 @@ impl NowPlayingPreferences {
             NowPlayingPreferenceChange::DisplayMode(value) => self.display_mode = value,
             NowPlayingPreferenceChange::RoundCorners(value) => self.classic.round_corners = value,
             NowPlayingPreferenceChange::HideTrackInfo(value) => {
-                self.classic.hide_track_info = value;
+                self.shared.hide_track_info = value;
             }
             NowPlayingPreferenceChange::TrackInfoAlignment(value) => {
                 self.classic.track_info_alignment = value;
@@ -774,7 +777,6 @@ mod tests {
 
         assert_eq!(defaults.display_mode, DisplayMode::Classic);
         assert!(defaults.classic.round_corners);
-        assert!(!defaults.classic.hide_track_info);
         assert_eq!(
             defaults.classic.track_info_alignment,
             TrackInfoAlignment::Center
@@ -784,6 +786,7 @@ mod tests {
             AlbumCoverSize::MEDIUM_LARGE_MIDPOINT
         );
         assert_eq!(defaults.classic.background_style, BackgroundStyle::Gradient);
+        assert!(!defaults.shared.hide_track_info);
         assert!(defaults.shared.always_display_last_recognized_song);
         assert_eq!(defaults.shared.transition, TransitionEffect::None);
         assert_eq!(
@@ -845,12 +848,12 @@ lights_off_enabled = false
                 display_mode: DisplayMode::Classic,
                 classic: ClassicNowPlayingPreferences {
                     round_corners: false,
-                    hide_track_info: true,
                     track_info_alignment: TrackInfoAlignment::Left,
                     album_cover_size: AlbumCoverSize::SMALL,
                     background_style: BackgroundStyle::Solid,
                 },
                 shared: SharedNowPlayingPreferences {
+                    hide_track_info: true,
                     always_display_last_recognized_song: false,
                     transition: TransitionEffect::SlideUp,
                     transition_duration_ms: 3_500,
@@ -872,7 +875,7 @@ lights_off_enabled = true
         .unwrap();
 
         assert_eq!(preferences.now_playing.display_mode, DisplayMode::LightsOff);
-        assert!(preferences.now_playing.classic.hide_track_info);
+        assert!(preferences.now_playing.shared.hide_track_info);
         assert!(!preferences.now_playing.classic.round_corners);
         assert_eq!(
             preferences.now_playing.shared.transition_duration_ms,
@@ -906,16 +909,19 @@ lights_off_enabled = true
     }
 
     #[test]
-    fn display_mode_and_classic_settings_round_trip_together() {
+    fn display_mode_and_scoped_settings_round_trip_together() {
         for display_mode in DisplayMode::ALL {
             let preferences = Preferences {
                 now_playing: NowPlayingPreferences {
                     display_mode,
                     classic: ClassicNowPlayingPreferences {
                         round_corners: false,
-                        hide_track_info: true,
                         background_style: BackgroundStyle::Solid,
                         ..ClassicNowPlayingPreferences::default()
+                    },
+                    shared: SharedNowPlayingPreferences {
+                        hide_track_info: true,
+                        ..SharedNowPlayingPreferences::default()
                     },
                     ..NowPlayingPreferences::default()
                 },
@@ -967,6 +973,7 @@ lights_off_enabled = true
                     ..ClassicNowPlayingPreferences::default()
                 },
                 shared: SharedNowPlayingPreferences {
+                    hide_track_info: true,
                     transition_duration_ms: TRANSITION_DURATION_MAX_MS,
                     ..SharedNowPlayingPreferences::default()
                 },
@@ -1006,7 +1013,7 @@ lights_off_enabled = true
         interface.update_now_playing(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Classic,
         ));
-        assert!(interface.preferences.now_playing.classic.hide_track_info);
+        assert!(interface.preferences.now_playing.shared.hide_track_info);
         assert!(!interface.preferences.now_playing.classic.round_corners);
 
         interface.update_now_playing(NowPlayingPreferenceChange::TransitionDurationMs(1));
@@ -1045,7 +1052,11 @@ lights_off_enabled = true
             );
         }
 
-        for alignment in [TrackInfoAlignment::Left, TrackInfoAlignment::Center] {
+        for alignment in [
+            TrackInfoAlignment::Left,
+            TrackInfoAlignment::Center,
+            TrackInfoAlignment::Right,
+        ] {
             assert_eq!(
                 TrackInfoAlignment::from_preference(Some(alignment.as_preference_value())),
                 alignment
@@ -1077,5 +1088,27 @@ lights_off_enabled = true
                 size
             );
         }
+    }
+
+    #[test]
+    fn right_track_info_alignment_round_trips_through_flat_toml() {
+        let preferences: Preferences = toml::from_str(
+            r#"
+now_playing_track_info_alignment = "right"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            preferences.now_playing.classic.track_info_alignment,
+            TrackInfoAlignment::Right
+        );
+
+        let serialized = toml::to_string(&preferences).unwrap();
+        let table = serialized.parse::<toml::Table>().unwrap();
+        assert_eq!(
+            table["now_playing_track_info_alignment"].as_str(),
+            Some("right")
+        );
     }
 }

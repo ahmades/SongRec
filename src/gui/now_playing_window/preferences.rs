@@ -1,6 +1,7 @@
 //! Applying persisted Now Playing preferences to the active window.
 
 use super::track::TrackPresentation;
+use super::ui::apply_classic_track_info_alignment;
 use super::{
     AlbumCoverSize, DisplayMode, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment,
     TransitionEffect, clamp_transition_duration_ms,
@@ -26,7 +27,7 @@ impl NowPlayingWindow {
 
             self.set_display_mode(settings.display_mode);
             self.set_round_corners(settings.classic.round_corners);
-            self.set_show_track_info(!settings.classic.hide_track_info);
+            self.set_show_track_info(!settings.shared.hide_track_info);
             self.set_track_info_alignment(settings.classic.track_info_alignment);
             self.set_album_cover_size(settings.classic.album_cover_size);
             self.set_always_display_last_recognized_song(
@@ -55,6 +56,9 @@ impl NowPlayingWindow {
             self.controls
                 .classic_settings
                 .set_visible(display_mode.shows_classic_settings());
+            self.controls
+                .hide_track_info
+                .set_sensitive(display_mode.supports_hiding_track_info());
         });
         TrackPresentation::from_window(self).refresh_mode();
     }
@@ -119,26 +123,25 @@ impl NowPlayingWindow {
 
     /// Applies the requested alignment to the metadata block and its labels.
     pub(super) fn set_track_info_alignment(&self, alignment: TrackInfoAlignment) {
-        self.with_preference_updates_suspended(|| match alignment {
-            TrackInfoAlignment::Left => {
-                self.ui.info_box.set_halign(gtk::Align::Start);
-                self.ui.title_label.set_halign(gtk::Align::Start);
-                self.ui.artist_label.set_halign(gtk::Align::Start);
-                self.ui.album_label.set_halign(gtk::Align::Start);
-                self.ui.details_label.set_halign(gtk::Align::Start);
-                if !self.controls.track_info_alignment_left.is_active() {
-                    self.controls.track_info_alignment_left.set_active(true);
-                }
-            }
-            TrackInfoAlignment::Center => {
-                self.ui.info_box.set_halign(gtk::Align::Center);
-                self.ui.title_label.set_halign(gtk::Align::Center);
-                self.ui.artist_label.set_halign(gtk::Align::Center);
-                self.ui.album_label.set_halign(gtk::Align::Center);
-                self.ui.details_label.set_halign(gtk::Align::Center);
-                if !self.controls.track_info_alignment_center.is_active() {
-                    self.controls.track_info_alignment_center.set_active(true);
-                }
+        self.with_preference_updates_suspended(|| {
+            apply_classic_track_info_alignment(
+                &self.ui.info_box,
+                [
+                    &self.ui.title_label,
+                    &self.ui.artist_label,
+                    &self.ui.album_label,
+                    &self.ui.details_label,
+                ],
+                alignment,
+            );
+
+            let selected = match alignment {
+                TrackInfoAlignment::Left => &self.controls.track_info_alignment_left,
+                TrackInfoAlignment::Center => &self.controls.track_info_alignment_center,
+                TrackInfoAlignment::Right => &self.controls.track_info_alignment_right,
+            };
+            if !selected.is_active() {
+                selected.set_active(true);
             }
         });
     }
@@ -165,6 +168,8 @@ impl NowPlayingWindow {
             self.controls
                 .track_info_alignment_center
                 .set_sensitive(show);
+            self.controls.track_info_alignment_right.set_sensitive(show);
         });
+        TrackPresentation::from_window(self).refresh_mode();
     }
 }

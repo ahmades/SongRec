@@ -463,88 +463,11 @@ Adw.ApplicationWindow main_window {
               subtitle: _("Choose how the recognized song is presented");
               title: _("Display mode");
             }
-          }
-
-          Adw.PreferencesGroup classic_now_playing_preferences {
-            title: _("Classic settings");
-
-            Adw.SwitchRow round_corners_setting {
-              subtitle: _("Round the corners of the album artwork");
-              title: _("Round corners of album cover");
-            }
 
             Adw.SwitchRow hide_track_info_setting {
-              subtitle: _("Show only the album artwork");
+              subtitle: _("Hide song details in every display mode");
               title: _("Hide track info");
             }
-
-            Adw.ActionRow track_info_alignment_setting {
-              subtitle: _("Choose how the track information is positioned");
-              title: _("Track info alignment");
-
-              Box {
-                spacing: 0;
-                css-classes: [
-                  "linked",
-                ];
-
-                ToggleButton track_info_alignment_left {
-                  label: _("Left");
-                }
-
-                ToggleButton track_info_alignment_center {
-                  group: track_info_alignment_left;
-                  active: true;
-                  label: _("Center");
-                }
-              }
-            }
-
-            Adw.ActionRow album_cover_size_setting {
-              subtitle: _("Choose an album artwork size or use one of the marked presets");
-              title: _("Album cover size");
-
-              [suffix]
-              Scale album_cover_size_setting_scale {
-                orientation: horizontal;
-                width-request: 300;
-                hexpand: true;
-                draw-value: false;
-                adjustment: Adjustment {
-                  lower: 0;
-                  upper: 200;
-                  step-increment: 1;
-                  page-increment: 10;
-                  value: 150;
-                };
-              }
-            }
-
-            Adw.ActionRow background_style_setting {
-              subtitle: _("Choose how the window's background is rendered");
-              title: _("Background style");
-
-              Box {
-                spacing: 0;
-                css-classes: [
-                  "linked",
-                ];
-
-                ToggleButton background_style_gradient {
-                  active: true;
-                  label: _("Gradient");
-                }
-
-                ToggleButton background_style_solid {
-                  group: background_style_gradient;
-                  label: _("Solid");
-                }
-              }
-            }
-          }
-
-          Adw.PreferencesGroup general_now_playing_preferences {
-            title: _("General");
 
             Adw.SwitchRow always_display_last_recognized_song_setting {
               subtitle: _("Keep showing the last recognized song when there is no current match");
@@ -574,6 +497,84 @@ Adw.ApplicationWindow main_window {
                   page-increment: 500;
                   value: 2000;
                 };
+              }
+            }
+
+            Adw.PreferencesGroup classic_now_playing_preferences {
+              title: _("Classic settings");
+
+              Adw.SwitchRow round_corners_setting {
+                subtitle: _("Round the corners of the album artwork");
+                title: _("Round corners of album cover");
+              }
+
+              Adw.ActionRow track_info_alignment_setting {
+                subtitle: _("Choose how the track information is positioned");
+                title: _("Track info alignment");
+
+                Box {
+                  spacing: 0;
+                  css-classes: [
+                    "linked",
+                  ];
+
+                  ToggleButton track_info_alignment_left {
+                    label: _("Left");
+                  }
+
+                  ToggleButton track_info_alignment_center {
+                    group: track_info_alignment_left;
+                    active: true;
+                    label: _("Center");
+                  }
+
+                  ToggleButton track_info_alignment_right {
+                    group: track_info_alignment_left;
+                    label: _("Right");
+                  }
+                }
+              }
+
+              Adw.ActionRow album_cover_size_setting {
+                subtitle: _("Choose an album artwork size or use one of the marked presets");
+                title: _("Album cover size");
+
+                [suffix]
+                Scale album_cover_size_setting_scale {
+                  orientation: horizontal;
+                  width-request: 300;
+                  hexpand: true;
+                  draw-value: false;
+                  adjustment: Adjustment {
+                    lower: 0;
+                    upper: 200;
+                    step-increment: 1;
+                    page-increment: 10;
+                    value: 150;
+                  };
+                }
+              }
+
+              Adw.ActionRow background_style_setting {
+                subtitle: _("Choose how the window's background is rendered");
+                title: _("Background style");
+
+                Box {
+                  spacing: 0;
+                  css-classes: [
+                    "linked",
+                  ];
+
+                  ToggleButton background_style_gradient {
+                    active: true;
+                    label: _("Gradient");
+                  }
+
+                  ToggleButton background_style_solid {
+                    group: background_style_gradient;
+                    label: _("Solid");
+                  }
+                }
               }
             }
           }

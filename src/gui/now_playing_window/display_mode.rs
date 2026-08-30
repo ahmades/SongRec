@@ -9,6 +9,11 @@ impl DisplayMode {
         matches!(self, Self::Classic)
     }
 
+    /// Whether this mode can remain useful after its metadata is hidden.
+    pub(crate) const fn supports_hiding_track_info(self) -> bool {
+        !matches!(self, Self::LightsOff)
+    }
+
     /// Returns the localized label used by display-mode selectors.
     pub(crate) fn translated_label(self) -> String {
         match self {
@@ -52,6 +57,16 @@ mod tests {
             assert_eq!(
                 display_mode.shows_classic_settings(),
                 matches!(display_mode, DisplayMode::Classic)
+            );
+        }
+    }
+
+    #[test]
+    fn lights_off_keeps_track_info_available() {
+        for display_mode in DisplayMode::ALL {
+            assert_eq!(
+                display_mode.supports_hiding_track_info(),
+                !matches!(display_mode, DisplayMode::LightsOff)
             );
         }
     }

@@ -542,99 +542,12 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             <property name="title" translatable="yes">Display mode</property>
                           </object>
                         </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="AdwPreferencesGroup" id="classic_now_playing_preferences">
-                        <property name="title" translatable="yes">Classic settings</property>
-                        <child>
-                          <object class="AdwSwitchRow" id="round_corners_setting">
-                            <property name="subtitle" translatable="yes">Round the corners of the album artwork</property>
-                            <property name="title" translatable="yes">Round corners of album cover</property>
-                          </object>
-                        </child>
                         <child>
                           <object class="AdwSwitchRow" id="hide_track_info_setting">
-                            <property name="subtitle" translatable="yes">Show only the album artwork</property>
+                            <property name="subtitle" translatable="yes">Hide song details in every display mode</property>
                             <property name="title" translatable="yes">Hide track info</property>
                           </object>
                         </child>
-                        <child>
-                          <object class="AdwActionRow" id="track_info_alignment_setting">
-                            <property name="subtitle" translatable="yes">Choose how the track information is positioned</property>
-                            <property name="title" translatable="yes">Track info alignment</property>
-                            <child>
-                              <object class="GtkBox">
-                                <property name="spacing">0</property>
-                                <property name="css-classes">linked</property>
-                                <child>
-                                  <object class="GtkToggleButton" id="track_info_alignment_left">
-                                    <property name="label" translatable="yes">Left</property>
-                                  </object>
-                                </child>
-                                <child>
-                                  <object class="GtkToggleButton" id="track_info_alignment_center">
-                                    <property name="group">track_info_alignment_left</property>
-                                    <property name="active">true</property>
-                                    <property name="label" translatable="yes">Center</property>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="AdwActionRow" id="album_cover_size_setting">
-                            <property name="subtitle" translatable="yes">Choose an album artwork size or use one of the marked presets</property>
-                            <property name="title" translatable="yes">Album cover size</property>
-                            <child type="suffix">
-                              <object class="GtkScale" id="album_cover_size_setting_scale">
-                                <property name="orientation">0</property>
-                                <property name="width-request">300</property>
-                                <property name="hexpand">true</property>
-                                <property name="draw-value">false</property>
-                                <property name="adjustment">
-                                  <object class="GtkAdjustment">
-                                    <property name="lower">0</property>
-                                    <property name="upper">200</property>
-                                    <property name="step-increment">1</property>
-                                    <property name="page-increment">10</property>
-                                    <property name="value">150</property>
-                                  </object>
-                                </property>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="AdwActionRow" id="background_style_setting">
-                            <property name="subtitle" translatable="yes">Choose how the window's background is rendered</property>
-                            <property name="title" translatable="yes">Background style</property>
-                            <child>
-                              <object class="GtkBox">
-                                <property name="spacing">0</property>
-                                <property name="css-classes">linked</property>
-                                <child>
-                                  <object class="GtkToggleButton" id="background_style_gradient">
-                                    <property name="active">true</property>
-                                    <property name="label" translatable="yes">Gradient</property>
-                                  </object>
-                                </child>
-                                <child>
-                                  <object class="GtkToggleButton" id="background_style_solid">
-                                    <property name="group">background_style_gradient</property>
-                                    <property name="label" translatable="yes">Solid</property>
-                                  </object>
-                                </child>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="AdwPreferencesGroup" id="general_now_playing_preferences">
-                        <property name="title" translatable="yes">General</property>
                         <child>
                           <object class="AdwSwitchRow" id="always_display_last_recognized_song_setting">
                             <property name="subtitle" translatable="yes">Keep showing the last recognized song when there is no current match</property>
@@ -667,6 +580,94 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                     <property name="value">2000</property>
                                   </object>
                                 </property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwPreferencesGroup" id="classic_now_playing_preferences">
+                            <property name="title" translatable="yes">Classic settings</property>
+                            <child>
+                              <object class="AdwSwitchRow" id="round_corners_setting">
+                                <property name="subtitle" translatable="yes">Round the corners of the album artwork</property>
+                                <property name="title" translatable="yes">Round corners of album cover</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwActionRow" id="track_info_alignment_setting">
+                                <property name="subtitle" translatable="yes">Choose how the track information is positioned</property>
+                                <property name="title" translatable="yes">Track info alignment</property>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">0</property>
+                                    <property name="css-classes">linked</property>
+                                    <child>
+                                      <object class="GtkToggleButton" id="track_info_alignment_left">
+                                        <property name="label" translatable="yes">Left</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkToggleButton" id="track_info_alignment_center">
+                                        <property name="group">track_info_alignment_left</property>
+                                        <property name="active">true</property>
+                                        <property name="label" translatable="yes">Center</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkToggleButton" id="track_info_alignment_right">
+                                        <property name="group">track_info_alignment_left</property>
+                                        <property name="label" translatable="yes">Right</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwActionRow" id="album_cover_size_setting">
+                                <property name="subtitle" translatable="yes">Choose an album artwork size or use one of the marked presets</property>
+                                <property name="title" translatable="yes">Album cover size</property>
+                                <child type="suffix">
+                                  <object class="GtkScale" id="album_cover_size_setting_scale">
+                                    <property name="orientation">0</property>
+                                    <property name="width-request">300</property>
+                                    <property name="hexpand">true</property>
+                                    <property name="draw-value">false</property>
+                                    <property name="adjustment">
+                                      <object class="GtkAdjustment">
+                                        <property name="lower">0</property>
+                                        <property name="upper">200</property>
+                                        <property name="step-increment">1</property>
+                                        <property name="page-increment">10</property>
+                                        <property name="value">150</property>
+                                      </object>
+                                    </property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwActionRow" id="background_style_setting">
+                                <property name="subtitle" translatable="yes">Choose how the window's background is rendered</property>
+                                <property name="title" translatable="yes">Background style</property>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">0</property>
+                                    <property name="css-classes">linked</property>
+                                    <child>
+                                      <object class="GtkToggleButton" id="background_style_gradient">
+                                        <property name="active">true</property>
+                                        <property name="label" translatable="yes">Gradient</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkToggleButton" id="background_style_solid">
+                                        <property name="group">background_style_gradient</property>
+                                        <property name="label" translatable="yes">Solid</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
                               </object>
                             </child>
                           </object>

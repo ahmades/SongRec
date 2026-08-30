@@ -157,18 +157,18 @@ mod tests {
         let controller = NowPlayingSettingsController::new(NowPlayingPreferences::default(), None);
 
         controller.update(NowPlayingPreferenceChange::HideTrackInfo(true));
-        assert!(controller.settings().classic.hide_track_info);
+        assert!(controller.settings().shared.hide_track_info);
 
         controller.update(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::LightsOff,
         ));
         assert_eq!(controller.settings().display_mode, DisplayMode::LightsOff);
-        assert!(controller.settings().classic.hide_track_info);
+        assert!(controller.settings().shared.hide_track_info);
 
         controller.update(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Classic,
         ));
-        assert!(controller.settings().classic.hide_track_info);
+        assert!(controller.settings().shared.hide_track_info);
 
         controller.update(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Ambient,

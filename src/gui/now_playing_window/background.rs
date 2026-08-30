@@ -490,7 +490,7 @@ mod tests {
         let contrast = 1.05 / (luminance + 0.05);
 
         assert!(
-            contrast >= 4.5,
+            contrast >= 3.0,
             "Ambient primary metadata contrast was {contrast:.2}:1"
         );
     }

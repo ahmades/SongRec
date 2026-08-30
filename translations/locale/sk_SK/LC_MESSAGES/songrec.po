@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-30 13:08+0200\n"
+"POT-Creation-Date: 2026-08-30 21:25+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -194,17 +194,17 @@ msgstr "Chyba zvuku:"
 msgid "Audio error: No input device available"
 msgstr "Chyba zvuku: Nie je k dispozícii žiadne vstupné zariadenie"
 
-#: src/core/preferences.rs:638 src/gui/main_window.rs:342
-#: src/gui/interface.blp:129 src/gui/interface.blp:706
-#: src/gui/interface.blp:756
+#: src/core/preferences.rs:641 src/gui/main_window.rs:342
+#: src/gui/interface.blp:129 src/gui/interface.blp:707
+#: src/gui/interface.blp:757
 msgid "Search on YouTube"
 msgstr "Vyhľadať na YouTube"
 
-#: src/core/preferences.rs:677
+#: src/core/preferences.rs:680
 msgid "When parsing the preferences file:"
 msgstr "Pri spracovaní súboru predvolieb:"
 
-#: src/core/preferences.rs:748
+#: src/core/preferences.rs:751
 msgid "When saving the preferences file:"
 msgstr "Pri ukladaná súboru predvolieb:"
 
@@ -281,87 +281,87 @@ msgstr ""
 msgid "Large"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:15
+#: src/gui/now_playing_window/display_mode.rs:20
 msgid "Classic"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:16
+#: src/gui/now_playing_window/display_mode.rs:21
 msgid "Full bleed / Cinema"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:17
+#: src/gui/now_playing_window/display_mode.rs:22
 msgid "Ambient"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:18
+#: src/gui/now_playing_window/display_mode.rs:23
 msgid "Lights Off"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:158 src/gui/interface.blp:535
+#: src/gui/now_playing_window/menu.rs:160 src/gui/interface.blp:570
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:159 src/gui/interface.blp:540
+#: src/gui/now_playing_window/menu.rs:161 src/gui/interface.blp:575
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:161 src/gui/interface.blp:492
+#: src/gui/now_playing_window/menu.rs:163 src/gui/interface.blp:522
 msgid "Left"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:162 src/gui/interface.blp:498
+#: src/gui/now_playing_window/menu.rs:164 src/gui/interface.blp:528
 msgid "Center"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:196 src/gui/interface.blp:459
+#: src/gui/now_playing_window/menu.rs:165 src/gui/interface.blp:533
+msgid "Right"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:201 src/gui/interface.blp:459
 msgid "Reset"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:212 src/gui/interface.blp:469
-msgid "Classic settings"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:218 src/gui/interface.blp:473
-msgid "Round corners of album cover"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:226 src/gui/interface.blp:478
+#: src/gui/now_playing_window/menu.rs:218 src/gui/interface.blp:469
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:254 src/gui/interface.blp:547
-msgid "General"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:259 src/gui/interface.blp:551
+#: src/gui/now_playing_window/menu.rs:226 src/gui/interface.blp:474
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:284
+#: src/gui/now_playing_window/menu.rs:246 src/gui/interface.blp:504
+msgid "Classic settings"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:252 src/gui/interface.blp:508
+msgid "Round corners of album cover"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:280
 msgid "Full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:433 src/gui/interface.blp:464
+#: src/gui/now_playing_window/menu.rs:429 src/gui/interface.blp:464
 msgid "Display mode"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:474 src/gui/interface.blp:556
+#: src/gui/now_playing_window/menu.rs:470 src/gui/interface.blp:479
 msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:495 src/gui/interface.blp:561
+#: src/gui/now_playing_window/menu.rs:491 src/gui/interface.blp:484
 msgid "Transition duration (ms)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:516 src/gui/interface.blp:505
+#: src/gui/now_playing_window/menu.rs:512 src/gui/interface.blp:540
 msgid "Album cover size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:538 src/gui/interface.blp:483
+#: src/gui/now_playing_window/menu.rs:534 src/gui/interface.blp:513
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:577 src/gui/interface.blp:525
+#: src/gui/now_playing_window/menu.rs:578 src/gui/interface.blp:560
 msgid "Background style"
 msgstr ""
 
@@ -518,7 +518,7 @@ msgstr "Zobraziť obľúbené"
 msgid "Application menu"
 msgstr "Ponuka aplikácie"
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:658
+#: src/gui/interface.blp:369 src/gui/interface.blp:659
 msgid "Export to CSV"
 msgstr "Exportovať do CSV"
 
@@ -535,7 +535,7 @@ msgid "Notify when a new song is recognized or network error is encountered"
 msgstr ""
 "Upozorniť, keď je rozpoznaná nová skladba alebo sa vyskytne sieťová chyba"
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:613
+#: src/gui/interface.blp:388 src/gui/interface.blp:614
 msgid "Show notifications"
 msgstr "Zobrazovať oznámenia"
 
@@ -611,87 +611,87 @@ msgstr ""
 msgid "Choose how the recognized song is presented"
 msgstr ""
 
-#: src/gui/interface.blp:472
-msgid "Round the corners of the album artwork"
+#: src/gui/interface.blp:468
+msgid "Hide song details in every display mode"
 msgstr ""
 
-#: src/gui/interface.blp:477
-msgid "Show only the album artwork"
-msgstr ""
-
-#: src/gui/interface.blp:482
-msgid "Choose how the track information is positioned"
-msgstr ""
-
-#: src/gui/interface.blp:504
-msgid "Choose an album artwork size or use one of the marked presets"
-msgstr ""
-
-#: src/gui/interface.blp:524
-msgid "Choose how the window's background is rendered"
-msgstr ""
-
-#: src/gui/interface.blp:550
+#: src/gui/interface.blp:473
 msgid "Keep showing the last recognized song when there is no current match"
 msgstr ""
 
-#: src/gui/interface.blp:555
+#: src/gui/interface.blp:478
 msgid "Choose the effect used when the recognized track changes"
 msgstr ""
 
-#: src/gui/interface.blp:560
+#: src/gui/interface.blp:483
 msgid "Duration of the selected transition effect (500–5000 ms)"
 msgstr ""
 
-#: src/gui/interface.blp:588
+#: src/gui/interface.blp:507
+msgid "Round the corners of the album artwork"
+msgstr ""
+
+#: src/gui/interface.blp:512
+msgid "Choose how the track information is positioned"
+msgstr ""
+
+#: src/gui/interface.blp:539
+msgid "Choose an album artwork size or use one of the marked presets"
+msgstr ""
+
+#: src/gui/interface.blp:559
+msgid "Choose how the window's background is rendered"
+msgstr ""
+
+#: src/gui/interface.blp:589
 msgid "Settings"
 msgstr "Nastavenia"
 
-#: src/gui/interface.blp:618
+#: src/gui/interface.blp:619
 msgid "_Preferences..."
 msgstr "_Predvoľby..."
 
-#: src/gui/interface.blp:625
+#: src/gui/interface.blp:626
 msgid "_Keyboard Shortcuts"
 msgstr "_Klávesové skratky"
 
-#: src/gui/interface.blp:630
+#: src/gui/interface.blp:631
 msgid "About..."
 msgstr "O aplikácii..."
 
-#: src/gui/interface.blp:663
+#: src/gui/interface.blp:664
 msgid "Delete history"
 msgstr "Vymazať históriu"
 
-#: src/gui/interface.blp:668
+#: src/gui/interface.blp:669
 msgid "Select a file to recognize"
 msgstr "Vyberte súbor na rozpoznanie"
 
-#: src/gui/interface.blp:680 src/gui/interface.blp:730
+#: src/gui/interface.blp:681 src/gui/interface.blp:731
 msgid "Copy artist and track"
 msgstr "Kopírovať interpreta a názov skladby"
 
-#: src/gui/interface.blp:686 src/gui/interface.blp:736
+#: src/gui/interface.blp:687 src/gui/interface.blp:737
 msgid "Copy artist"
 msgstr "Kopírovať interpreta"
 
-#: src/gui/interface.blp:692 src/gui/interface.blp:742
+#: src/gui/interface.blp:693 src/gui/interface.blp:743
 msgid "Copy track name"
 msgstr "Kopírovať názov skladby"
 
-#: src/gui/interface.blp:698 src/gui/interface.blp:748
+#: src/gui/interface.blp:699 src/gui/interface.blp:749
 msgid "Copy album"
 msgstr "Kopírovať album"
 
-#: src/gui/interface.blp:714
+#: src/gui/interface.blp:715
 msgid "Delete from History"
 msgstr "Vymazať z histórie"
 
-#: src/gui/interface.blp:720
+#: src/gui/interface.blp:721
 msgid "Add to Favorites"
 msgstr "Pridať medzi obľúbené"
 
-#: src/gui/interface.blp:764
+#: src/gui/interface.blp:765
 msgid "Remove from Favorites"
 msgstr "Odstrániť z obľúbených"
 

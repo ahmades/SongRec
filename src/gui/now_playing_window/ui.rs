@@ -4,7 +4,7 @@ use super::style::{
     ALBUM_CSS_CLASS, ARTIST_CSS_CLASS, DETAILS_CSS_CLASS, TITLE_CSS_CLASS, font_css_for_size,
 };
 use super::track::transition_leg_duration_ms;
-use super::{AlbumCoverSize, DisplayMode, TRANSITION_DURATION_DEFAULT_MS};
+use super::{AlbumCoverSize, DisplayMode, TRANSITION_DURATION_DEFAULT_MS, TrackInfoAlignment};
 use adw::prelude::*;
 use gettextrs::gettext;
 use std::cell::Cell;
@@ -24,7 +24,7 @@ const CLASSIC_PADDING_MAX_PX: i32 = 96;
 const IMMERSIVE_MARGIN_MIN_PX: i32 = 28;
 const IMMERSIVE_MARGIN_MAX_PX: i32 = 96;
 const CINEMA_CROP_RETENTION_MINIMUM: f64 = 0.70;
-pub(super) const AMBIENT_FOREGROUND_OPACITY: f64 = 0.4;
+pub(super) const AMBIENT_FOREGROUND_OPACITY: f64 = 0.3;
 const SECONDARY_METADATA_OPACITY: f64 = 0.72;
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
 const IMMERSIVE_INFO_CSS_CLASS: &str = "now-playing-immersive-info";
@@ -484,6 +484,29 @@ fn metadata_label(css_class: &str) -> gtk::Label {
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .css_classes([css_class])
         .build()
+}
+
+/// Applies Classic metadata alignment to both the block and the text inside it.
+///
+/// Label alignment alone only moves a label widget. `xalign` and `justify`
+/// ensure that text in an expanding label follows the selected edge as well.
+pub(super) fn apply_classic_track_info_alignment(
+    info_box: &gtk::Box,
+    labels: [&gtk::Label; 4],
+    alignment: TrackInfoAlignment,
+) {
+    let (widget_alignment, text_alignment, xalign) = match alignment {
+        TrackInfoAlignment::Left => (gtk::Align::Start, gtk::Justification::Left, 0.0),
+        TrackInfoAlignment::Center => (gtk::Align::Center, gtk::Justification::Center, 0.5),
+        TrackInfoAlignment::Right => (gtk::Align::End, gtk::Justification::Right, 1.0),
+    };
+
+    info_box.set_halign(widget_alignment);
+    for label in labels {
+        label.set_halign(widget_alignment);
+        label.set_justify(text_alignment);
+        label.set_xalign(xalign);
+    }
 }
 
 /// Keeps Classic's desktop spacing while fitting its declared minimum viewport.
