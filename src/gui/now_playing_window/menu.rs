@@ -107,10 +107,11 @@ pub(super) struct NowPlayingControls {
     pub(super) always_display_last_recognized_song: gtk::Switch,
     pub(super) transition_menu: gtk::DropDown,
     pub(super) transition_duration: gtk::Scale,
-    pub(super) fullscreen: gtk::Switch,
+    pub(super) fullscreen_button: gtk::Button,
+    pub(super) fullscreen_button_content: adw::ButtonContent,
 }
 
-/// Creates the switches and segmented controls used by the Now Playing context menu.
+/// Creates the controls used by the Now Playing context menu.
 pub(super) fn build_controls() -> NowPlayingControls {
     let display_mode_labels = DisplayMode::ALL
         .into_iter()
@@ -156,7 +157,12 @@ pub(super) fn build_controls() -> NowPlayingControls {
     transition_duration.set_draw_value(true);
     transition_duration.set_hexpand(true);
     transition_duration.set_width_request(190);
-    let fullscreen = gtk::Switch::new();
+    let fullscreen_button_content = adw::ButtonContent::new();
+    let fullscreen_button = gtk::Button::builder()
+        .halign(gtk::Align::Fill)
+        .hexpand(true)
+        .build();
+    fullscreen_button.set_child(Some(&fullscreen_button_content));
     let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
     let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
     background_style_solid.set_group(Some(&background_style_gradient));
@@ -180,7 +186,8 @@ pub(super) fn build_controls() -> NowPlayingControls {
         always_display_last_recognized_song,
         transition_menu,
         transition_duration,
-        fullscreen,
+        fullscreen_button,
+        fullscreen_button_content,
     }
 }
 
@@ -198,8 +205,18 @@ impl NowPlayingWindow {
         menu_box.set_margin_start(12);
         menu_box.set_margin_end(12);
 
-        let reset_button = gtk::Button::with_label(&gettext("Reset"));
-        reset_button.set_halign(gtk::Align::End);
+        Self::update_fullscreen_button(
+            &self.controls.fullscreen_button_content,
+            self.ui.window.is_fullscreen(),
+        );
+        menu_box.append(&self.controls.fullscreen_button);
+        menu_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+
+        let reset_button = gtk::Button::builder()
+            .label(gettext("Reset"))
+            .halign(gtk::Align::Fill)
+            .hexpand(true)
+            .build();
         menu_box.append(&reset_button);
         let controller_for_reset = self.controller.clone();
         reset_button.connect_clicked(move |_| {
@@ -273,17 +290,6 @@ impl NowPlayingWindow {
             .set_visible(settings.display_mode.shows_classic_settings());
         menu_box.append(&self.controls.classic_settings);
 
-        let fullscreen_grid = menu_grid();
-        self.add_switch_menu_row(
-            &fullscreen_grid,
-            0,
-            &gettext("Full screen"),
-            &self.controls.fullscreen,
-            self.ui.window.is_fullscreen(),
-            true,
-        );
-        menu_box.append(&fullscreen_grid);
-
         let menu_scroll = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
             .vscrollbar_policy(gtk::PolicyType::Automatic)
@@ -353,19 +359,22 @@ impl NowPlayingWindow {
         });
         self.ui.window.add_controller(pointer);
 
-        let window_for_fullscreen = self.ui.window.downgrade();
-        self.controls
-            .fullscreen
-            .connect_active_notify(move |switch| {
-                let Some(window) = window_for_fullscreen.upgrade() else {
-                    return;
-                };
-                if switch.is_active() {
-                    window.fullscreen();
-                } else {
-                    window.unfullscreen();
-                }
-            });
+        let window_for_fullscreen_button = self.ui.window.downgrade();
+        let popover_for_fullscreen_button = popover.downgrade();
+        self.controls.fullscreen_button.connect_clicked(move |_| {
+            let Some(window) = window_for_fullscreen_button.upgrade() else {
+                return;
+            };
+
+            if let Some(popover) = popover_for_fullscreen_button.upgrade() {
+                popover.popdown();
+            }
+            if window.is_fullscreen() {
+                window.unfullscreen();
+            } else {
+                window.fullscreen();
+            }
+        });
 
         let fullscreen_cursor_hide = DebouncedAction::default();
         let window_for_cursor_motion = self.ui.window.downgrade();
@@ -386,16 +395,25 @@ impl NowPlayingWindow {
         });
         self.ui.window.add_controller(cursor_motion);
 
-        let fullscreen_switch = self.controls.fullscreen.clone();
+        let fullscreen_button_content = self.controls.fullscreen_button_content.clone();
         let cursor_hide_for_fullscreen = fullscreen_cursor_hide;
         self.ui.window.connect_fullscreened_notify(move |window| {
             let fullscreened = window.is_fullscreen();
             cursor_hide_for_fullscreen.cancel();
             window.set_cursor_from_name(if fullscreened { Some("none") } else { None });
-            if fullscreen_switch.is_active() != fullscreened {
-                fullscreen_switch.set_active(fullscreened);
-            }
+            Self::update_fullscreen_button(&fullscreen_button_content, fullscreened);
         });
+    }
+
+    /// Keeps the menu action in sync with fullscreen changes from any source.
+    fn update_fullscreen_button(content: &adw::ButtonContent, fullscreened: bool) {
+        if fullscreened {
+            content.set_icon_name("view-restore-symbolic");
+            content.set_label(&gettext("Exit full screen"));
+        } else {
+            content.set_icon_name("view-fullscreen-symbolic");
+            content.set_label(&gettext("Enter full screen"));
+        }
     }
 
     /// Temporarily reveals the cursor in fullscreen, then hides it after the pointer is idle.
