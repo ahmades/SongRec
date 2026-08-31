@@ -443,10 +443,9 @@ fn presentation_visibility(
         // belonging to the new song. Keep that Classic slot empty until its
         // matching PreparedArtwork is ready.
         classic_artwork: matches!(display_mode, DisplayMode::Classic) && current_artwork_available,
-        cinema_artwork: matches!(display_mode, DisplayMode::FullBleed)
-            && retained_artwork_available,
+        cinema_artwork: matches!(display_mode, DisplayMode::Cinema) && retained_artwork_available,
         ambient_artwork: matches!(display_mode, DisplayMode::Ambient) && retained_artwork_available,
-        immersive_scrim: matches!(display_mode, DisplayMode::FullBleed | DisplayMode::Ambient),
+        immersive_scrim: matches!(display_mode, DisplayMode::Cinema | DisplayMode::Ambient),
         immersive_info: show_track_info && !matches!(display_mode, DisplayMode::Classic),
         listening: false,
     }
@@ -525,7 +524,7 @@ mod tests {
 
         let cinema = presentation_visibility(
             PresentationMode::TrackWithArtwork,
-            DisplayMode::FullBleed,
+            DisplayMode::Cinema,
             true,
             true,
             false,
@@ -569,7 +568,7 @@ mod tests {
 
         let cinema = presentation_visibility(
             PresentationMode::TrackWithoutArtwork,
-            DisplayMode::FullBleed,
+            DisplayMode::Cinema,
             false,
             true,
             false,
@@ -588,7 +587,7 @@ mod tests {
 
     #[test]
     fn hidden_track_info_suppresses_metadata_in_visual_immersive_modes() {
-        for display_mode in [DisplayMode::FullBleed, DisplayMode::Ambient] {
+        for display_mode in [DisplayMode::Cinema, DisplayMode::Ambient] {
             let visibility = presentation_visibility(
                 PresentationMode::TrackWithArtwork,
                 display_mode,

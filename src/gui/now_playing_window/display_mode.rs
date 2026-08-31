@@ -18,7 +18,7 @@ impl DisplayMode {
     pub(crate) fn translated_label(self) -> String {
         match self {
             Self::Classic => gettext("Classic"),
-            Self::FullBleed => gettext("Full bleed / Cinema"),
+            Self::Cinema => gettext("Cinema"),
             Self::Ambient => gettext("Ambient"),
             Self::LightsOff => gettext("Lights Off"),
         }

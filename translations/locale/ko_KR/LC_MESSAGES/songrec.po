@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 00:26+0200\n"
+"POT-Creation-Date: 2026-09-01 00:36+0200\n"
 "PO-Revision-Date: 2023-12-30 23:42+0900\n"
 "Last-Translator: 이정희 <daemul72@gmail.com>\n"
 "Language-Team: \n"
@@ -178,17 +178,17 @@ msgstr ""
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:641 src/gui/main_window.rs:342
+#: src/core/preferences.rs:638 src/gui/main_window.rs:342
 #: src/gui/interface.blp:129 src/gui/interface.blp:707
 #: src/gui/interface.blp:757
 msgid "Search on YouTube"
 msgstr "YouTube에서 검색하기"
 
-#: src/core/preferences.rs:680
+#: src/core/preferences.rs:677
 msgid "When parsing the preferences file:"
 msgstr "환경설정 파일을 구문 분석하는 경우:"
 
-#: src/core/preferences.rs:751
+#: src/core/preferences.rs:748
 msgid "When saving the preferences file:"
 msgstr "환경설정 파일을 저장하는 경우:"
 
@@ -269,7 +269,7 @@ msgid "Classic"
 msgstr ""
 
 #: src/gui/now_playing_window/display_mode.rs:21
-msgid "Full bleed / Cinema"
+msgid "Cinema"
 msgstr ""
 
 #: src/gui/now_playing_window/display_mode.rs:22

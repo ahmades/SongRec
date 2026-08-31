@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 00:26+0200\n"
+"POT-Creation-Date: 2026-09-01 00:36+0200\n"
 "PO-Revision-Date: 2026-03-09 02:16+0000\n"
 "Last-Translator: Marin <25437947+marin-m@users.noreply.github.com>\n"
 "Language-Team: Dutch <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -190,17 +190,17 @@ msgstr "Audiofout:"
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:641 src/gui/main_window.rs:342
+#: src/core/preferences.rs:638 src/gui/main_window.rs:342
 #: src/gui/interface.blp:129 src/gui/interface.blp:707
 #: src/gui/interface.blp:757
 msgid "Search on YouTube"
 msgstr "Opzoeken op YouTube"
 
-#: src/core/preferences.rs:680
+#: src/core/preferences.rs:677
 msgid "When parsing the preferences file:"
 msgstr "Tijdens verwerken van instellingenbestand:"
 
-#: src/core/preferences.rs:751
+#: src/core/preferences.rs:748
 msgid "When saving the preferences file:"
 msgstr "Tijdens opslaan van instellingenbestand:"
 
@@ -282,7 +282,7 @@ msgid "Classic"
 msgstr ""
 
 #: src/gui/now_playing_window/display_mode.rs:21
-msgid "Full bleed / Cinema"
+msgid "Cinema"
 msgstr ""
 
 #: src/gui/now_playing_window/display_mode.rs:22

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 00:26+0200\n"
+"POT-Creation-Date: 2026-09-01 00:36+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -194,17 +194,17 @@ msgstr "Chyba zvuku:"
 msgid "Audio error: No input device available"
 msgstr "Chyba zvuku: Nie je k dispozícii žiadne vstupné zariadenie"
 
-#: src/core/preferences.rs:641 src/gui/main_window.rs:342
+#: src/core/preferences.rs:638 src/gui/main_window.rs:342
 #: src/gui/interface.blp:129 src/gui/interface.blp:707
 #: src/gui/interface.blp:757
 msgid "Search on YouTube"
 msgstr "Vyhľadať na YouTube"
 
-#: src/core/preferences.rs:680
+#: src/core/preferences.rs:677
 msgid "When parsing the preferences file:"
 msgstr "Pri spracovaní súboru predvolieb:"
 
-#: src/core/preferences.rs:751
+#: src/core/preferences.rs:748
 msgid "When saving the preferences file:"
 msgstr "Pri ukladaná súboru predvolieb:"
 
@@ -286,7 +286,7 @@ msgid "Classic"
 msgstr ""
 
 #: src/gui/now_playing_window/display_mode.rs:21
-msgid "Full bleed / Cinema"
+msgid "Cinema"
 msgstr ""
 
 #: src/gui/now_playing_window/display_mode.rs:22

@@ -24,6 +24,7 @@ const CLASSIC_PADDING_MAX_PX: i32 = 96;
 const IMMERSIVE_MARGIN_MIN_PX: i32 = 28;
 const IMMERSIVE_MARGIN_MAX_PX: i32 = 96;
 const CINEMA_CROP_RETENTION_MINIMUM: f64 = 0.70;
+const CINEMA_PORTRAIT_ARTWORK_MAX_HEIGHT_FRACTION: f64 = 0.70;
 pub(super) const AMBIENT_FOREGROUND_OPACITY: f64 = 0.3;
 const SECONDARY_METADATA_OPACITY: f64 = 0.72;
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
@@ -35,13 +36,13 @@ pub(super) enum CinemaFraming {
     /// A cover crop retains enough of the artwork to use it edge-to-edge.
     #[default]
     Cover,
-    /// Preserve the complete artwork on the right and use Ambient fill on the left.
+    /// Preserve the complete artwork on one side and use Ambient fill beside it.
     Wide,
-    /// Preserve the complete artwork above the metadata and use Ambient fill below it.
+    /// Preserve the complete artwork on one side and use Ambient fill beside it.
     Tall,
 }
 
-/// Full-bleed artwork with an automatic non-destructive fallback for extreme aspect ratios.
+/// Cinema artwork with an automatic non-destructive fallback for mismatched aspect ratios.
 #[derive(Clone)]
 pub(super) struct CinemaArtworkLayout {
     pub(super) container: gtk::Overlay,
@@ -78,15 +79,14 @@ impl CinemaArtworkLayout {
         let source_dimensions = Rc::new(Cell::new((0, 0)));
         let source_dimensions_for_position = source_dimensions.clone();
         let foreground_widget = foreground.clone().upcast::<gtk::Widget>();
-        let backdrop_for_position = backdrop.clone();
-        container.connect_get_child_position(move |_, child| {
+        container.connect_get_child_position(move |overlay, child| {
             if child != &foreground_widget {
                 return None;
             }
 
             Some(cinema_artwork_rect(
-                backdrop_for_position.width(),
-                backdrop_for_position.height(),
+                overlay.width(),
+                overlay.height(),
                 source_dimensions_for_position.get(),
             ))
         });
@@ -543,16 +543,7 @@ pub(super) fn configure_immersive_info(
     let margin = ((width.min(height) as f64 * 0.065).round() as i32)
         .clamp(IMMERSIVE_MARGIN_MIN_PX, IMMERSIVE_MARGIN_MAX_PX);
     let (alignment, vertical_alignment, width_fraction, maximum_width_chars) =
-        match (mode, cinema_framing) {
-            (DisplayMode::FullBleed, CinemaFraming::Wide) => {
-                (gtk::Align::Start, gtk::Align::Center, 0.38, 28)
-            }
-            (DisplayMode::FullBleed, _) => (gtk::Align::Start, gtk::Align::End, 0.78, 40),
-            (DisplayMode::Ambient | DisplayMode::LightsOff, _) => {
-                (gtk::Align::Center, gtk::Align::Center, 0.82, 40)
-            }
-            (DisplayMode::Classic, _) => (gtk::Align::Center, gtk::Align::End, 0.82, 40),
-        };
+        immersive_info_placement(mode, cinema_framing, width, height);
     let available_width = (width - margin * 2).max(1);
     let info_width = ((width as f64 * width_fraction).round() as i32)
         .min(available_width)
@@ -573,6 +564,28 @@ pub(super) fn configure_immersive_info(
         } else {
             gtk::Justification::Left
         });
+    }
+}
+
+/// Resolves metadata placement without depending on allocated GTK widgets.
+fn immersive_info_placement(
+    mode: DisplayMode,
+    cinema_framing: CinemaFraming,
+    width: i32,
+    height: i32,
+) -> (gtk::Align, gtk::Align, f64, i32) {
+    match (mode, cinema_framing) {
+        (DisplayMode::Cinema, _) if height > width => {
+            (gtk::Align::Start, gtk::Align::Start, 0.78, 40)
+        }
+        (DisplayMode::Cinema, CinemaFraming::Wide) => {
+            (gtk::Align::Start, gtk::Align::Center, 0.38, 28)
+        }
+        (DisplayMode::Cinema, _) => (gtk::Align::Start, gtk::Align::End, 0.78, 40),
+        (DisplayMode::Ambient | DisplayMode::LightsOff, _) => {
+            (gtk::Align::Center, gtk::Align::Center, 0.82, 40)
+        }
+        (DisplayMode::Classic, _) => (gtk::Align::Center, gtk::Align::End, 0.82, 40),
     }
 }
 
@@ -607,6 +620,26 @@ fn cinema_artwork_rect(
     source_dimensions: (i32, i32),
 ) -> gdk::Rectangle {
     let (source_width, source_height) = source_dimensions;
+    if view_width > 0 && view_height > view_width && source_width > 0 && source_height > 0 {
+        let maximum_height =
+            (f64::from(view_height) * CINEMA_PORTRAIT_ARTWORK_MAX_HEIGHT_FRACTION).round() as i32;
+        let maximum_height = maximum_height.clamp(1, view_height);
+        let scale = (f64::from(view_width) / f64::from(source_width))
+            .min(f64::from(maximum_height) / f64::from(source_height));
+        let artwork_width = (f64::from(source_width) * scale)
+            .round()
+            .clamp(1.0, f64::from(view_width)) as i32;
+        let artwork_height = (f64::from(source_height) * scale)
+            .round()
+            .clamp(1.0, f64::from(maximum_height)) as i32;
+        return gdk::Rectangle::new(
+            view_width.saturating_sub(artwork_width) / 2,
+            view_height.saturating_sub(artwork_height),
+            artwork_width,
+            artwork_height,
+        );
+    }
+
     match cinema_framing(view_width, view_height, source_dimensions) {
         CinemaFraming::Cover => gdk::Rectangle::new(0, 0, view_width.max(0), view_height.max(0)),
         CinemaFraming::Wide => {
@@ -633,7 +666,11 @@ fn cinema_artwork_rect(
 
 #[cfg(test)]
 mod tests {
-    use super::{CinemaFraming, cinema_artwork_rect, cinema_framing, classic_padding_for_size};
+    use super::{
+        CinemaFraming, cinema_artwork_rect, cinema_framing, classic_padding_for_size,
+        immersive_info_placement,
+    };
+    use crate::gui::now_playing_window::DisplayMode;
 
     #[test]
     fn classic_padding_adapts_between_minimum_and_desktop_sizes() {
@@ -644,15 +681,19 @@ mod tests {
     }
 
     #[test]
-    fn cinema_uses_cover_when_most_of_a_square_artwork_is_retained() {
+    fn cinema_portrait_places_complete_artwork_at_the_bottom() {
         assert_eq!(
             cinema_framing(720, 820, (1_000, 1_000)),
             CinemaFraming::Cover
         );
         assert_eq!(
             cinema_artwork_rect(720, 820, (1_000, 1_000)),
-            gdk::Rectangle::new(0, 0, 720, 820)
+            gdk::Rectangle::new(73, 246, 574, 574)
         );
+        let (horizontal, vertical, _, _) =
+            immersive_info_placement(DisplayMode::Cinema, CinemaFraming::Cover, 720, 820);
+        assert_eq!(horizontal, gtk::Align::Start);
+        assert_eq!(vertical, gtk::Align::Start);
     }
 
     #[test]
@@ -671,8 +712,25 @@ mod tests {
         );
         assert_eq!(
             cinema_artwork_rect(1_080, 1_920, (1_000, 1_000)),
-            gdk::Rectangle::new(0, 0, 1_080, 1_080)
+            gdk::Rectangle::new(0, 840, 1_080, 1_080)
         );
+    }
+
+    #[test]
+    fn cinema_landscape_artwork_and_metadata_placement_is_unchanged() {
+        assert_eq!(
+            cinema_artwork_rect(820, 720, (1_000, 1_000)),
+            gdk::Rectangle::new(0, 0, 820, 720)
+        );
+        let (cover_horizontal, cover_vertical, _, _) =
+            immersive_info_placement(DisplayMode::Cinema, CinemaFraming::Cover, 820, 720);
+        assert_eq!(cover_horizontal, gtk::Align::Start);
+        assert_eq!(cover_vertical, gtk::Align::End);
+
+        let (wide_horizontal, wide_vertical, _, _) =
+            immersive_info_placement(DisplayMode::Cinema, CinemaFraming::Wide, 1_920, 1_080);
+        assert_eq!(wide_horizontal, gtk::Align::Start);
+        assert_eq!(wide_vertical, gtk::Align::Center);
     }
 
     #[test]

@@ -163,7 +163,7 @@ fn effective_background(
 ) -> (Background, BackgroundStyle) {
     match display_mode {
         DisplayMode::Classic => (background, style),
-        DisplayMode::FullBleed | DisplayMode::Ambient => (background, BackgroundStyle::Gradient),
+        DisplayMode::Cinema | DisplayMode::Ambient => (background, BackgroundStyle::Gradient),
         DisplayMode::LightsOff => (
             Background {
                 top: (0, 0, 0),
@@ -260,25 +260,37 @@ fn draw_immersive_scrim(
                 let _ = context.paint();
             }
         }
-        DisplayMode::FullBleed => {
+        DisplayMode::Cinema => {
             context.set_source_rgba(0.0, 0.0, 0.0, 0.12);
             let _ = context.paint();
 
-            let gradient = match framing {
-                CinemaFraming::Wide => {
-                    let gradient = LinearGradient::new(0.0, 0.0, f64::from(width) * 0.68, 0.0);
-                    gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.78);
-                    gradient.add_color_stop_rgba(0.72, 0.0, 0.0, 0.0, 0.30);
-                    gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0);
-                    gradient
-                }
-                CinemaFraming::Cover | CinemaFraming::Tall => {
-                    let gradient =
-                        LinearGradient::new(0.0, f64::from(height) * 0.40, 0.0, f64::from(height));
-                    gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.0);
-                    gradient.add_color_stop_rgba(0.60, 0.0, 0.0, 0.0, 0.34);
-                    gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.82);
-                    gradient
+            let gradient = if height > width {
+                let gradient = LinearGradient::new(0.0, 0.0, 0.0, f64::from(height) * 0.60);
+                gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.82);
+                gradient.add_color_stop_rgba(0.40, 0.0, 0.0, 0.0, 0.34);
+                gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0);
+                gradient
+            } else {
+                match framing {
+                    CinemaFraming::Wide => {
+                        let gradient = LinearGradient::new(0.0, 0.0, f64::from(width) * 0.68, 0.0);
+                        gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.78);
+                        gradient.add_color_stop_rgba(0.72, 0.0, 0.0, 0.0, 0.30);
+                        gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0);
+                        gradient
+                    }
+                    CinemaFraming::Cover | CinemaFraming::Tall => {
+                        let gradient = LinearGradient::new(
+                            0.0,
+                            f64::from(height) * 0.40,
+                            0.0,
+                            f64::from(height),
+                        );
+                        gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.0);
+                        gradient.add_color_stop_rgba(0.60, 0.0, 0.0, 0.0, 0.34);
+                        gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.82);
+                        gradient
+                    }
                 }
             };
             if context.set_source(gradient).is_ok() {
@@ -528,5 +540,31 @@ mod tests {
                 assert_eq!(pixel_at(x as usize), expected_pixel);
             }
         }
+    }
+
+    #[test]
+    fn cinema_scrim_tracks_portrait_and_landscape_metadata_edges() {
+        let render_alpha =
+            |width: i32, height: i32, framing: super::CinemaFraming, x: usize, y: usize| {
+                let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                    .expect("test surface");
+                let context = cairo::Context::new(&surface).expect("test context");
+                draw_immersive_scrim(&context, width, height, DisplayMode::Cinema, framing);
+                drop(context);
+                surface.flush();
+
+                let stride = surface.stride() as usize;
+                let data = surface.data().expect("test surface data");
+                let offset = y * stride + x * 4;
+                (u32::from_ne_bytes(data[offset..offset + 4].try_into().unwrap()) >> 24) as u8
+            };
+
+        let portrait_top = render_alpha(180, 320, super::CinemaFraming::Cover, 90, 0);
+        let portrait_bottom = render_alpha(180, 320, super::CinemaFraming::Cover, 90, 319);
+        assert!(portrait_top > portrait_bottom);
+
+        let landscape_left = render_alpha(320, 180, super::CinemaFraming::Wide, 0, 90);
+        let landscape_right = render_alpha(320, 180, super::CinemaFraming::Wide, 319, 90);
+        assert!(landscape_left > landscape_right);
     }
 }

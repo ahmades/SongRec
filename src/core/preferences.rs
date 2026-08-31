@@ -310,25 +310,20 @@ impl<'de> Deserialize<'de> for TrackInfoAlignment {
 pub enum DisplayMode {
     #[default]
     Classic,
-    FullBleed,
+    Cinema,
     Ambient,
     LightsOff,
 }
 
 impl DisplayMode {
     /// All display modes in the order used by selector controls.
-    pub const ALL: [Self; 4] = [
-        Self::Classic,
-        Self::FullBleed,
-        Self::Ambient,
-        Self::LightsOff,
-    ];
+    pub const ALL: [Self; 4] = [Self::Classic, Self::Cinema, Self::Ambient, Self::LightsOff];
 
     /// Returns the persisted string representation of this display mode.
     pub fn as_preference_value(self) -> &'static str {
         match self {
             Self::Classic => "classic",
-            Self::FullBleed => "full-bleed",
+            Self::Cinema => "cinema",
             Self::Ambient => "ambient",
             Self::LightsOff => "lights-off",
         }
@@ -337,7 +332,9 @@ impl DisplayMode {
     /// Parses a persisted display mode, defaulting to the classic layout.
     pub fn from_preference(value: Option<&str>) -> Self {
         match value {
-            Some("full-bleed") => Self::FullBleed,
+            // Accept the former value so existing preference files migrate
+            // to the canonical Cinema value the next time they are written.
+            Some("cinema" | "full-bleed") => Self::Cinema,
             Some("ambient") => Self::Ambient,
             Some("lights-off") => Self::LightsOff,
             _ => Self::Classic,
@@ -906,6 +903,25 @@ lights_off_enabled = true
         .unwrap();
 
         assert_eq!(preferences.now_playing.display_mode, DisplayMode::Ambient);
+    }
+
+    #[test]
+    fn previous_cinema_value_migrates_to_the_canonical_value() {
+        let preferences: Preferences = toml::from_str(
+            r#"
+now_playing_display_mode = "full-bleed"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(preferences.now_playing.display_mode, DisplayMode::Cinema);
+
+        let migrated = toml::to_string(&preferences).unwrap();
+        let migrated_table = migrated.parse::<toml::Table>().unwrap();
+        assert_eq!(
+            migrated_table["now_playing_display_mode"].as_str(),
+            Some("cinema")
+        );
     }
 
     #[test]
