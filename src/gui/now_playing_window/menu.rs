@@ -97,6 +97,7 @@ pub(super) struct NowPlayingControls {
     pub(super) display_mode_menu: gtk::DropDown,
     pub(super) classic_settings: gtk::Box,
     pub(super) round_corners: gtk::Switch,
+    pub(super) hide_track_info_label: gtk::Label,
     pub(super) hide_track_info: gtk::Switch,
     pub(super) background_style_gradient: gtk::ToggleButton,
     pub(super) background_style_solid: gtk::ToggleButton,
@@ -127,6 +128,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         .spacing(6)
         .build();
     let round_corners = gtk::Switch::new();
+    let hide_track_info_label = gtk::Label::new(Some(&gettext("Hide track info")));
     let hide_track_info = gtk::Switch::new();
     let album_cover_size = gtk::Scale::with_range(
         gtk::Orientation::Horizontal,
@@ -176,6 +178,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         display_mode_menu,
         classic_settings,
         round_corners,
+        hide_track_info_label,
         hide_track_info,
         background_style_gradient,
         background_style_solid,
@@ -229,14 +232,21 @@ impl NowPlayingWindow {
             &self.controls.display_mode_menu,
             settings.display_mode,
         );
-        self.add_switch_menu_row(
+        self.add_switch_menu_row_with_label(
             &shared_grid,
             1,
-            &gettext("Hide track info"),
+            &self.controls.hide_track_info_label,
             &self.controls.hide_track_info,
             settings.shared.hide_track_info,
-            settings.display_mode.supports_hiding_track_info(),
+            true,
         );
+        let show_hide_track_info = settings.display_mode.supports_hiding_track_info();
+        self.controls
+            .hide_track_info_label
+            .set_visible(show_hide_track_info);
+        self.controls
+            .hide_track_info
+            .set_visible(show_hide_track_info);
         self.add_switch_menu_row(
             &shared_grid,
             2,
@@ -466,10 +476,23 @@ impl NowPlayingWindow {
         sensitive: bool,
     ) {
         let label = gtk::Label::new(Some(title));
+        self.add_switch_menu_row_with_label(menu_grid, row, &label, switch, active, sensitive);
+    }
+
+    /// Adds a pre-built label-and-switch row to the context menu.
+    fn add_switch_menu_row_with_label(
+        &self,
+        menu_grid: &gtk::Grid,
+        row: i32,
+        label: &gtk::Label,
+        switch: &gtk::Switch,
+        active: bool,
+        sensitive: bool,
+    ) {
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
         label.set_hexpand(true);
-        menu_grid.attach(&label, 0, row, 1, 1);
+        menu_grid.attach(label, 0, row, 1, 1);
         switch.set_halign(gtk::Align::End);
         switch.set_valign(gtk::Align::Center);
         switch.set_active(active);
@@ -620,6 +643,7 @@ impl NowPlayingWindow {
         let applying_settings_for_display_mode = self.state.applying_settings.clone();
         let controller_for_display_mode = self.controller.clone();
         let classic_settings_for_display_mode = self.controls.classic_settings.clone();
+        let hide_track_info_label_for_display_mode = self.controls.hide_track_info_label.clone();
         let hide_track_info_for_display_mode = self.controls.hide_track_info.clone();
         let presentation_for_display_mode = TrackPresentation::from_window(self);
         self.controls
@@ -634,8 +658,10 @@ impl NowPlayingWindow {
                     .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
                 classic_settings_for_display_mode
                     .set_visible(display_mode.shows_classic_settings());
+                hide_track_info_label_for_display_mode
+                    .set_visible(display_mode.supports_hiding_track_info());
                 hide_track_info_for_display_mode
-                    .set_sensitive(display_mode.supports_hiding_track_info());
+                    .set_visible(display_mode.supports_hiding_track_info());
                 presentation_for_display_mode.refresh_mode();
             });
 

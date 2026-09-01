@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 00:36+0200\n"
+"POT-Creation-Date: 2026-09-01 12:16+0200\n"
 "PO-Revision-Date: 2022-10-09 13:27+0200\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -291,75 +291,75 @@ msgstr ""
 msgid "Lights Off"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:166 src/gui/interface.blp:570
-msgid "Gradient"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:167 src/gui/interface.blp:575
-msgid "Solid"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:169 src/gui/interface.blp:522
-msgid "Left"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:170 src/gui/interface.blp:528
-msgid "Center"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:171 src/gui/interface.blp:533
-msgid "Right"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:216 src/gui/interface.blp:459
-msgid "Reset"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:235 src/gui/interface.blp:469
+#: src/gui/now_playing_window/menu.rs:131 src/gui/interface.blp:469
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:243 src/gui/interface.blp:474
+#: src/gui/now_playing_window/menu.rs:168 src/gui/interface.blp:570
+msgid "Gradient"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:169 src/gui/interface.blp:575
+msgid "Solid"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:171 src/gui/interface.blp:522
+msgid "Left"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:172 src/gui/interface.blp:528
+msgid "Center"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:173 src/gui/interface.blp:533
+msgid "Right"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:219 src/gui/interface.blp:459
+msgid "Reset"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:253 src/gui/interface.blp:474
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:263 src/gui/interface.blp:504
+#: src/gui/now_playing_window/menu.rs:273 src/gui/interface.blp:504
 msgid "Classic settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:269 src/gui/interface.blp:508
+#: src/gui/now_playing_window/menu.rs:279 src/gui/interface.blp:508
 msgid "Round corners of album cover"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:412
+#: src/gui/now_playing_window/menu.rs:422
 msgid "Exit full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:415
+#: src/gui/now_playing_window/menu.rs:425
 msgid "Enter full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:447 src/gui/interface.blp:464
+#: src/gui/now_playing_window/menu.rs:457 src/gui/interface.blp:464
 msgid "Display mode"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:488 src/gui/interface.blp:479
+#: src/gui/now_playing_window/menu.rs:511 src/gui/interface.blp:479
 msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:509 src/gui/interface.blp:484
+#: src/gui/now_playing_window/menu.rs:532 src/gui/interface.blp:484
 msgid "Transition duration (ms)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:530 src/gui/interface.blp:540
+#: src/gui/now_playing_window/menu.rs:553 src/gui/interface.blp:540
 msgid "Album cover size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:552 src/gui/interface.blp:513
+#: src/gui/now_playing_window/menu.rs:575 src/gui/interface.blp:513
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:596 src/gui/interface.blp:560
+#: src/gui/now_playing_window/menu.rs:619 src/gui/interface.blp:560
 msgid "Background style"
 msgstr ""
 

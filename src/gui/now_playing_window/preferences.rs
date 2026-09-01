@@ -57,8 +57,11 @@ impl NowPlayingWindow {
                 .classic_settings
                 .set_visible(display_mode.shows_classic_settings());
             self.controls
+                .hide_track_info_label
+                .set_visible(display_mode.supports_hiding_track_info());
+            self.controls
                 .hide_track_info
-                .set_sensitive(display_mode.supports_hiding_track_info());
+                .set_visible(display_mode.supports_hiding_track_info());
         });
         TrackPresentation::from_window(self).refresh_mode();
     }

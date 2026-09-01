@@ -145,14 +145,14 @@ impl NowPlayingPreferencesView {
             .transition_duration
             .set_value(settings.shared.transition_duration_ms as f64);
 
-        self.apply_sensitivity(settings);
+        self.apply_control_state(settings);
         self.applying.set(was_applying);
     }
 
-    fn apply_sensitivity(&self, settings: NowPlayingSettings) {
+    fn apply_control_state(&self, settings: NowPlayingSettings) {
         self.widgets
             .hide_track_info
-            .set_sensitive(settings.display_mode.supports_hiding_track_info());
+            .set_visible(settings.display_mode.supports_hiding_track_info());
         self.widgets
             .track_info_alignment
             .set_sensitive(!settings.shared.hide_track_info);
@@ -183,7 +183,7 @@ impl NowPlayingPreferencesView {
                 controller_for_display_mode
                     .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
                 classic_settings.set_visible(display_mode.shows_classic_settings());
-                hide_track_info.set_sensitive(display_mode.supports_hiding_track_info());
+                hide_track_info.set_visible(display_mode.supports_hiding_track_info());
             });
 
         let applying = self.applying.clone();
