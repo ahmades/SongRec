@@ -189,6 +189,16 @@ impl TrackPresentation {
         self.ambient_artwork
             .container
             .set_visible(visibility.ambient_artwork);
+        self.cinema_artwork.set_background_motion(
+            settings.shared.background_motion_enabled && visibility.cinema_artwork,
+            settings.shared.background_motion_zoom_percent,
+            settings.shared.background_motion_reversal_duration_secs,
+        );
+        self.ambient_artwork.set_background_motion(
+            settings.shared.background_motion_enabled && visibility.ambient_artwork,
+            settings.shared.background_motion_zoom_percent,
+            settings.shared.background_motion_reversal_duration_secs,
+        );
         self.scrim_area.set_visible(visibility.immersive_scrim);
         self.immersive_info_box
             .set_visible(visibility.immersive_info);

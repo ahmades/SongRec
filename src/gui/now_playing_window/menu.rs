@@ -3,9 +3,15 @@
 use super::track::TrackPresentation;
 use super::ui::apply_classic_track_info_alignment;
 use super::{
-    AlbumCoverSize, BackgroundStyle, DisplayMode, NowPlayingSettings, NowPlayingWindow,
-    TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
-    TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
+    AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
+    BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
+    BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS, BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
+    BACKGROUND_MOTION_ZOOM_MAX_PERCENT, BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
+    BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, DisplayMode, NowPlayingSettings,
+    NowPlayingWindow, TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS,
+    TRANSITION_DURATION_MIN_MS, TrackInfoAlignment, TransitionEffect,
+    clamp_background_motion_zoom_percent, normalize_background_motion_reversal_duration_secs,
+    transition_duration_from_scale,
 };
 use crate::core::preferences::NowPlayingPreferenceChange;
 use adw::prelude::*;
@@ -96,9 +102,16 @@ fn section_heading(title: &str) -> gtk::Label {
 pub(super) struct NowPlayingControls {
     pub(super) display_mode_menu: gtk::DropDown,
     pub(super) classic_settings: gtk::Box,
+    pub(super) background_motion_settings: gtk::Box,
     pub(super) round_corners: gtk::Switch,
     pub(super) hide_track_info_label: gtk::Label,
     pub(super) hide_track_info: gtk::Switch,
+    pub(super) background_motion_enabled_label: gtk::Label,
+    pub(super) background_motion_enabled: gtk::Switch,
+    pub(super) background_motion_zoom_label: gtk::Label,
+    pub(super) background_motion_zoom: gtk::Scale,
+    pub(super) background_motion_reversal_duration_label: gtk::Label,
+    pub(super) background_motion_reversal_duration: gtk::Scale,
     pub(super) background_style_gradient: gtk::ToggleButton,
     pub(super) background_style_solid: gtk::ToggleButton,
     pub(super) track_info_alignment_left: gtk::ToggleButton,
@@ -127,9 +140,39 @@ pub(super) fn build_controls() -> NowPlayingControls {
         .orientation(gtk::Orientation::Vertical)
         .spacing(6)
         .build();
+    let background_motion_settings = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(6)
+        .build();
     let round_corners = gtk::Switch::new();
     let hide_track_info_label = gtk::Label::new(Some(&gettext("Hide track info")));
     let hide_track_info = gtk::Switch::new();
+    let background_motion_enabled_label = gtk::Label::new(Some(&gettext("Subtle ambient motion")));
+    let background_motion_enabled = gtk::Switch::new();
+    let background_motion_zoom_label = gtk::Label::new(Some(&gettext("Zoom level (%)")));
+    let background_motion_zoom = gtk::Scale::with_range(
+        gtk::Orientation::Horizontal,
+        f64::from(BACKGROUND_MOTION_ZOOM_MIN_PERCENT),
+        f64::from(BACKGROUND_MOTION_ZOOM_MAX_PERCENT),
+        f64::from(BACKGROUND_MOTION_ZOOM_STEP_PERCENT),
+    );
+    background_motion_zoom.set_value(f64::from(BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT));
+    background_motion_zoom.set_digits(0);
+    background_motion_zoom.set_draw_value(true);
+    background_motion_zoom.set_width_request(190);
+    let background_motion_reversal_duration_label =
+        gtk::Label::new(Some(&gettext("Direction change interval (seconds)")));
+    let background_motion_reversal_duration = gtk::Scale::with_range(
+        gtk::Orientation::Horizontal,
+        BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS as f64,
+        BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS as f64,
+        BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS as f64,
+    );
+    background_motion_reversal_duration
+        .set_value(BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS as f64);
+    background_motion_reversal_duration.set_digits(0);
+    background_motion_reversal_duration.set_draw_value(true);
+    background_motion_reversal_duration.set_width_request(190);
     let album_cover_size = gtk::Scale::with_range(
         gtk::Orientation::Horizontal,
         AlbumCoverSize::MIN_SCALE_VALUE,
@@ -177,9 +220,16 @@ pub(super) fn build_controls() -> NowPlayingControls {
     NowPlayingControls {
         display_mode_menu,
         classic_settings,
+        background_motion_settings,
         round_corners,
         hide_track_info_label,
         hide_track_info,
+        background_motion_enabled_label,
+        background_motion_enabled,
+        background_motion_zoom_label,
+        background_motion_zoom,
+        background_motion_reversal_duration_label,
+        background_motion_reversal_duration,
         background_style_gradient,
         background_style_solid,
         track_info_alignment_left,
@@ -299,6 +349,42 @@ impl NowPlayingWindow {
             .classic_settings
             .set_visible(settings.display_mode.shows_classic_settings());
         menu_box.append(&self.controls.classic_settings);
+
+        let background_motion_heading = section_heading(&gettext("Cinema and Ambient settings"));
+        self.controls
+            .background_motion_settings
+            .append(&background_motion_heading);
+        let background_motion_grid = menu_grid();
+        self.add_switch_menu_row_with_label(
+            &background_motion_grid,
+            0,
+            &self.controls.background_motion_enabled_label,
+            &self.controls.background_motion_enabled,
+            settings.shared.background_motion_enabled,
+            true,
+        );
+        self.add_scale_menu_row_with_label(
+            &background_motion_grid,
+            1,
+            &self.controls.background_motion_zoom_label,
+            &self.controls.background_motion_zoom,
+            f64::from(settings.shared.background_motion_zoom_percent),
+        );
+        self.add_scale_menu_row_with_label(
+            &background_motion_grid,
+            2,
+            &self.controls.background_motion_reversal_duration_label,
+            &self.controls.background_motion_reversal_duration,
+            settings.shared.background_motion_reversal_duration_secs as f64,
+        );
+        self.controls
+            .background_motion_settings
+            .append(&background_motion_grid);
+        self.update_background_motion_control_visibility(
+            settings.display_mode,
+            settings.shared.background_motion_enabled,
+        );
+        menu_box.append(&self.controls.background_motion_settings);
 
         let menu_scroll = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
@@ -500,6 +586,50 @@ impl NowPlayingWindow {
         menu_grid.attach(switch, 1, row, 1, 1);
     }
 
+    /// Adds a pre-built label-and-slider row whose widgets can later be hidden together.
+    fn add_scale_menu_row_with_label(
+        &self,
+        menu_grid: &gtk::Grid,
+        row: i32,
+        label: &gtk::Label,
+        scale: &gtk::Scale,
+        value: f64,
+    ) {
+        label.set_halign(gtk::Align::Start);
+        label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
+        menu_grid.attach(label, 0, row, 1, 1);
+        scale.set_value(value);
+        scale.set_halign(gtk::Align::End);
+        scale.set_valign(gtk::Align::Center);
+        scale.set_hexpand(false);
+        menu_grid.attach(scale, 1, row, 1, 1);
+    }
+
+    pub(super) fn update_background_motion_control_visibility(
+        &self,
+        display_mode: DisplayMode,
+        enabled: bool,
+    ) {
+        let supported = display_mode.supports_background_motion();
+        self.controls
+            .background_motion_settings
+            .set_visible(supported);
+        let show_details = supported && enabled;
+        self.controls
+            .background_motion_zoom_label
+            .set_visible(show_details);
+        self.controls
+            .background_motion_zoom
+            .set_visible(show_details);
+        self.controls
+            .background_motion_reversal_duration_label
+            .set_visible(show_details);
+        self.controls
+            .background_motion_reversal_duration
+            .set_visible(show_details);
+    }
+
     /// Adds the transition effect drop-down to the context menu and selects the saved effect.
     fn add_transition_menu_row(
         &self,
@@ -645,6 +775,19 @@ impl NowPlayingWindow {
         let classic_settings_for_display_mode = self.controls.classic_settings.clone();
         let hide_track_info_label_for_display_mode = self.controls.hide_track_info_label.clone();
         let hide_track_info_for_display_mode = self.controls.hide_track_info.clone();
+        let background_motion_settings_for_display_mode =
+            self.controls.background_motion_settings.clone();
+        let background_motion_enabled_for_display_mode =
+            self.controls.background_motion_enabled.clone();
+        let background_motion_zoom_label_for_display_mode =
+            self.controls.background_motion_zoom_label.clone();
+        let background_motion_zoom_for_display_mode = self.controls.background_motion_zoom.clone();
+        let background_motion_reversal_label_for_display_mode = self
+            .controls
+            .background_motion_reversal_duration_label
+            .clone();
+        let background_motion_reversal_for_display_mode =
+            self.controls.background_motion_reversal_duration.clone();
         let presentation_for_display_mode = TrackPresentation::from_window(self);
         self.controls
             .display_mode_menu
@@ -662,6 +805,14 @@ impl NowPlayingWindow {
                     .set_visible(display_mode.supports_hiding_track_info());
                 hide_track_info_for_display_mode
                     .set_visible(display_mode.supports_hiding_track_info());
+                let supports_background_motion = display_mode.supports_background_motion();
+                background_motion_settings_for_display_mode.set_visible(supports_background_motion);
+                let show_motion_details = supports_background_motion
+                    && background_motion_enabled_for_display_mode.is_active();
+                background_motion_zoom_label_for_display_mode.set_visible(show_motion_details);
+                background_motion_zoom_for_display_mode.set_visible(show_motion_details);
+                background_motion_reversal_label_for_display_mode.set_visible(show_motion_details);
+                background_motion_reversal_for_display_mode.set_visible(show_motion_details);
                 presentation_for_display_mode.refresh_mode();
             });
 
@@ -708,6 +859,70 @@ impl NowPlayingWindow {
                 alignment_center_for_hide.set_sensitive(!hide_track_info);
                 alignment_right_for_hide.set_sensitive(!hide_track_info);
                 presentation_for_hide.refresh_mode();
+            });
+
+        let applying_settings_for_background_motion = self.state.applying_settings.clone();
+        let controller_for_background_motion = self.controller.clone();
+        let background_motion_zoom_label = self.controls.background_motion_zoom_label.clone();
+        let background_motion_zoom = self.controls.background_motion_zoom.clone();
+        let background_motion_reversal_label = self
+            .controls
+            .background_motion_reversal_duration_label
+            .clone();
+        let background_motion_reversal = self.controls.background_motion_reversal_duration.clone();
+        let presentation_for_background_motion = TrackPresentation::from_window(self);
+        self.controls
+            .background_motion_enabled
+            .connect_active_notify(move |switch| {
+                if applying_settings_for_background_motion.get() {
+                    return;
+                }
+
+                let enabled = switch.is_active();
+                controller_for_background_motion
+                    .update(NowPlayingPreferenceChange::BackgroundMotionEnabled(enabled));
+                background_motion_zoom_label.set_visible(enabled);
+                background_motion_zoom.set_visible(enabled);
+                background_motion_reversal_label.set_visible(enabled);
+                background_motion_reversal.set_visible(enabled);
+                presentation_for_background_motion.refresh_mode();
+            });
+
+        let applying_settings_for_background_motion_zoom = self.state.applying_settings.clone();
+        let controller_for_background_motion_zoom = self.controller.clone();
+        let presentation_for_background_motion_zoom = TrackPresentation::from_window(self);
+        self.controls
+            .background_motion_zoom
+            .connect_value_changed(move |scale| {
+                if applying_settings_for_background_motion_zoom.get() {
+                    return;
+                }
+
+                let zoom_percent =
+                    clamp_background_motion_zoom_percent(scale.value().round().max(0.0) as u16);
+                controller_for_background_motion_zoom.update_debounced(
+                    NowPlayingPreferenceChange::BackgroundMotionZoomPercent(zoom_percent),
+                );
+                presentation_for_background_motion_zoom.refresh_mode();
+            });
+
+        let applying_settings_for_background_motion_duration = self.state.applying_settings.clone();
+        let controller_for_background_motion_duration = self.controller.clone();
+        let presentation_for_background_motion_duration = TrackPresentation::from_window(self);
+        self.controls
+            .background_motion_reversal_duration
+            .connect_value_changed(move |scale| {
+                if applying_settings_for_background_motion_duration.get() {
+                    return;
+                }
+
+                let duration_secs = normalize_background_motion_reversal_duration_secs(
+                    scale.value().round().max(0.0) as u64,
+                );
+                controller_for_background_motion_duration.update_debounced(
+                    NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(duration_secs),
+                );
+                presentation_for_background_motion_duration.refresh_mode();
             });
 
         let applying_settings_for_alignment_left = self.state.applying_settings.clone();

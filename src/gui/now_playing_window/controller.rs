@@ -16,6 +16,9 @@ enum SettingKey {
     DisplayMode,
     RoundCorners,
     HideTrackInfo,
+    BackgroundMotionEnabled,
+    BackgroundMotionZoom,
+    BackgroundMotionReversalDuration,
     TrackInfoAlignment,
     AlbumCoverSize,
     BackgroundStyle,
@@ -31,6 +34,13 @@ impl From<NowPlayingPreferenceChange> for SettingKey {
             NowPlayingPreferenceChange::DisplayMode(_) => Self::DisplayMode,
             NowPlayingPreferenceChange::RoundCorners(_) => Self::RoundCorners,
             NowPlayingPreferenceChange::HideTrackInfo(_) => Self::HideTrackInfo,
+            NowPlayingPreferenceChange::BackgroundMotionEnabled(_) => Self::BackgroundMotionEnabled,
+            NowPlayingPreferenceChange::BackgroundMotionZoomPercent(_) => {
+                Self::BackgroundMotionZoom
+            }
+            NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(_) => {
+                Self::BackgroundMotionReversalDuration
+            }
             NowPlayingPreferenceChange::TrackInfoAlignment(_) => Self::TrackInfoAlignment,
             NowPlayingPreferenceChange::AlbumCoverSize(_) => Self::AlbumCoverSize,
             NowPlayingPreferenceChange::BackgroundStyle(_) => Self::BackgroundStyle,
@@ -147,8 +157,9 @@ impl NowPlayingSettingsController {
 
 #[cfg(test)]
 mod tests {
-    use super::NowPlayingSettingsController;
+    use super::{NowPlayingSettingsController, SettingKey};
     use crate::core::preferences::{
+        BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
         DisplayMode, NowPlayingPreferenceChange, NowPlayingPreferences,
     };
 
@@ -173,7 +184,40 @@ mod tests {
         controller.update(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Ambient,
         ));
+        controller.update(NowPlayingPreferenceChange::BackgroundMotionEnabled(true));
+        controller.update(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(
+            u16::MAX,
+        ));
+        controller.update(NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(21));
+        assert!(controller.settings().shared.background_motion_enabled);
+        assert_eq!(
+            controller.settings().shared.background_motion_zoom_percent,
+            BACKGROUND_MOTION_ZOOM_MAX_PERCENT
+        );
+        assert_eq!(
+            controller
+                .settings()
+                .shared
+                .background_motion_reversal_duration_secs,
+            BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS
+        );
         controller.reset();
         assert_eq!(controller.settings(), NowPlayingPreferences::default());
+    }
+
+    #[test]
+    fn background_motion_changes_have_independent_persistence_keys() {
+        assert_eq!(
+            SettingKey::from(NowPlayingPreferenceChange::BackgroundMotionEnabled(true)),
+            SettingKey::BackgroundMotionEnabled
+        );
+        assert_eq!(
+            SettingKey::from(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(110)),
+            SettingKey::BackgroundMotionZoom
+        );
+        assert_eq!(
+            SettingKey::from(NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(30)),
+            SettingKey::BackgroundMotionReversalDuration
+        );
     }
 }

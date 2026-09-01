@@ -1,5 +1,6 @@
 //! GTK widget construction for the Now Playing window.
 
+use super::motion::BackdropMotion;
 use super::style::{
     ALBUM_CSS_CLASS, ARTIST_CSS_CLASS, DETAILS_CSS_CLASS, TITLE_CSS_CLASS, font_css_for_size,
 };
@@ -48,6 +49,7 @@ pub(super) struct CinemaArtworkLayout {
     pub(super) container: gtk::Overlay,
     backdrop: gtk::Picture,
     foreground: gtk::Picture,
+    backdrop_motion: BackdropMotion,
     source_dimensions: Rc<Cell<(i32, i32)>>,
 }
 
@@ -70,16 +72,28 @@ impl CinemaArtworkLayout {
         foreground.set_can_target(false);
 
         let container = gtk::Overlay::builder().hexpand(true).vexpand(true).build();
-        container.set_child(Some(&backdrop));
+        let reservation = gtk::Box::builder().hexpand(true).vexpand(true).build();
+        container.set_child(Some(&reservation));
+        container.add_overlay(&backdrop);
+        container.set_measure_overlay(&backdrop, false);
+        container.set_clip_overlay(&backdrop, true);
         container.add_overlay(&foreground);
         container.set_measure_overlay(&foreground, false);
         container.set_clip_overlay(&foreground, true);
         container.set_can_target(false);
 
+        let backdrop_motion = BackdropMotion::new(&container);
         let source_dimensions = Rc::new(Cell::new((0, 0)));
         let source_dimensions_for_position = source_dimensions.clone();
+        let backdrop_widget = backdrop.clone().upcast::<gtk::Widget>();
         let foreground_widget = foreground.clone().upcast::<gtk::Widget>();
+        let backdrop_motion_for_position = backdrop_motion.clone();
         container.connect_get_child_position(move |overlay, child| {
+            if child == &backdrop_widget {
+                return Some(
+                    backdrop_motion_for_position.backdrop_rect(overlay.width(), overlay.height()),
+                );
+            }
             if child != &foreground_widget {
                 return None;
             }
@@ -95,6 +109,7 @@ impl CinemaArtworkLayout {
             container,
             backdrop,
             foreground,
+            backdrop_motion,
             source_dimensions,
         }
     }
@@ -117,6 +132,16 @@ impl CinemaArtworkLayout {
         self.container.queue_allocate();
     }
 
+    pub(super) fn set_background_motion(
+        &self,
+        enabled: bool,
+        zoom_percent: u16,
+        reversal_duration_secs: u64,
+    ) {
+        self.backdrop_motion
+            .configure(enabled, zoom_percent, reversal_duration_secs);
+    }
+
     pub(super) fn framing(&self, width: i32, height: i32) -> CinemaFraming {
         cinema_framing(width, height, self.source_dimensions.get())
     }
@@ -129,6 +154,7 @@ pub(super) struct AmbientArtworkLayout {
     pub(super) container: gtk::Overlay,
     backdrop: gtk::Picture,
     foreground: gtk::Picture,
+    backdrop_motion: BackdropMotion,
 }
 
 impl AmbientArtworkLayout {
@@ -151,16 +177,30 @@ impl AmbientArtworkLayout {
         foreground.set_can_target(false);
 
         let container = gtk::Overlay::builder().hexpand(true).vexpand(true).build();
-        container.set_child(Some(&backdrop));
+        let reservation = gtk::Box::builder().hexpand(true).vexpand(true).build();
+        container.set_child(Some(&reservation));
+        container.add_overlay(&backdrop);
+        container.set_measure_overlay(&backdrop, false);
+        container.set_clip_overlay(&backdrop, true);
         container.add_overlay(&foreground);
         container.set_measure_overlay(&foreground, false);
         container.set_clip_overlay(&foreground, true);
         container.set_can_target(false);
 
+        let backdrop_motion = BackdropMotion::new(&container);
+        let backdrop_widget = backdrop.clone().upcast::<gtk::Widget>();
+        let backdrop_motion_for_position = backdrop_motion.clone();
+        container.connect_get_child_position(move |overlay, child| {
+            (child == &backdrop_widget).then(|| {
+                backdrop_motion_for_position.backdrop_rect(overlay.width(), overlay.height())
+            })
+        });
+
         Self {
             container,
             backdrop,
             foreground,
+            backdrop_motion,
         }
     }
 
@@ -176,6 +216,16 @@ impl AmbientArtworkLayout {
         } else {
             self.foreground.set_paintable(Option::<&gdk::Texture>::None);
         }
+    }
+
+    pub(super) fn set_background_motion(
+        &self,
+        enabled: bool,
+        zoom_percent: u16,
+        reversal_duration_secs: u64,
+    ) {
+        self.backdrop_motion
+            .configure(enabled, zoom_percent, reversal_duration_secs);
     }
 }
 

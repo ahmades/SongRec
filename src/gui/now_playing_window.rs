@@ -11,6 +11,7 @@ mod controller;
 mod display_mode;
 mod main_preferences;
 mod menu;
+mod motion;
 mod palette;
 mod preferences;
 mod state;
@@ -29,8 +30,13 @@ pub use crate::core::preferences::{
     AlbumCoverSize, BackgroundStyle, DisplayMode, TrackInfoAlignment, TransitionEffect,
 };
 pub(crate) use crate::core::preferences::{
+    BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS,
+    BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS,
+    BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
+    BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BACKGROUND_MOTION_ZOOM_STEP_PERCENT,
     NowPlayingPreferences as NowPlayingSettings, TRANSITION_DURATION_DEFAULT_MS,
-    TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, clamp_transition_duration_ms,
+    TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, clamp_background_motion_zoom_percent,
+    clamp_transition_duration_ms, normalize_background_motion_reversal_duration_secs,
 };
 pub(crate) use controller::NowPlayingSettingsController as SettingsController;
 pub(crate) use main_preferences::NowPlayingPreferencesView;

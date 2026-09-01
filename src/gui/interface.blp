@@ -577,6 +577,60 @@ Adw.ApplicationWindow main_window {
                 }
               }
             }
+
+            Adw.PreferencesGroup background_motion_preferences {
+              title: _("Cinema and Ambient settings");
+              visible: false;
+
+              Adw.SwitchRow background_motion_enabled_setting {
+                subtitle: _("Gently zoom the blurred background in and out");
+                title: _("Subtle ambient motion");
+              }
+
+              Adw.ActionRow background_motion_zoom_setting {
+                subtitle: _("Set how far the background zooms in");
+                title: _("Zoom level (%)");
+                visible: false;
+
+                [suffix]
+                Scale background_motion_zoom_setting_scale {
+                  orientation: horizontal;
+                  width-request: 300;
+                  hexpand: true;
+                  draw-value: true;
+                  digits: 0;
+                  adjustment: Adjustment {
+                    lower: 105;
+                    upper: 120;
+                    step-increment: 1;
+                    page-increment: 1;
+                    value: 110;
+                  };
+                }
+              }
+
+              Adw.ActionRow background_motion_reversal_duration_setting {
+                subtitle: _("Set how often the background changes direction");
+                title: _("Direction change interval (seconds)");
+                visible: false;
+
+                [suffix]
+                Scale background_motion_reversal_duration_setting_scale {
+                  orientation: horizontal;
+                  width-request: 300;
+                  hexpand: true;
+                  draw-value: true;
+                  digits: 0;
+                  adjustment: Adjustment {
+                    lower: 20;
+                    upper: 60;
+                    step-increment: 5;
+                    page-increment: 5;
+                    value: 30;
+                  };
+                }
+              }
+            }
           }
 
         };

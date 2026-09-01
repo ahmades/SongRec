@@ -13,9 +13,53 @@ pub(crate) const TRANSITION_DURATION_MIN_MS: u64 = 500;
 /// The longest transition duration exposed by the UI.
 pub(crate) const TRANSITION_DURATION_MAX_MS: u64 = 5_000;
 
+/// Default maximum zoom reached by the moving Now Playing background.
+pub(crate) const BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT: u16 = 110;
+/// Smallest background-motion zoom exposed by the UI.
+pub(crate) const BACKGROUND_MOTION_ZOOM_MIN_PERCENT: u16 = 105;
+/// Largest background-motion zoom exposed by the UI.
+pub(crate) const BACKGROUND_MOTION_ZOOM_MAX_PERCENT: u16 = 120;
+/// Increment used by the background-motion zoom controls.
+pub(crate) const BACKGROUND_MOTION_ZOOM_STEP_PERCENT: u16 = 1;
+
+/// Default time taken before the moving background reverses direction.
+pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS: u64 = 30;
+/// Shortest background-motion direction-reversal duration exposed by the UI.
+pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS: u64 = 20;
+/// Longest background-motion direction-reversal duration exposed by the UI.
+pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS: u64 = 60;
+/// Increment used by the direction-reversal duration controls.
+pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS: u64 = 5;
+
 /// Clamps a transition duration to the range supported by Now Playing.
 pub(crate) fn clamp_transition_duration_ms(duration_ms: u64) -> u64 {
     duration_ms.clamp(TRANSITION_DURATION_MIN_MS, TRANSITION_DURATION_MAX_MS)
+}
+
+/// Clamps a background-motion zoom to the range supported by Now Playing.
+pub(crate) fn clamp_background_motion_zoom_percent(zoom_percent: u16) -> u16 {
+    let zoom_percent = zoom_percent.clamp(
+        BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
+        BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
+    );
+    let offset = zoom_percent - BACKGROUND_MOTION_ZOOM_MIN_PERCENT;
+
+    BACKGROUND_MOTION_ZOOM_MIN_PERCENT
+        + offset / BACKGROUND_MOTION_ZOOM_STEP_PERCENT * BACKGROUND_MOTION_ZOOM_STEP_PERCENT
+}
+
+/// Normalizes a reversal duration to a supported five-second increment.
+pub(crate) fn normalize_background_motion_reversal_duration_secs(duration_secs: u64) -> u64 {
+    let duration_secs = duration_secs.clamp(
+        BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
+        BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS,
+    );
+    let offset = duration_secs - BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS;
+    let rounded_steps = (offset + BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS / 2)
+        / BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS;
+
+    BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS
+        + rounded_steps * BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS
 }
 
 /// Controls the relative size of the album artwork within its reserved layout area.
@@ -428,11 +472,17 @@ impl Default for ClassicNowPlayingPreferences {
     }
 }
 
-/// Settings and behavior shared by every display mode.
+/// Settings and behavior shared by more than one display mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SharedNowPlayingPreferences {
     #[serde(rename = "hide_now_playing_info")]
     pub hide_track_info: bool,
+    #[serde(rename = "now_playing_background_motion_enabled")]
+    pub background_motion_enabled: bool,
+    #[serde(rename = "now_playing_background_motion_zoom_percent")]
+    pub background_motion_zoom_percent: u16,
+    #[serde(rename = "now_playing_background_motion_reversal_duration_secs")]
+    pub background_motion_reversal_duration_secs: u64,
     pub always_display_last_recognized_song: bool,
     #[serde(rename = "now_playing_transition")]
     pub transition: TransitionEffect,
@@ -444,6 +494,10 @@ impl Default for SharedNowPlayingPreferences {
     fn default() -> Self {
         Self {
             hide_track_info: false,
+            background_motion_enabled: false,
+            background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
+            background_motion_reversal_duration_secs:
+                BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
             always_display_last_recognized_song: true,
             transition: TransitionEffect::default(),
             transition_duration_ms: TRANSITION_DURATION_DEFAULT_MS,
@@ -483,6 +537,12 @@ struct NowPlayingPreferencesWire {
     round_corners: Option<bool>,
     #[serde(rename = "hide_now_playing_info")]
     hide_track_info: Option<bool>,
+    #[serde(rename = "now_playing_background_motion_enabled")]
+    background_motion_enabled: Option<bool>,
+    #[serde(rename = "now_playing_background_motion_zoom_percent")]
+    background_motion_zoom_percent: Option<u16>,
+    #[serde(rename = "now_playing_background_motion_reversal_duration_secs")]
+    background_motion_reversal_duration_secs: Option<u64>,
     #[serde(rename = "now_playing_track_info_alignment")]
     track_info_alignment: Option<TrackInfoAlignment>,
     #[serde(rename = "now_playing_album_cover_size")]
@@ -529,6 +589,15 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
                 hide_track_info: wire
                     .hide_track_info
                     .unwrap_or(defaults.shared.hide_track_info),
+                background_motion_enabled: wire
+                    .background_motion_enabled
+                    .unwrap_or(defaults.shared.background_motion_enabled),
+                background_motion_zoom_percent: wire
+                    .background_motion_zoom_percent
+                    .unwrap_or(defaults.shared.background_motion_zoom_percent),
+                background_motion_reversal_duration_secs: wire
+                    .background_motion_reversal_duration_secs
+                    .unwrap_or(defaults.shared.background_motion_reversal_duration_secs),
                 always_display_last_recognized_song: wire
                     .always_display_last_recognized_song
                     .unwrap_or(defaults.shared.always_display_last_recognized_song),
@@ -547,6 +616,12 @@ impl NowPlayingPreferences {
     fn normalize(&mut self) {
         self.shared.transition_duration_ms =
             clamp_transition_duration_ms(self.shared.transition_duration_ms);
+        self.shared.background_motion_zoom_percent =
+            clamp_background_motion_zoom_percent(self.shared.background_motion_zoom_percent);
+        self.shared.background_motion_reversal_duration_secs =
+            normalize_background_motion_reversal_duration_secs(
+                self.shared.background_motion_reversal_duration_secs,
+            );
     }
 
     pub(crate) fn apply_change(&mut self, change: NowPlayingPreferenceChange) {
@@ -556,6 +631,15 @@ impl NowPlayingPreferences {
             NowPlayingPreferenceChange::RoundCorners(value) => self.classic.round_corners = value,
             NowPlayingPreferenceChange::HideTrackInfo(value) => {
                 self.shared.hide_track_info = value;
+            }
+            NowPlayingPreferenceChange::BackgroundMotionEnabled(value) => {
+                self.shared.background_motion_enabled = value;
+            }
+            NowPlayingPreferenceChange::BackgroundMotionZoomPercent(value) => {
+                self.shared.background_motion_zoom_percent = value;
+            }
+            NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(value) => {
+                self.shared.background_motion_reversal_duration_secs = value;
             }
             NowPlayingPreferenceChange::TrackInfoAlignment(value) => {
                 self.classic.track_info_alignment = value;
@@ -585,6 +669,9 @@ pub enum NowPlayingPreferenceChange {
     DisplayMode(DisplayMode),
     RoundCorners(bool),
     HideTrackInfo(bool),
+    BackgroundMotionEnabled(bool),
+    BackgroundMotionZoomPercent(u16),
+    BackgroundMotionReversalDurationSecs(u64),
     TrackInfoAlignment(TrackInfoAlignment),
     AlbumCoverSize(AlbumCoverSize),
     BackgroundStyle(BackgroundStyle),
@@ -761,11 +848,14 @@ impl PreferencesInterface {
 #[cfg(test)]
 mod tests {
     use super::{
-        AlbumCoverSize, BackgroundStyle, ClassicNowPlayingPreferences, DisplayMode,
-        NowPlayingPreferenceChange, NowPlayingPreferences, Preferences, PreferencesInterface,
-        PreferencesPatch, SharedNowPlayingPreferences, TRANSITION_DURATION_DEFAULT_MS,
-        TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TrackInfoAlignment,
-        TransitionEffect,
+        AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
+        BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
+        BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
+        BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BackgroundStyle, ClassicNowPlayingPreferences,
+        DisplayMode, NowPlayingPreferenceChange, NowPlayingPreferences, Preferences,
+        PreferencesInterface, PreferencesPatch, SharedNowPlayingPreferences,
+        TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
+        TrackInfoAlignment, TransitionEffect,
     };
 
     #[test]
@@ -784,6 +874,15 @@ mod tests {
         );
         assert_eq!(defaults.classic.background_style, BackgroundStyle::Gradient);
         assert!(!defaults.shared.hide_track_info);
+        assert!(!defaults.shared.background_motion_enabled);
+        assert_eq!(
+            defaults.shared.background_motion_zoom_percent,
+            BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT
+        );
+        assert_eq!(
+            defaults.shared.background_motion_reversal_duration_secs,
+            BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS
+        );
         assert!(defaults.shared.always_display_last_recognized_song);
         assert_eq!(defaults.shared.transition, TransitionEffect::None);
         assert_eq!(
@@ -802,6 +901,18 @@ mod tests {
         assert_eq!(table["now_playing_display_mode"].as_str(), Some("classic"));
         assert_eq!(table["now_playing_round_corners"].as_bool(), Some(true));
         assert_eq!(table["hide_now_playing_info"].as_bool(), Some(false));
+        assert_eq!(
+            table["now_playing_background_motion_enabled"].as_bool(),
+            Some(false)
+        );
+        assert_eq!(
+            table["now_playing_background_motion_zoom_percent"].as_integer(),
+            Some(110)
+        );
+        assert_eq!(
+            table["now_playing_background_motion_reversal_duration_secs"].as_integer(),
+            Some(30)
+        );
         assert_eq!(
             table["now_playing_track_info_alignment"].as_str(),
             Some("center")
@@ -851,6 +962,10 @@ lights_off_enabled = false
                 },
                 shared: SharedNowPlayingPreferences {
                     hide_track_info: true,
+                    background_motion_enabled: false,
+                    background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
+                    background_motion_reversal_duration_secs:
+                        BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
                     always_display_last_recognized_song: false,
                     transition: TransitionEffect::SlideUp,
                     transition_duration_ms: 3_500,
@@ -925,6 +1040,34 @@ now_playing_display_mode = "full-bleed"
     }
 
     #[test]
+    fn background_motion_values_from_disk_are_normalized() {
+        let preferences: Preferences = toml::from_str(
+            r#"
+now_playing_background_motion_enabled = true
+now_playing_background_motion_zoom_percent = 104
+now_playing_background_motion_reversal_duration_secs = 23
+"#,
+        )
+        .unwrap();
+
+        assert!(preferences.now_playing.shared.background_motion_enabled);
+        assert_eq!(
+            preferences
+                .now_playing
+                .shared
+                .background_motion_zoom_percent,
+            BACKGROUND_MOTION_ZOOM_MIN_PERCENT
+        );
+        assert_eq!(
+            preferences
+                .now_playing
+                .shared
+                .background_motion_reversal_duration_secs,
+            25
+        );
+    }
+
+    #[test]
     fn display_mode_and_scoped_settings_round_trip_together() {
         for display_mode in DisplayMode::ALL {
             let preferences = Preferences {
@@ -937,6 +1080,9 @@ now_playing_display_mode = "full-bleed"
                     },
                     shared: SharedNowPlayingPreferences {
                         hide_track_info: true,
+                        background_motion_enabled: true,
+                        background_motion_zoom_percent: 117,
+                        background_motion_reversal_duration_secs: 45,
                         ..SharedNowPlayingPreferences::default()
                     },
                     ..NowPlayingPreferences::default()
@@ -990,6 +1136,10 @@ now_playing_display_mode = "full-bleed"
                 },
                 shared: SharedNowPlayingPreferences {
                     hide_track_info: true,
+                    background_motion_enabled: true,
+                    background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
+                    background_motion_reversal_duration_secs:
+                        BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS,
                     transition_duration_ms: TRANSITION_DURATION_MAX_MS,
                     ..SharedNowPlayingPreferences::default()
                 },
@@ -1031,6 +1181,58 @@ now_playing_display_mode = "full-bleed"
         ));
         assert!(interface.preferences.now_playing.shared.hide_track_info);
         assert!(!interface.preferences.now_playing.classic.round_corners);
+
+        interface.update_now_playing(NowPlayingPreferenceChange::BackgroundMotionEnabled(true));
+        interface.update_now_playing(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(1));
+        interface.update_now_playing(
+            NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(21),
+        );
+        assert!(
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .background_motion_enabled
+        );
+        assert_eq!(
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .background_motion_zoom_percent,
+            BACKGROUND_MOTION_ZOOM_MIN_PERCENT
+        );
+        assert_eq!(
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .background_motion_reversal_duration_secs,
+            BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS
+        );
+
+        interface.update_now_playing(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(
+            u16::MAX,
+        ));
+        interface.update_now_playing(
+            NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(58),
+        );
+        assert_eq!(
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .background_motion_zoom_percent,
+            BACKGROUND_MOTION_ZOOM_MAX_PERCENT
+        );
+        assert_eq!(
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .background_motion_reversal_duration_secs,
+            BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS
+        );
 
         interface.update_now_playing(NowPlayingPreferenceChange::TransitionDurationMs(1));
         assert_eq!(

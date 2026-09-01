@@ -14,6 +14,11 @@ impl DisplayMode {
         !matches!(self, Self::LightsOff)
     }
 
+    /// Whether this mode renders the blurred background used by ambient motion.
+    pub(crate) const fn supports_background_motion(self) -> bool {
+        matches!(self, Self::Cinema | Self::Ambient)
+    }
+
     /// Returns the localized label used by display-mode selectors.
     pub(crate) fn translated_label(self) -> String {
         match self {
@@ -67,6 +72,16 @@ mod tests {
             assert_eq!(
                 display_mode.supports_hiding_track_info(),
                 !matches!(display_mode, DisplayMode::LightsOff)
+            );
+        }
+    }
+
+    #[test]
+    fn only_immersive_modes_support_background_motion() {
+        for display_mode in DisplayMode::ALL {
+            assert_eq!(
+                display_mode.supports_background_motion(),
+                matches!(display_mode, DisplayMode::Cinema | DisplayMode::Ambient)
             );
         }
     }

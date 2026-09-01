@@ -4,7 +4,8 @@ use super::track::TrackPresentation;
 use super::ui::apply_classic_track_info_alignment;
 use super::{
     AlbumCoverSize, DisplayMode, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment,
-    TransitionEffect, clamp_transition_duration_ms,
+    TransitionEffect, clamp_background_motion_zoom_percent, clamp_transition_duration_ms,
+    normalize_background_motion_reversal_duration_secs,
 };
 use adw::prelude::*;
 
@@ -28,6 +29,11 @@ impl NowPlayingWindow {
             self.set_display_mode(settings.display_mode);
             self.set_round_corners(settings.classic.round_corners);
             self.set_show_track_info(!settings.shared.hide_track_info);
+            self.set_background_motion(
+                settings.shared.background_motion_enabled,
+                settings.shared.background_motion_zoom_percent,
+                settings.shared.background_motion_reversal_duration_secs,
+            );
             self.set_track_info_alignment(settings.classic.track_info_alignment);
             self.set_album_cover_size(settings.classic.album_cover_size);
             self.set_always_display_last_recognized_song(
@@ -62,6 +68,44 @@ impl NowPlayingWindow {
             self.controls
                 .hide_track_info
                 .set_visible(display_mode.supports_hiding_track_info());
+            self.update_background_motion_control_visibility(
+                display_mode,
+                self.controls.background_motion_enabled.is_active(),
+            );
+        });
+        TrackPresentation::from_window(self).refresh_mode();
+    }
+
+    /// Synchronizes the shared immersive-background motion controls and renderer.
+    pub(super) fn set_background_motion(
+        &self,
+        enabled: bool,
+        zoom_percent: u16,
+        reversal_duration_secs: u64,
+    ) {
+        let zoom_percent = clamp_background_motion_zoom_percent(zoom_percent);
+        let reversal_duration_secs =
+            normalize_background_motion_reversal_duration_secs(reversal_duration_secs);
+        self.with_preference_updates_suspended(|| {
+            if self.controls.background_motion_enabled.is_active() != enabled {
+                self.controls.background_motion_enabled.set_active(enabled);
+            }
+            if self.controls.background_motion_zoom.value() != f64::from(zoom_percent) {
+                self.controls
+                    .background_motion_zoom
+                    .set_value(f64::from(zoom_percent));
+            }
+            if self.controls.background_motion_reversal_duration.value()
+                != reversal_duration_secs as f64
+            {
+                self.controls
+                    .background_motion_reversal_duration
+                    .set_value(reversal_duration_secs as f64);
+            }
+            self.update_background_motion_control_visibility(
+                self.state.settings.get().display_mode,
+                enabled,
+            );
         });
         TrackPresentation::from_window(self).refresh_mode();
     }

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 12:16+0200\n"
+"POT-Creation-Date: 2026-09-01 23:21+0200\n"
 "PO-Revision-Date: 2026-07-06 14:05+0000\n"
 "Last-Translator: Arda Aydın <arda.aydin@operationsilkscarf.com>\n"
 "Language-Team: Turkish <https://weblate.fossplant.re/projects/songrec/"
@@ -193,17 +193,17 @@ msgstr "Ses hatası:"
 msgid "Audio error: No input device available"
 msgstr "Ses hatası: Mevcut bir giriş cihazı yok"
 
-#: src/core/preferences.rs:638 src/gui/main_window.rs:342
-#: src/gui/interface.blp:129 src/gui/interface.blp:707
-#: src/gui/interface.blp:757
+#: src/core/preferences.rs:725 src/gui/main_window.rs:342
+#: src/gui/interface.blp:129 src/gui/interface.blp:761
+#: src/gui/interface.blp:811
 msgid "Search on YouTube"
 msgstr "YouTube'da ara"
 
-#: src/core/preferences.rs:677
+#: src/core/preferences.rs:764
 msgid "When parsing the preferences file:"
 msgstr "Seçenekler dosyası okunurken şu oldu:"
 
-#: src/core/preferences.rs:748
+#: src/core/preferences.rs:835
 msgid "When saving the preferences file:"
 msgstr "Seçenekler dosyasını kaydederken şu oldu:"
 
@@ -279,95 +279,111 @@ msgstr ""
 msgid "Large"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:20
+#: src/gui/now_playing_window/display_mode.rs:25
 msgid "Classic"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:21
+#: src/gui/now_playing_window/display_mode.rs:26
 msgid "Cinema"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:22
+#: src/gui/now_playing_window/display_mode.rs:27
 msgid "Ambient"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:23
+#: src/gui/now_playing_window/display_mode.rs:28
 msgid "Lights Off"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:131 src/gui/interface.blp:469
+#: src/gui/now_playing_window/menu.rs:148 src/gui/interface.blp:469
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:168 src/gui/interface.blp:570
+#: src/gui/now_playing_window/menu.rs:150 src/gui/interface.blp:587
+msgid "Subtle ambient motion"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:152 src/gui/interface.blp:592
+msgid "Zoom level (%)"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:164 src/gui/interface.blp:614
+msgid "Direction change interval (seconds)"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:211 src/gui/interface.blp:570
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:169 src/gui/interface.blp:575
+#: src/gui/now_playing_window/menu.rs:212 src/gui/interface.blp:575
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:171 src/gui/interface.blp:522
+#: src/gui/now_playing_window/menu.rs:214 src/gui/interface.blp:522
 msgid "Left"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:172 src/gui/interface.blp:528
+#: src/gui/now_playing_window/menu.rs:215 src/gui/interface.blp:528
 msgid "Center"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:173 src/gui/interface.blp:533
+#: src/gui/now_playing_window/menu.rs:216 src/gui/interface.blp:533
 msgid "Right"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:219 src/gui/interface.blp:459
+#: src/gui/now_playing_window/menu.rs:269 src/gui/interface.blp:459
 msgid "Reset"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:253 src/gui/interface.blp:474
+#: src/gui/now_playing_window/menu.rs:303 src/gui/interface.blp:474
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:273 src/gui/interface.blp:504
+#: src/gui/now_playing_window/menu.rs:323 src/gui/interface.blp:504
 msgid "Classic settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:279 src/gui/interface.blp:508
+#: src/gui/now_playing_window/menu.rs:329 src/gui/interface.blp:508
 msgid "Round corners of album cover"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:422
+#: src/gui/now_playing_window/menu.rs:353 src/gui/interface.blp:582
+msgid "Cinema and Ambient settings"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:508
 msgid "Exit full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:425
+#: src/gui/now_playing_window/menu.rs:511
 msgid "Enter full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:457 src/gui/interface.blp:464
+#: src/gui/now_playing_window/menu.rs:543 src/gui/interface.blp:464
 msgid "Display mode"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:511 src/gui/interface.blp:479
+#: src/gui/now_playing_window/menu.rs:641 src/gui/interface.blp:479
 msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:532 src/gui/interface.blp:484
+#: src/gui/now_playing_window/menu.rs:662 src/gui/interface.blp:484
 msgid "Transition duration (ms)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:553 src/gui/interface.blp:540
+#: src/gui/now_playing_window/menu.rs:683 src/gui/interface.blp:540
 msgid "Album cover size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:575 src/gui/interface.blp:513
+#: src/gui/now_playing_window/menu.rs:705 src/gui/interface.blp:513
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:619 src/gui/interface.blp:560
+#: src/gui/now_playing_window/menu.rs:749 src/gui/interface.blp:560
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:117 src/gui/now_playing_window/ui.rs:305
+#: src/gui/now_playing_window/track.rs:117 src/gui/now_playing_window/ui.rs:355
 msgid "Listening..."
 msgstr ""
 
@@ -411,7 +427,7 @@ msgstr ""
 msgid "Swing down"
 msgstr ""
 
-#: src/gui/now_playing_window/ui.rs:273
+#: src/gui/now_playing_window/ui.rs:323
 msgid "Now playing"
 msgstr ""
 
@@ -519,7 +535,7 @@ msgstr "Favorileri göster"
 msgid "Application menu"
 msgstr "Uygulama menüsü"
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:659
+#: src/gui/interface.blp:369 src/gui/interface.blp:713
 msgid "Export to CSV"
 msgstr "CSV halinde dışarı aktar"
 
@@ -535,7 +551,7 @@ msgstr "Genel seçenekler"
 msgid "Notify when a new song is recognized or network error is encountered"
 msgstr "Yeni bir şarkı tanındığında ya da ağ hatasıyla karşılaşınca bildir"
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:614
+#: src/gui/interface.blp:388 src/gui/interface.blp:668
 msgid "Show notifications"
 msgstr "Bildirimleri göster"
 
@@ -643,55 +659,67 @@ msgstr ""
 msgid "Choose how the window's background is rendered"
 msgstr ""
 
-#: src/gui/interface.blp:589
+#: src/gui/interface.blp:586
+msgid "Gently zoom the blurred background in and out"
+msgstr ""
+
+#: src/gui/interface.blp:591
+msgid "Set how far the background zooms in"
+msgstr ""
+
+#: src/gui/interface.blp:613
+msgid "Set how often the background changes direction"
+msgstr ""
+
+#: src/gui/interface.blp:643
 msgid "Settings"
 msgstr "Ayarlar"
 
-#: src/gui/interface.blp:619
+#: src/gui/interface.blp:673
 msgid "_Preferences..."
 msgstr "_Tercihler..."
 
-#: src/gui/interface.blp:626
+#: src/gui/interface.blp:680
 msgid "_Keyboard Shortcuts"
 msgstr "_Klavye Kısayolları"
 
-#: src/gui/interface.blp:631
+#: src/gui/interface.blp:685
 msgid "About..."
 msgstr "Hakkında..."
 
-#: src/gui/interface.blp:664
+#: src/gui/interface.blp:718
 msgid "Delete history"
 msgstr "Geçmişi sil"
 
-#: src/gui/interface.blp:669
+#: src/gui/interface.blp:723
 msgid "Select a file to recognize"
 msgstr "Tanınacak bir dosya seç"
 
-#: src/gui/interface.blp:681 src/gui/interface.blp:731
+#: src/gui/interface.blp:735 src/gui/interface.blp:785
 msgid "Copy artist and track"
 msgstr "Sanatçı ve parça adını kopyala"
 
-#: src/gui/interface.blp:687 src/gui/interface.blp:737
+#: src/gui/interface.blp:741 src/gui/interface.blp:791
 msgid "Copy artist"
 msgstr "Sanatçı adını kopyala"
 
-#: src/gui/interface.blp:693 src/gui/interface.blp:743
+#: src/gui/interface.blp:747 src/gui/interface.blp:797
 msgid "Copy track name"
 msgstr "Şarkı adını kopyala"
 
-#: src/gui/interface.blp:699 src/gui/interface.blp:749
+#: src/gui/interface.blp:753 src/gui/interface.blp:803
 msgid "Copy album"
 msgstr "Albüm adını kopyala"
 
-#: src/gui/interface.blp:715
+#: src/gui/interface.blp:769
 msgid "Delete from History"
 msgstr "Geçmişten sil"
 
-#: src/gui/interface.blp:721
+#: src/gui/interface.blp:775
 msgid "Add to Favorites"
 msgstr "Favorilere ekle"
 
-#: src/gui/interface.blp:765
+#: src/gui/interface.blp:819
 msgid "Remove from Favorites"
 msgstr "Favorilerden çıkar"
 
