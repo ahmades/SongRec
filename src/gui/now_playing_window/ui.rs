@@ -402,8 +402,21 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
     immersive_info_box.append(&immersive_album_label);
     immersive_info_box.append(&immersive_details_label);
 
+    let cinema_artwork = CinemaArtworkLayout::new();
+    cinema_artwork.container.set_visible(false);
+    let ambient_artwork = AmbientArtworkLayout::new();
+    ambient_artwork.container.set_visible(false);
+    let scrim_area = gtk::DrawingArea::builder()
+        .hexpand(true)
+        .vexpand(true)
+        .visible(false)
+        .build();
+    scrim_area.set_can_target(false);
+
     // A permanent reservation lets Classic and immersive content occupy the
-    // same revealer without reparenting the metadata widgets on mode changes.
+    // same revealer without reparenting widgets on mode changes. Keeping every
+    // foreground scene layer here also applies the selected transition to
+    // Cinema and Ambient while the stable palette background remains visible.
     let content_layer = gtk::Overlay::builder().hexpand(true).vexpand(true).build();
     let content_reservation = gtk::Box::builder()
         .hexpand(true)
@@ -412,6 +425,12 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
         .height_request(MIN_WINDOW_HEIGHT)
         .build();
     content_layer.set_child(Some(&content_reservation));
+    content_layer.add_overlay(&cinema_artwork.container);
+    content_layer.set_measure_overlay(&cinema_artwork.container, false);
+    content_layer.add_overlay(&ambient_artwork.container);
+    content_layer.set_measure_overlay(&ambient_artwork.container, false);
+    content_layer.add_overlay(&scrim_area);
+    content_layer.set_measure_overlay(&scrim_area, false);
     content_layer.add_overlay(&root);
     content_layer.set_measure_overlay(&root, false);
     content_layer.add_overlay(&immersive_info_box);
@@ -431,22 +450,8 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
     background_area.set_vexpand(true);
     background_area.set_can_target(false);
 
-    let cinema_artwork = CinemaArtworkLayout::new();
-    cinema_artwork.container.set_visible(false);
-    let ambient_artwork = AmbientArtworkLayout::new();
-    ambient_artwork.container.set_visible(false);
-    let scrim_area = gtk::DrawingArea::builder()
-        .hexpand(true)
-        .vexpand(true)
-        .visible(false)
-        .build();
-    scrim_area.set_can_target(false);
-
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&background_area));
-    overlay.add_overlay(&cinema_artwork.container);
-    overlay.add_overlay(&ambient_artwork.container);
-    overlay.add_overlay(&scrim_area);
     overlay.add_overlay(&content_revealer);
     overlay.add_overlay(&artwork_placeholder);
     artwork_placeholder.set_halign(gtk::Align::Center);

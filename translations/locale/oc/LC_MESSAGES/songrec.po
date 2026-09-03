@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 23:21+0200\n"
+"POT-Creation-Date: 2026-09-03 20:23+0200\n"
 "PO-Revision-Date: 2026-04-19 16:15+0000\n"
 "Last-Translator: Mejans <farga@mejans.fr>\n"
 "Language-Team: Occitan <https://weblate.fossplant.re/projects/songrec/"
@@ -256,19 +256,19 @@ msgstr ""
 msgid "Large"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:25
+#: src/gui/now_playing_window/display_mode.rs:30
 msgid "Classic"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:26
+#: src/gui/now_playing_window/display_mode.rs:31
 msgid "Cinema"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:27
+#: src/gui/now_playing_window/display_mode.rs:32
 msgid "Ambient"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:28
+#: src/gui/now_playing_window/display_mode.rs:33
 msgid "Lights Off"
 msgstr ""
 
@@ -360,7 +360,7 @@ msgstr ""
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:117 src/gui/now_playing_window/ui.rs:355
+#: src/gui/now_playing_window/track.rs:128 src/gui/now_playing_window/ui.rs:355
 msgid "Listening..."
 msgstr ""
 

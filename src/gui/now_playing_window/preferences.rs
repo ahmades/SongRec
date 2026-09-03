@@ -74,6 +74,7 @@ impl NowPlayingWindow {
             );
         });
         TrackPresentation::from_window(self).refresh_mode();
+        self.reconcile_pending_transition();
     }
 
     /// Synchronizes the shared immersive-background motion controls and renderer.
@@ -120,6 +121,7 @@ impl NowPlayingWindow {
                 .transition_duration
                 .set_sensitive(!matches!(effect, TransitionEffect::None));
         });
+        self.reconcile_pending_transition();
     }
 
     /// Sets the transition duration in milliseconds and updates the duration control.

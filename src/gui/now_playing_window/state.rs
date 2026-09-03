@@ -101,6 +101,8 @@ impl PresentedTrack {
 pub(super) enum PresentationAction {
     None,
     BeginTransition,
+    /// Preserve the revealer's current position while an in-flight replacement catches up.
+    HoldTransition,
     RenderTrack(Rc<PresentedTrack>),
     RenderListening,
 }
@@ -109,7 +111,18 @@ pub(super) enum PresentationAction {
 pub(super) struct TrackPresentationState {
     pub(super) displayed_track: Option<Rc<PresentedTrack>>,
     pub(super) pending_track: Option<Rc<PresentedTrack>>,
+    pending_transition_phase: Option<PendingTransitionPhase>,
     pub(super) mode: PresentationMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PendingTransitionPhase {
+    /// The outgoing scene remains fully visible while its replacement is prepared.
+    AwaitingArtworkVisible,
+    /// The existing GTK revealer is animating towards its hidden midpoint.
+    Hiding,
+    /// A newer pending track arrived during the hide leg and is not ready yet.
+    AwaitingArtworkHidden,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,6 +136,7 @@ impl Default for TrackPresentationState {
         Self {
             displayed_track: None,
             pending_track: None,
+            pending_transition_phase: None,
             mode: PresentationMode::Listening,
         }
     }
@@ -166,7 +180,16 @@ impl TrackPresentationState {
                     .as_ref()
                     .expect("prepared artwork target guarantees a pending track");
                 self.pending_track = Some(Rc::new(pending.with_artwork(artwork)));
-                PresentationAction::None
+                match self.pending_transition_phase {
+                    Some(PendingTransitionPhase::AwaitingArtworkVisible) => {
+                        self.pending_transition_phase = Some(PendingTransitionPhase::Hiding);
+                        PresentationAction::BeginTransition
+                    }
+                    Some(PendingTransitionPhase::AwaitingArtworkHidden) => {
+                        self.commit_pending_track()
+                    }
+                    Some(PendingTransitionPhase::Hiding) | None => PresentationAction::None,
+                }
             }
             Some(PreparedArtworkTarget::Displayed) => {
                 let displayed = self
@@ -183,15 +206,35 @@ impl TrackPresentationState {
     }
 
     /// Accepts the latest recognition, either committing it or making it the
-    /// sole pending track behind the current hide animation.
+    /// sole replacement staged before or behind the current hide animation.
     pub(super) fn receive_track(
         &mut self,
         track: Rc<PresentedTrack>,
         can_animate: bool,
+        wait_for_artwork: bool,
     ) -> PresentationAction {
-        if can_animate && self.pending_track.is_some() {
-            self.pending_track = Some(track);
-            return PresentationAction::None;
+        if let Some(phase) = self.pending_transition_phase {
+            self.pending_track = Some(track.clone());
+            return match phase {
+                PendingTransitionPhase::AwaitingArtworkVisible => {
+                    if wait_for_artwork && track.artwork_pending {
+                        PresentationAction::None
+                    } else if !can_animate {
+                        self.commit_track(track)
+                    } else {
+                        self.pending_transition_phase = Some(PendingTransitionPhase::Hiding);
+                        PresentationAction::BeginTransition
+                    }
+                }
+                PendingTransitionPhase::Hiding => PresentationAction::None,
+                PendingTransitionPhase::AwaitingArtworkHidden => {
+                    if wait_for_artwork && track.artwork_pending {
+                        PresentationAction::HoldTransition
+                    } else {
+                        self.commit_track(track)
+                    }
+                }
+            };
         }
 
         let should_transition = can_animate
@@ -202,28 +245,97 @@ impl TrackPresentationState {
 
         if should_transition {
             self.pending_track = Some(track);
-            PresentationAction::BeginTransition
+            if wait_for_artwork
+                && self
+                    .pending_track
+                    .as_ref()
+                    .is_some_and(|track| track.artwork_pending)
+            {
+                self.pending_transition_phase =
+                    Some(PendingTransitionPhase::AwaitingArtworkVisible);
+                PresentationAction::None
+            } else {
+                self.pending_transition_phase = Some(PendingTransitionPhase::Hiding);
+                PresentationAction::BeginTransition
+            }
         } else {
             self.commit_track(track)
         }
     }
 
     /// Commits the latest pending recognition once the old content is hidden.
-    pub(super) fn transition_hidden(&mut self) -> PresentationAction {
-        self.pending_track
-            .take()
-            .map_or(PresentationAction::None, |track| self.commit_track(track))
+    pub(super) fn transition_hidden(&mut self, wait_for_artwork: bool) -> PresentationAction {
+        let Some(phase) = self.pending_transition_phase else {
+            return PresentationAction::None;
+        };
+
+        let artwork_pending = self
+            .pending_track
+            .as_ref()
+            .is_some_and(|track| track.artwork_pending);
+        match phase {
+            PendingTransitionPhase::Hiding | PendingTransitionPhase::AwaitingArtworkVisible
+                if wait_for_artwork && artwork_pending =>
+            {
+                self.pending_transition_phase = Some(PendingTransitionPhase::AwaitingArtworkHidden);
+                PresentationAction::HoldTransition
+            }
+            PendingTransitionPhase::AwaitingArtworkHidden => PresentationAction::HoldTransition,
+            PendingTransitionPhase::Hiding | PendingTransitionPhase::AwaitingArtworkVisible => {
+                self.commit_pending_track()
+            }
+        }
+    }
+
+    /// Re-evaluates a queued track after display or transition settings change.
+    pub(super) fn reconcile_pending_transition(
+        &mut self,
+        animations_enabled: bool,
+        wait_for_artwork: bool,
+    ) -> PresentationAction {
+        let Some(phase) = self.pending_transition_phase else {
+            return PresentationAction::None;
+        };
+        let artwork_pending = self
+            .pending_track
+            .as_ref()
+            .is_some_and(|track| track.artwork_pending);
+
+        match phase {
+            PendingTransitionPhase::AwaitingArtworkVisible => {
+                if wait_for_artwork && artwork_pending {
+                    PresentationAction::None
+                } else if !animations_enabled {
+                    self.commit_pending_track()
+                } else {
+                    self.pending_transition_phase = Some(PendingTransitionPhase::Hiding);
+                    PresentationAction::BeginTransition
+                }
+            }
+            PendingTransitionPhase::AwaitingArtworkHidden => {
+                if wait_for_artwork && artwork_pending {
+                    PresentationAction::HoldTransition
+                } else {
+                    self.commit_pending_track()
+                }
+            }
+            PendingTransitionPhase::Hiding => PresentationAction::None,
+        }
     }
 
     /// Makes a pending track authoritative without waiting for an animation.
     pub(super) fn flush_pending_track(&mut self) -> PresentationAction {
-        self.transition_hidden()
+        self.commit_pending_track()
     }
 
     /// Resolves a no-match result according to the keep-last preference.
     pub(super) fn no_recognition(&mut self, keep_last: bool) -> PresentationAction {
         if keep_last {
-            return self.flush_pending_track();
+            return self
+                .pending_transition_phase
+                .map_or(PresentationAction::None, |_| {
+                    PresentationAction::HoldTransition
+                });
         }
 
         self.show_listening()
@@ -232,6 +344,7 @@ impl TrackPresentationState {
     pub(super) fn show_listening(&mut self) -> PresentationAction {
         self.displayed_track = None;
         self.pending_track = None;
+        self.pending_transition_phase = None;
         self.mode = PresentationMode::Listening;
         PresentationAction::RenderListening
     }
@@ -239,8 +352,15 @@ impl TrackPresentationState {
     fn commit_track(&mut self, track: Rc<PresentedTrack>) -> PresentationAction {
         self.mode = track.presentation_mode();
         self.pending_track = None;
+        self.pending_transition_phase = None;
         self.displayed_track = Some(track.clone());
         PresentationAction::RenderTrack(track)
+    }
+
+    fn commit_pending_track(&mut self) -> PresentationAction {
+        let pending = self.pending_track.take();
+        self.pending_transition_phase = None;
+        pending.map_or(PresentationAction::None, |track| self.commit_track(track))
     }
 
     fn prepared_artwork_target(
@@ -329,9 +449,10 @@ impl NowPlayingState {
 
 #[cfg(test)]
 mod tests {
+    use super::super::palette::{ArtworkVisuals, prepare_artwork};
     use super::{
-        ArtworkPreparationJobs, PreparedArtworkTarget, PresentationAction, PresentationMode,
-        PresentedTrack, TrackPresentationState,
+        ArtworkPreparationJobs, PendingTransitionPhase, PreparedArtworkTarget, PresentationAction,
+        PresentationMode, PresentedTrack, TrackPresentationState,
     };
     use crate::core::artwork::Artwork;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
@@ -358,6 +479,12 @@ mod tests {
         Rc::new(track)
     }
 
+    fn pending_track_expecting(key: &str, artwork: &Arc<Artwork>) -> Rc<PresentedTrack> {
+        let mut track = (*track_expecting(key, artwork)).clone();
+        track.artwork_pending = true;
+        Rc::new(track)
+    }
+
     fn assert_rendered_track(action: PresentationAction, expected_key: &str) {
         let PresentationAction::RenderTrack(track) = action else {
             panic!("expected a rendered track");
@@ -372,31 +499,38 @@ mod tests {
         Arc::new(Artwork::decode(encoded.into_inner()).unwrap())
     }
 
+    fn prepared_artwork(source: &Arc<Artwork>) -> super::PreparedArtwork {
+        prepare_artwork(source, ArtworkVisuals::fallback())
+    }
+
     #[test]
-    fn no_match_commits_the_latest_pending_track_when_keep_last_is_enabled() {
+    fn no_match_keeps_the_latest_recognition_in_its_active_transition() {
         let mut state = TrackPresentationState::default();
-        assert_rendered_track(state.receive_track(track("a"), true), "a");
+        assert_rendered_track(state.receive_track(track("a"), true, false), "a");
         assert!(matches!(
-            state.receive_track(track("b"), true),
+            state.receive_track(track("b"), true, false),
             PresentationAction::BeginTransition
         ));
 
-        assert_rendered_track(state.no_recognition(true), "b");
+        assert!(matches!(
+            state.no_recognition(true),
+            PresentationAction::HoldTransition
+        ));
         assert_eq!(
             state
                 .displayed_track
                 .as_ref()
                 .map(|track| track.track_key.as_str()),
-            Some("b")
+            Some("a")
         );
-        assert!(state.pending_track.is_none());
+        assert_rendered_track(state.transition_hidden(false), "b");
     }
 
     #[test]
     fn no_match_discards_pending_and_displayed_tracks_when_keep_last_is_disabled() {
         let mut state = TrackPresentationState::default();
-        state.receive_track(track("a"), true);
-        state.receive_track(track("b"), true);
+        state.receive_track(track("a"), true, false);
+        state.receive_track(track("b"), true, false);
 
         assert!(matches!(
             state.no_recognition(false),
@@ -410,14 +544,14 @@ mod tests {
     #[test]
     fn in_flight_transition_keeps_only_the_newest_pending_track() {
         let mut state = TrackPresentationState::default();
-        state.receive_track(track("a"), true);
-        state.receive_track(track("b"), true);
+        state.receive_track(track("a"), true, false);
+        state.receive_track(track("b"), true, false);
 
         assert!(matches!(
-            state.receive_track(track("c"), true),
+            state.receive_track(track("c"), true, false),
             PresentationAction::None
         ));
-        assert_rendered_track(state.transition_hidden(), "c");
+        assert_rendered_track(state.transition_hidden(false), "c");
         assert_eq!(
             state
                 .displayed_track
@@ -430,16 +564,16 @@ mod tests {
     #[test]
     fn hidden_window_updates_commit_immediately_without_a_pending_track() {
         let mut state = TrackPresentationState::default();
-        state.receive_track(track("a"), false);
+        state.receive_track(track("a"), false, false);
 
-        assert_rendered_track(state.receive_track(track("b"), false), "b");
+        assert_rendered_track(state.receive_track(track("b"), false, false), "b");
         assert!(state.pending_track.is_none());
     }
 
     #[test]
     fn track_without_artwork_has_a_distinct_mode_from_listening() {
         let mut state = TrackPresentationState::default();
-        state.receive_track(track("a"), false);
+        state.receive_track(track("a"), false, false);
 
         assert_eq!(state.mode, PresentationMode::TrackWithoutArtwork);
     }
@@ -449,20 +583,20 @@ mod tests {
         let first = artwork(1);
         let second = artwork(2);
         let mut state = TrackPresentationState::default();
-        state.receive_track(track_expecting("a", &first), true);
+        state.receive_track(track_expecting("a", &first), true, false);
         assert_eq!(
             state.prepared_artwork_target("a", &first),
             Some(PreparedArtworkTarget::Displayed)
         );
 
-        state.receive_track(track_expecting("b", &second), true);
+        state.receive_track(track_expecting("b", &second), true, false);
         assert_eq!(state.prepared_artwork_target("a", &first), None);
         assert_eq!(
             state.prepared_artwork_target("b", &second),
             Some(PreparedArtworkTarget::Pending)
         );
 
-        state.transition_hidden();
+        state.transition_hidden(false);
         assert_eq!(
             state.prepared_artwork_target("b", &second),
             Some(PreparedArtworkTarget::Displayed)
@@ -473,13 +607,13 @@ mod tests {
     fn same_key_update_without_artwork_rejects_an_old_palette_result() {
         let old_artwork = artwork(1);
         let mut state = TrackPresentationState::default();
-        state.receive_track(track_expecting("a", &old_artwork), false);
+        state.receive_track(track_expecting("a", &old_artwork), false, false);
         assert_eq!(
             state.prepared_artwork_target("a", &old_artwork),
             Some(PreparedArtworkTarget::Displayed)
         );
 
-        state.receive_track(track("a"), false);
+        state.receive_track(track("a"), false, false);
         assert_eq!(state.prepared_artwork_target("a", &old_artwork), None);
     }
 
@@ -488,14 +622,221 @@ mod tests {
         let old_artwork = artwork(1);
         let new_artwork = artwork(2);
         let mut state = TrackPresentationState::default();
-        state.receive_track(track_expecting("a", &old_artwork), false);
-        state.receive_track(track_expecting("a", &new_artwork), false);
+        state.receive_track(track_expecting("a", &old_artwork), false, false);
+        state.receive_track(track_expecting("a", &new_artwork), false, false);
 
         assert_eq!(state.prepared_artwork_target("a", &old_artwork), None);
         assert_eq!(
             state.prepared_artwork_target("a", &new_artwork),
             Some(PreparedArtworkTarget::Displayed)
         );
+    }
+
+    #[test]
+    fn immersive_transition_waits_for_prepared_artwork_before_hiding() {
+        let source = artwork(2);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, false);
+
+        assert!(matches!(
+            state.receive_track(pending_track_expecting("b", &source), true, true),
+            PresentationAction::None
+        ));
+        assert_eq!(
+            state.pending_transition_phase,
+            Some(PendingTransitionPhase::AwaitingArtworkVisible)
+        );
+        assert_eq!(
+            state
+                .displayed_track
+                .as_ref()
+                .map(|track| track.track_key.as_str()),
+            Some("a")
+        );
+
+        assert!(matches!(
+            state.apply_prepared_artwork("b", &source, prepared_artwork(&source)),
+            PresentationAction::BeginTransition
+        ));
+        assert_eq!(
+            state.pending_transition_phase,
+            Some(PendingTransitionPhase::Hiding)
+        );
+        assert_rendered_track(state.transition_hidden(true), "b");
+        assert!(
+            state
+                .displayed_track
+                .as_ref()
+                .is_some_and(|track| track.artwork.is_some())
+        );
+    }
+
+    #[test]
+    fn unavailable_immersive_artwork_starts_the_waiting_transition() {
+        let source = artwork(2);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, false);
+        state.receive_track(pending_track_expecting("b", &source), true, true);
+
+        assert!(matches!(
+            state.receive_track(track("b"), true, true),
+            PresentationAction::BeginTransition
+        ));
+        assert_rendered_track(state.transition_hidden(true), "b");
+    }
+
+    #[test]
+    fn immersive_mode_change_during_hide_waits_at_the_midpoint() {
+        let source = artwork(2);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, false);
+        assert!(matches!(
+            state.receive_track(pending_track_expecting("b", &source), true, false),
+            PresentationAction::BeginTransition
+        ));
+
+        assert!(matches!(
+            state.transition_hidden(true),
+            PresentationAction::HoldTransition
+        ));
+        assert_eq!(
+            state.pending_transition_phase,
+            Some(PendingTransitionPhase::AwaitingArtworkHidden)
+        );
+    }
+
+    #[test]
+    fn leaving_an_immersive_mode_releases_an_artwork_wait() {
+        let source = artwork(2);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, false);
+        state.receive_track(pending_track_expecting("b", &source), true, true);
+
+        assert!(matches!(
+            state.reconcile_pending_transition(true, false),
+            PresentationAction::BeginTransition
+        ));
+        assert_rendered_track(state.transition_hidden(false), "b");
+    }
+
+    #[test]
+    fn disabling_transitions_does_not_expose_retained_immersive_artwork() {
+        let source = artwork(2);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, false);
+        state.receive_track(pending_track_expecting("b", &source), true, true);
+
+        assert!(matches!(
+            state.reconcile_pending_transition(false, true),
+            PresentationAction::None
+        ));
+        assert_eq!(
+            state.pending_transition_phase,
+            Some(PendingTransitionPhase::AwaitingArtworkVisible)
+        );
+        assert!(matches!(
+            state.apply_prepared_artwork("b", &source, prepared_artwork(&source)),
+            PresentationAction::BeginTransition
+        ));
+    }
+
+    #[test]
+    fn artwork_prepared_during_hide_is_committed_only_at_the_midpoint() {
+        let source = artwork(2);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, false);
+        state.receive_track(pending_track_expecting("b", &source), true, false);
+
+        assert!(matches!(
+            state.apply_prepared_artwork("b", &source, prepared_artwork(&source)),
+            PresentationAction::None
+        ));
+        assert_rendered_track(state.transition_hidden(true), "b");
+        assert!(
+            state
+                .displayed_track
+                .as_ref()
+                .is_some_and(|track| track.artwork.is_some())
+        );
+    }
+
+    #[test]
+    fn newer_pending_artwork_keeps_a_started_transition_hidden() {
+        let source = artwork(3);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, false);
+        assert!(matches!(
+            state.receive_track(track("b"), true, true),
+            PresentationAction::BeginTransition
+        ));
+        state.receive_track(pending_track_expecting("c", &source), true, true);
+
+        assert!(matches!(
+            state.transition_hidden(true),
+            PresentationAction::HoldTransition
+        ));
+        assert_eq!(
+            state
+                .displayed_track
+                .as_ref()
+                .map(|track| track.track_key.as_str()),
+            Some("a")
+        );
+        assert!(matches!(
+            state.no_recognition(true),
+            PresentationAction::HoldTransition
+        ));
+        assert_rendered_track(
+            state.apply_prepared_artwork("c", &source, prepared_artwork(&source)),
+            "c",
+        );
+    }
+
+    #[test]
+    fn newest_artwork_source_wins_while_the_transition_is_held_hidden() {
+        let stale_source = artwork(3);
+        let current_source = artwork(4);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, false);
+        state.receive_track(track("b"), true, true);
+        state.receive_track(pending_track_expecting("c", &stale_source), true, true);
+        state.transition_hidden(true);
+
+        assert!(matches!(
+            state.receive_track(pending_track_expecting("d", &current_source), false, true,),
+            PresentationAction::HoldTransition
+        ));
+        assert!(matches!(
+            state.apply_prepared_artwork("c", &stale_source, prepared_artwork(&stale_source),),
+            PresentationAction::None
+        ));
+        assert_rendered_track(
+            state.apply_prepared_artwork("d", &current_source, prepared_artwork(&current_source)),
+            "d",
+        );
+    }
+
+    #[test]
+    fn stale_artwork_cannot_start_a_replaced_pending_transition() {
+        let stale_source = artwork(2);
+        let current_source = artwork(3);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, false);
+        state.receive_track(pending_track_expecting("b", &stale_source), true, true);
+        state.receive_track(pending_track_expecting("c", &current_source), true, true);
+
+        assert!(matches!(
+            state.apply_prepared_artwork("b", &stale_source, prepared_artwork(&stale_source),),
+            PresentationAction::None
+        ));
+        assert_eq!(
+            state.pending_transition_phase,
+            Some(PendingTransitionPhase::AwaitingArtworkVisible)
+        );
+        assert!(matches!(
+            state.apply_prepared_artwork("c", &current_source, prepared_artwork(&current_source),),
+            PresentationAction::BeginTransition
+        ));
     }
 
     #[test]

@@ -18,6 +18,15 @@ pub(super) fn transition_leg_duration_ms(total_duration_ms: u64) -> u32 {
     (total_duration_ms / 2).max(1).min(u64::from(u32::MAX)) as u32
 }
 
+/// Starts the hide leg using the currently selected, already-supported effect.
+fn begin_track_transition(revealer: &gtk::Revealer, settings: NowPlayingSettings) {
+    revealer.set_transition_duration(transition_leg_duration_ms(
+        settings.shared.transition_duration_ms,
+    ));
+    revealer.set_transition_type(settings.shared.transition.revealer_type());
+    revealer.set_reveal_child(false);
+}
+
 /// The GTK objects and shared state required to render one presentation.
 ///
 /// GTK callbacks own this lightweight clone instead of borrowing the window.
@@ -75,7 +84,9 @@ impl TrackPresentation {
         match action {
             PresentationAction::RenderTrack(track) => self.render_track(&track),
             PresentationAction::RenderListening => self.render_listening(),
-            PresentationAction::None | PresentationAction::BeginTransition => {}
+            PresentationAction::None
+            | PresentationAction::BeginTransition
+            | PresentationAction::HoldTransition => {}
         }
     }
 
@@ -228,6 +239,7 @@ impl NowPlayingWindow {
     /// Installs one completion callback for every track transition made by this window.
     pub(super) fn setup_track_transition_handlers(&self) {
         let track_state_for_completion = self.state.track_presentation.clone();
+        let settings_for_completion = self.state.settings.clone();
         let presentation_for_completion = TrackPresentation::from_window(self);
         self.ui
             .content_revealer
@@ -236,7 +248,17 @@ impl NowPlayingWindow {
                     return;
                 }
 
-                let action = track_state_for_completion.borrow_mut().transition_hidden();
+                let wait_for_artwork = settings_for_completion
+                    .get()
+                    .display_mode
+                    .uses_immersive_artwork();
+                let action = track_state_for_completion
+                    .borrow_mut()
+                    .transition_hidden(wait_for_artwork);
+                if matches!(action, PresentationAction::HoldTransition) {
+                    return;
+                }
+
                 presentation_for_completion.apply_action(action);
                 // Even a stale/spurious hidden notification must not leave the
                 // reusable window exposing only its background.
@@ -280,30 +302,24 @@ impl NowPlayingWindow {
         let can_animate = !matches!(settings.shared.transition, TransitionEffect::None)
             && self.ui.window.is_mapped()
             && self.ui.content_revealer.is_child_revealed();
-        let action = self
-            .state
-            .track_presentation
-            .borrow_mut()
-            .receive_track(track, can_animate);
+        let action = self.state.track_presentation.borrow_mut().receive_track(
+            track,
+            can_animate,
+            settings.display_mode.uses_immersive_artwork(),
+        );
 
         match action {
             PresentationAction::BeginTransition => {
-                self.ui
-                    .content_revealer
-                    .set_transition_duration(transition_leg_duration_ms(
-                        settings.shared.transition_duration_ms,
-                    ));
-                self.ui
-                    .content_revealer
-                    .set_transition_type(settings.shared.transition.revealer_type());
-                self.ui.content_revealer.set_reveal_child(false);
+                begin_track_transition(&self.ui.content_revealer, settings);
             }
             PresentationAction::RenderTrack(track) => {
                 TrackPresentation::from_window(self)
                     .apply_action(PresentationAction::RenderTrack(track));
                 self.ui.content_revealer.set_reveal_child(true);
             }
-            PresentationAction::None | PresentationAction::RenderListening => {}
+            PresentationAction::None
+            | PresentationAction::HoldTransition
+            | PresentationAction::RenderListening => {}
         }
 
         if visuals_pending {
@@ -315,6 +331,37 @@ impl NowPlayingWindow {
                     .expect("artwork visual preparation requires artwork")
                     .clone(),
             );
+        }
+    }
+
+    /// Re-evaluates an artwork-staged transition after its applicable settings change.
+    pub(super) fn reconcile_pending_transition(&self) {
+        let settings = self.state.settings.get();
+        let animations_enabled = !matches!(settings.shared.transition, TransitionEffect::None)
+            && self.ui.window.is_mapped();
+        let action = self
+            .state
+            .track_presentation
+            .borrow_mut()
+            .reconcile_pending_transition(
+                animations_enabled,
+                settings.display_mode.uses_immersive_artwork(),
+            );
+
+        match action {
+            PresentationAction::BeginTransition => {
+                begin_track_transition(&self.ui.content_revealer, settings);
+            }
+            PresentationAction::RenderTrack(track) => {
+                TrackPresentation::from_window(self)
+                    .apply_action(PresentationAction::RenderTrack(track));
+                self.ui.content_revealer.set_reveal_child(true);
+            }
+            PresentationAction::RenderListening => {
+                TrackPresentation::from_window(self).apply_action(action);
+                self.ui.content_revealer.set_reveal_child(true);
+            }
+            PresentationAction::None | PresentationAction::HoldTransition => {}
         }
     }
 
@@ -333,6 +380,7 @@ impl NowPlayingWindow {
         let track_state = self.state.track_presentation.clone();
         let presentation = TrackPresentation::from_window(self);
         let revealer = self.ui.content_revealer.clone();
+        let settings = self.state.settings.clone();
         glib::spawn_future_local(async move {
             let artwork_for_worker = artwork.clone();
             let visuals = match gio::spawn_blocking(move || {
@@ -355,9 +403,17 @@ impl NowPlayingWindow {
             let action = track_state
                 .borrow_mut()
                 .apply_prepared_artwork(&track_key, &artwork, prepared);
-            if let PresentationAction::RenderTrack(track) = action {
-                presentation.apply_action(PresentationAction::RenderTrack(track));
-                revealer.set_reveal_child(true);
+            match action {
+                PresentationAction::BeginTransition => {
+                    begin_track_transition(&revealer, settings.get());
+                }
+                PresentationAction::RenderTrack(track) => {
+                    presentation.apply_action(PresentationAction::RenderTrack(track));
+                    revealer.set_reveal_child(true);
+                }
+                PresentationAction::None
+                | PresentationAction::HoldTransition
+                | PresentationAction::RenderListening => {}
             }
         });
     }
@@ -382,8 +438,11 @@ impl NowPlayingWindow {
             .track_presentation
             .borrow_mut()
             .no_recognition(keep_last);
+        let hold_transition = matches!(action, PresentationAction::HoldTransition);
         TrackPresentation::from_window(self).apply_action(action);
-        self.ui.content_revealer.set_reveal_child(true);
+        if !hold_transition {
+            self.ui.content_revealer.set_reveal_child(true);
+        }
     }
 }
 

@@ -14,9 +14,14 @@ impl DisplayMode {
         !matches!(self, Self::LightsOff)
     }
 
+    /// Whether this mode's track-change scene depends on prepared immersive artwork.
+    pub(crate) const fn uses_immersive_artwork(self) -> bool {
+        matches!(self, Self::Cinema | Self::Ambient)
+    }
+
     /// Whether this mode renders the blurred background used by ambient motion.
     pub(crate) const fn supports_background_motion(self) -> bool {
-        matches!(self, Self::Cinema | Self::Ambient)
+        self.uses_immersive_artwork()
     }
 
     /// Returns the localized label used by display-mode selectors.
@@ -79,10 +84,9 @@ mod tests {
     #[test]
     fn only_immersive_modes_support_background_motion() {
         for display_mode in DisplayMode::ALL {
-            assert_eq!(
-                display_mode.supports_background_motion(),
-                matches!(display_mode, DisplayMode::Cinema | DisplayMode::Ambient)
-            );
+            let is_immersive = matches!(display_mode, DisplayMode::Cinema | DisplayMode::Ambient);
+            assert_eq!(display_mode.supports_background_motion(), is_immersive);
+            assert_eq!(display_mode.uses_immersive_artwork(), is_immersive);
         }
     }
 }
