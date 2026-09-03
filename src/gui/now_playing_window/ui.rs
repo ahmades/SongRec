@@ -24,9 +24,9 @@ const CLASSIC_PADDING_MIN_PX: i32 = 32;
 const CLASSIC_PADDING_MAX_PX: i32 = 96;
 const IMMERSIVE_MARGIN_MIN_PX: i32 = 28;
 const IMMERSIVE_MARGIN_MAX_PX: i32 = 96;
-const CINEMA_CROP_RETENTION_MINIMUM: f64 = 0.70;
+const CINEMA_CROP_RETENTION_MINIMUM: f64 = 0.75;
 const CINEMA_PORTRAIT_ARTWORK_MAX_HEIGHT_FRACTION: f64 = 0.70;
-pub(super) const AMBIENT_FOREGROUND_OPACITY: f64 = 0.3;
+pub(super) const AMBIENT_FOREGROUND_OPACITY: f64 = 0.4;
 const SECONDARY_METADATA_OPACITY: f64 = 0.72;
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
 const IMMERSIVE_INFO_CSS_CLASS: &str = "now-playing-immersive-info";
@@ -763,6 +763,26 @@ mod tests {
         assert_eq!(
             cinema_artwork_rect(1_080, 1_920, (1_000, 1_000)),
             gdk::Rectangle::new(0, 840, 1_080, 1_080)
+        );
+    }
+
+    #[test]
+    fn cinema_cover_crop_starts_at_seventy_five_percent_retention() {
+        assert_eq!(
+            cinema_framing(749, 1_000, (1_000, 1_000)),
+            CinemaFraming::Tall
+        );
+        assert_eq!(
+            cinema_framing(750, 1_000, (1_000, 1_000)),
+            CinemaFraming::Cover
+        );
+        assert_eq!(
+            cinema_framing(1_000, 749, (1_000, 1_000)),
+            CinemaFraming::Wide
+        );
+        assert_eq!(
+            cinema_framing(1_000, 750, (1_000, 1_000)),
+            CinemaFraming::Cover
         );
     }
 

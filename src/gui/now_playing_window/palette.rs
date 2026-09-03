@@ -9,14 +9,14 @@ use std::sync::{Arc, Weak};
 type Rgb = (u8, u8, u8);
 type Hsl = (f32, f32, f32);
 
-const AMBIENT_MAXIMUM_DIMENSION: u32 = 512;
-const AMBIENT_BLUR_SIGMA: f32 = 6.0;
-const AMBIENT_MAX_SATURATION: f32 = 0.78;
-const AMBIENT_LIGHTNESS_MULTIPLIER: f32 = 0.70;
+const AMBIENT_MAXIMUM_DIMENSION: u32 = 1024;
+const AMBIENT_BLUR_SIGMA: f32 = 4.0;
+const AMBIENT_MAX_SATURATION: f32 = 0.60;
+const AMBIENT_LIGHTNESS_MULTIPLIER: f32 = 0.80;
 const AMBIENT_MAX_LIGHTNESS: f32 = 0.50;
-const AMBIENT_VIGNETTE_STRENGTH: f32 = 0.14;
-const NEUTRAL_COLORFULNESS_START: f32 = 0.08;
-const FULL_COLORFULNESS_START: f32 = 0.20;
+const AMBIENT_VIGNETTE_STRENGTH: f32 = 0.0;
+const NEUTRAL_COLORFULNESS_START: f32 = 0.10;
+const FULL_COLORFULNESS_START: f32 = 0.28;
 
 /// Dark colors derived from an album cover for the Now Playing background.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -485,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn ambient_treatment_is_deterministic_dark_and_vignetted() {
+    fn ambient_treatment_is_deterministic_dark_and_has_no_radial_shading() {
         let image = ImageBuffer::from_pixel(40, 40, Rgba([240, 160, 80, 255]));
         let first = generate_ambient_image(&image, Background::fallback());
         let second = generate_ambient_image(&image, Background::fallback());
@@ -504,7 +504,7 @@ mod tests {
         let source_sum = 240 + 160 + 80;
 
         assert!(center < source_sum);
-        assert!(corner < center);
+        assert_eq!(corner, center);
     }
 
     #[test]
@@ -536,8 +536,8 @@ mod tests {
 
     #[test]
     fn neutral_color_strength_is_continuous_around_its_threshold() {
-        let below = colorfulness_strength((200, 185, 185));
-        let just_above = colorfulness_strength((200, 183, 183));
+        let below = colorfulness_strength((200, 181, 181));
+        let just_above = colorfulness_strength((200, 179, 179));
 
         assert_eq!(below, 0.0);
         assert!(just_above > 0.0 && just_above < 0.02);

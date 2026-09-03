@@ -10,9 +10,9 @@ use std::cell::RefCell;
 
 const GRADIENT_SURFACE_WIDTH: i32 = 256;
 const TRANSITION_START: f64 = 0.20;
-const AMBIENT_BASE_SCRIM_ALPHA: f64 = 0.22;
-const AMBIENT_TOP_SCRIM_ALPHA: f64 = 0.08;
-const AMBIENT_BOTTOM_SCRIM_ALPHA: f64 = 0.14;
+const AMBIENT_BASE_SCRIM_ALPHA: f64 = 0.18;
+const AMBIENT_TOP_SCRIM_ALPHA: f64 = 0.05;
+const AMBIENT_BOTTOM_SCRIM_ALPHA: f64 = 0.08;
 
 #[derive(Debug, Clone)]
 pub(super) struct CachedGradient {
@@ -261,34 +261,34 @@ fn draw_immersive_scrim(
             }
         }
         DisplayMode::Cinema => {
-            context.set_source_rgba(0.0, 0.0, 0.0, 0.12);
+            context.set_source_rgba(0.0, 0.0, 0.0, 0.08);
             let _ = context.paint();
 
             let gradient = if height > width {
-                let gradient = LinearGradient::new(0.0, 0.0, 0.0, f64::from(height) * 0.60);
-                gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.82);
-                gradient.add_color_stop_rgba(0.40, 0.0, 0.0, 0.0, 0.34);
+                let gradient = LinearGradient::new(0.0, 0.0, 0.0, f64::from(height) * 0.52);
+                gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.74);
+                gradient.add_color_stop_rgba(0.40, 0.0, 0.0, 0.0, 0.28);
                 gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0);
                 gradient
             } else {
                 match framing {
                     CinemaFraming::Wide => {
-                        let gradient = LinearGradient::new(0.0, 0.0, f64::from(width) * 0.68, 0.0);
-                        gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.78);
-                        gradient.add_color_stop_rgba(0.72, 0.0, 0.0, 0.0, 0.30);
+                        let gradient = LinearGradient::new(0.0, 0.0, f64::from(width) * 0.62, 0.0);
+                        gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.72);
+                        gradient.add_color_stop_rgba(0.72, 0.0, 0.0, 0.0, 0.26);
                         gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0);
                         gradient
                     }
                     CinemaFraming::Cover | CinemaFraming::Tall => {
                         let gradient = LinearGradient::new(
                             0.0,
-                            f64::from(height) * 0.40,
+                            f64::from(height) * 0.50,
                             0.0,
                             f64::from(height),
                         );
                         gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.0);
-                        gradient.add_color_stop_rgba(0.60, 0.0, 0.0, 0.0, 0.34);
-                        gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.82);
+                        gradient.add_color_stop_rgba(0.60, 0.0, 0.0, 0.0, 0.28);
+                        gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.74);
                         gradient
                     }
                 }

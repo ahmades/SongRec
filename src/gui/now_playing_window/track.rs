@@ -455,7 +455,8 @@ fn presentation_visibility(
         classic_artwork: matches!(display_mode, DisplayMode::Classic) && current_artwork_available,
         cinema_artwork: matches!(display_mode, DisplayMode::Cinema) && retained_artwork_available,
         ambient_artwork: matches!(display_mode, DisplayMode::Ambient) && retained_artwork_available,
-        immersive_scrim: matches!(display_mode, DisplayMode::Cinema | DisplayMode::Ambient),
+        immersive_scrim: show_track_info
+            && matches!(display_mode, DisplayMode::Cinema | DisplayMode::Ambient),
         immersive_info: show_track_info && !matches!(display_mode, DisplayMode::Classic),
         listening: false,
     }
@@ -606,6 +607,7 @@ mod tests {
                 true,
             );
             assert!(!visibility.immersive_info);
+            assert!(!visibility.immersive_scrim);
         }
     }
 
