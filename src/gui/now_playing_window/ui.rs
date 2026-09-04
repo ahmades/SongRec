@@ -5,7 +5,11 @@ use super::style::{
     ALBUM_CSS_CLASS, ARTIST_CSS_CLASS, DETAILS_CSS_CLASS, TITLE_CSS_CLASS, font_css_for_size,
 };
 use super::track::transition_leg_duration_ms;
-use super::{AlbumCoverSize, DisplayMode, TRANSITION_DURATION_DEFAULT_MS, TrackInfoAlignment};
+use super::transition::RevealerLayout;
+use super::{
+    AlbumCoverSize, DisplayMode, TRANSITION_DURATION_DEFAULT_MS, TrackInfoAlignment,
+    TransitionEffect,
+};
 use adw::prelude::*;
 use gettextrs::gettext;
 use std::cell::Cell;
@@ -284,6 +288,182 @@ impl AlbumCoverLayout {
     }
 }
 
+/// Keeps full-window scenes at a bounded allocation during `GtkRevealer` animations.
+///
+/// GTK implements slide and swing effects by shrinking the revealer's requested
+/// size while allocating its child at the unscaled size. A fill-aligned overlay
+/// child defeats that contract: the revealer stays viewport-sized and GTK
+/// reverse-scales that allocation towards infinity near the hidden endpoint.
+/// Temporarily anchoring the revealer and fixing its child's natural size to the
+/// viewport lets GTK take its bounded natural-size path instead.
+#[derive(Clone)]
+pub(super) struct TrackTransitionLayout {
+    revealer: gtk::Revealer,
+    reservation: gtk::Box,
+    viewport_sync_generation: Rc<Cell<u64>>,
+}
+
+impl TrackTransitionLayout {
+    fn new(revealer: gtk::Revealer, reservation: gtk::Box) -> Self {
+        Self {
+            revealer,
+            reservation,
+            viewport_sync_generation: Rc::new(Cell::new(0)),
+        }
+    }
+
+    pub(super) fn revealer(&self) -> &gtk::Revealer {
+        &self.revealer
+    }
+
+    pub(super) fn is_child_revealed(&self) -> bool {
+        self.revealer.is_child_revealed()
+    }
+
+    /// Connects transition completion without retaining the revealer from its own signal.
+    pub(super) fn connect_child_revealed_notify<F>(&self, callback: F)
+    where
+        F: Fn(&gtk::Revealer) + 'static,
+    {
+        let reservation = self.reservation.clone();
+        let viewport_sync_generation = self.viewport_sync_generation.clone();
+        self.revealer
+            .connect_child_revealed_notify(move |revealer| {
+                if revealer.is_child_revealed() {
+                    Self::restore_layout_for(revealer, &reservation, &viewport_sync_generation);
+                }
+                callback(revealer);
+            });
+    }
+
+    /// Starts one hide leg, constraining size-changing effects to the viewport.
+    pub(super) fn begin(&self, effect: TransitionEffect, duration_ms: u32) {
+        let transition_type = match effect.revealer_layout() {
+            Some(layout)
+                if Self::sync_reservation_to_viewport(&self.revealer, &self.reservation) =>
+            {
+                self.apply_layout(layout);
+                self.start_viewport_sync();
+                effect.revealer_type()
+            }
+            Some(_) => {
+                // A mapped window normally has a positive allocation. If a
+                // transition races initial layout, crossfade keeps allocations
+                // fixed until the next recognition instead of inverse-scaling 0.
+                self.restore_layout();
+                gtk::RevealerTransitionType::Crossfade
+            }
+            None => {
+                self.restore_layout();
+                effect.revealer_type()
+            }
+        };
+
+        self.revealer.set_transition_duration(duration_ms);
+        self.revealer.set_transition_type(transition_type);
+        self.revealer.set_reveal_child(false);
+    }
+
+    /// Reveals the staged replacement using the same bounded layout as the hide leg.
+    pub(super) fn reveal(&self) {
+        if self.revealer.halign() != gtk::Align::Fill || self.revealer.valign() != gtk::Align::Fill
+        {
+            Self::sync_reservation_to_viewport(&self.revealer, &self.reservation);
+        }
+        self.revealer.set_reveal_child(true);
+    }
+
+    /// Cancels a transition for an unpresented window without inverse-scaling its child.
+    pub(super) fn reveal_immediately(&self) {
+        self.revealer
+            .set_transition_type(gtk::RevealerTransitionType::None);
+        self.revealer.set_reveal_child(true);
+        self.restore_layout();
+    }
+
+    /// Restores normal fill behavior after the replacement is fully visible.
+    fn restore_layout(&self) {
+        Self::restore_layout_for(
+            &self.revealer,
+            &self.reservation,
+            &self.viewport_sync_generation,
+        );
+    }
+
+    fn restore_layout_for(
+        revealer: &gtk::Revealer,
+        reservation: &gtk::Box,
+        viewport_sync_generation: &Cell<u64>,
+    ) {
+        viewport_sync_generation.set(viewport_sync_generation.get().wrapping_add(1));
+        reservation.set_size_request(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+        revealer.set_halign(gtk::Align::Fill);
+        revealer.set_valign(gtk::Align::Fill);
+        revealer.set_hexpand(true);
+        revealer.set_vexpand(true);
+    }
+
+    fn apply_layout(&self, layout: RevealerLayout) {
+        match layout {
+            RevealerLayout::HorizontalStart => {
+                self.revealer.set_halign(gtk::Align::Start);
+                self.revealer.set_valign(gtk::Align::Fill);
+                self.revealer.set_hexpand(false);
+                self.revealer.set_vexpand(true);
+            }
+            RevealerLayout::HorizontalEnd => {
+                self.revealer.set_halign(gtk::Align::End);
+                self.revealer.set_valign(gtk::Align::Fill);
+                self.revealer.set_hexpand(false);
+                self.revealer.set_vexpand(true);
+            }
+            RevealerLayout::VerticalStart => {
+                self.revealer.set_halign(gtk::Align::Fill);
+                self.revealer.set_valign(gtk::Align::Start);
+                self.revealer.set_hexpand(true);
+                self.revealer.set_vexpand(false);
+            }
+            RevealerLayout::VerticalEnd => {
+                self.revealer.set_halign(gtk::Align::Fill);
+                self.revealer.set_valign(gtk::Align::End);
+                self.revealer.set_hexpand(true);
+                self.revealer.set_vexpand(false);
+            }
+        }
+    }
+
+    fn start_viewport_sync(&self) {
+        let generation = self.viewport_sync_generation.get().wrapping_add(1);
+        self.viewport_sync_generation.set(generation);
+        let current_generation = self.viewport_sync_generation.clone();
+        let reservation = self.reservation.clone();
+        self.revealer.add_tick_callback(move |revealer, _| {
+            if current_generation.get() != generation {
+                return glib::ControlFlow::Break;
+            }
+            Self::sync_reservation_to_viewport(revealer, &reservation);
+            glib::ControlFlow::Continue
+        });
+    }
+
+    fn sync_reservation_to_viewport(revealer: &gtk::Revealer, reservation: &gtk::Box) -> bool {
+        let parent_size = revealer
+            .parent()
+            .map(|parent| (parent.width(), parent.height()));
+        let (width, height) = parent_size
+            .filter(|(width, height)| *width > 0 && *height > 0)
+            .unwrap_or_else(|| (revealer.width(), revealer.height()));
+        if width <= 0 || height <= 0 {
+            return false;
+        }
+
+        if reservation.width_request() != width || reservation.height_request() != height {
+            reservation.set_size_request(width, height);
+        }
+        true
+    }
+}
+
 pub(super) struct NowPlayingWidgets {
     pub(super) window: gtk::Window,
     pub(super) classic_content: gtk::Box,
@@ -305,7 +485,7 @@ pub(super) struct NowPlayingWidgets {
     pub(super) immersive_details_label: gtk::Label,
     pub(super) immersive_info_box: gtk::Box,
     pub(super) background_area: gtk::DrawingArea,
-    pub(super) content_revealer: gtk::Revealer,
+    pub(super) content_transition: TrackTransitionLayout,
 }
 
 /// Builds the window, artwork presentation, metadata widgets, and static CSS providers.
@@ -444,6 +624,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
         .vexpand(true)
         .build();
     content_revealer.set_child(Some(&content_layer));
+    let content_transition = TrackTransitionLayout::new(content_revealer, content_reservation);
 
     let background_area = gtk::DrawingArea::new();
     background_area.set_hexpand(true);
@@ -452,7 +633,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
 
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&background_area));
-    overlay.add_overlay(&content_revealer);
+    overlay.add_overlay(content_transition.revealer());
     overlay.add_overlay(&artwork_placeholder);
     artwork_placeholder.set_halign(gtk::Align::Center);
     artwork_placeholder.set_valign(gtk::Align::Center);
@@ -525,7 +706,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
             immersive_details_label,
             immersive_info_box,
             background_area,
-            content_revealer,
+            content_transition,
         },
         text_css,
     )

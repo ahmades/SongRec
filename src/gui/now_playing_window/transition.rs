@@ -3,6 +3,18 @@
 use crate::core::preferences::{TransitionEffect, clamp_transition_duration_ms};
 use gettextrs::gettext;
 
+/// Placement used while a size-changing `GtkRevealer` transition is running.
+///
+/// A non-fill alignment lets the revealer itself shrink on the animated axis
+/// while its child keeps the viewport-sized allocation it was designed for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RevealerLayout {
+    HorizontalStart,
+    HorizontalEnd,
+    VerticalStart,
+    VerticalEnd,
+}
+
 /// Converts a transition-duration scale value into its persisted representation.
 pub(crate) fn transition_duration_from_scale(value: f64) -> u64 {
     clamp_transition_duration_ms(value.round().max(0.0) as u64)
@@ -44,6 +56,17 @@ impl TransitionEffect {
         }
     }
 
+    /// Returns the edge anchoring needed by GTK's size-changing transitions.
+    pub(super) const fn revealer_layout(self) -> Option<RevealerLayout> {
+        match self {
+            Self::SlideRight | Self::SwingRight => Some(RevealerLayout::HorizontalStart),
+            Self::SlideLeft | Self::SwingLeft => Some(RevealerLayout::HorizontalEnd),
+            Self::SlideDown | Self::SwingDown => Some(RevealerLayout::VerticalStart),
+            Self::SlideUp | Self::SwingUp => Some(RevealerLayout::VerticalEnd),
+            Self::None | Self::Crossfade => None,
+        }
+    }
+
     /// Returns the zero-based index used by the transition-effect dropdown.
     pub fn index(self) -> u32 {
         Self::ALL
@@ -60,7 +83,7 @@ impl TransitionEffect {
 
 #[cfg(test)]
 mod tests {
-    use super::TransitionEffect;
+    use super::{RevealerLayout, TransitionEffect};
 
     #[test]
     fn transition_dropdown_indices_follow_the_all_table() {
@@ -72,5 +95,33 @@ mod tests {
             TransitionEffect::from_index(u32::MAX),
             TransitionEffect::None
         );
+    }
+
+    #[test]
+    fn size_changing_transitions_are_anchored_to_their_reveal_edge() {
+        for effect in [TransitionEffect::SlideRight, TransitionEffect::SwingRight] {
+            assert_eq!(
+                effect.revealer_layout(),
+                Some(RevealerLayout::HorizontalStart)
+            );
+        }
+        for effect in [TransitionEffect::SlideLeft, TransitionEffect::SwingLeft] {
+            assert_eq!(
+                effect.revealer_layout(),
+                Some(RevealerLayout::HorizontalEnd)
+            );
+        }
+        for effect in [TransitionEffect::SlideDown, TransitionEffect::SwingDown] {
+            assert_eq!(
+                effect.revealer_layout(),
+                Some(RevealerLayout::VerticalStart)
+            );
+        }
+        for effect in [TransitionEffect::SlideUp, TransitionEffect::SwingUp] {
+            assert_eq!(effect.revealer_layout(), Some(RevealerLayout::VerticalEnd));
+        }
+        for effect in [TransitionEffect::None, TransitionEffect::Crossfade] {
+            assert_eq!(effect.revealer_layout(), None);
+        }
     }
 }

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 20:23+0200\n"
+"POT-Creation-Date: 2026-09-03 23:17+0200\n"
 "PO-Revision-Date: 2026-07-06 14:05+0000\n"
 "Last-Translator: Arda Aydın <arda.aydin@operationsilkscarf.com>\n"
 "Language-Team: Turkish <https://weblate.fossplant.re/projects/songrec/"
@@ -383,51 +383,51 @@ msgstr ""
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:128 src/gui/now_playing_window/ui.rs:355
+#: src/gui/now_playing_window/track.rs:129 src/gui/now_playing_window/ui.rs:535
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:18
+#: src/gui/now_playing_window/transition.rs:30
 msgid "None"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:19
+#: src/gui/now_playing_window/transition.rs:31
 msgid "Crossfade"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:20
+#: src/gui/now_playing_window/transition.rs:32
 msgid "Slide right"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:21
+#: src/gui/now_playing_window/transition.rs:33
 msgid "Slide left"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:22
+#: src/gui/now_playing_window/transition.rs:34
 msgid "Slide up"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:23
+#: src/gui/now_playing_window/transition.rs:35
 msgid "Slide down"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:24
+#: src/gui/now_playing_window/transition.rs:36
 msgid "Swing right"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:25
+#: src/gui/now_playing_window/transition.rs:37
 msgid "Swing left"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:26
+#: src/gui/now_playing_window/transition.rs:38
 msgid "Swing up"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:27
+#: src/gui/now_playing_window/transition.rs:39
 msgid "Swing down"
 msgstr ""
 
-#: src/gui/now_playing_window/ui.rs:323
+#: src/gui/now_playing_window/ui.rs:503
 msgid "Now playing"
 msgstr ""
 
