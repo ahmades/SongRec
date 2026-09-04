@@ -679,7 +679,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             <child>
                               <object class="AdwSwitchRow" id="background_motion_enabled_setting">
                                 <property name="subtitle" translatable="yes">Gently zoom the blurred background in and out</property>
-                                <property name="title" translatable="yes">Subtle ambient motion</property>
+                                <property name="title" translatable="yes">Bakground motion</property>
                               </object>
                             </child>
                             <child>

@@ -147,7 +147,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     let round_corners = gtk::Switch::new();
     let hide_track_info_label = gtk::Label::new(Some(&gettext("Hide track info")));
     let hide_track_info = gtk::Switch::new();
-    let background_motion_enabled_label = gtk::Label::new(Some(&gettext("Subtle ambient motion")));
+    let background_motion_enabled_label = gtk::Label::new(Some(&gettext("Bakground motion")));
     let background_motion_enabled = gtk::Switch::new();
     let background_motion_zoom_label = gtk::Label::new(Some(&gettext("Zoom level (%)")));
     let background_motion_zoom = gtk::Scale::with_range(

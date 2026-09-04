@@ -313,7 +313,7 @@ msgid "Hide track info"
 msgstr ""
 
 #: src/gui/now_playing_window/menu.rs:150 src/gui/interface.blp:587
-msgid "Subtle ambient motion"
+msgid "Bakground motion"
 msgstr ""
 
 #: src/gui/now_playing_window/menu.rs:152 src/gui/interface.blp:592
