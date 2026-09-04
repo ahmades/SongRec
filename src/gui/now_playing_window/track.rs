@@ -504,7 +504,7 @@ fn presentation_visibility(
         };
     }
 
-    let show_track_info = !hide_track_info || !display_mode.supports_hiding_track_info();
+    let show_track_info = display_mode.shows_track_info(hide_track_info);
 
     PresentationVisibility {
         classic_content: matches!(display_mode, DisplayMode::Classic),

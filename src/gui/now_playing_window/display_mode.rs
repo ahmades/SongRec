@@ -14,6 +14,11 @@ impl DisplayMode {
         !matches!(self, Self::LightsOff)
     }
 
+    /// Whether track metadata is effectively visible in this mode.
+    pub(crate) const fn shows_track_info(self, hide_track_info: bool) -> bool {
+        !hide_track_info || !self.supports_hiding_track_info()
+    }
+
     /// Whether this mode's track-change scene depends on prepared immersive artwork.
     pub(crate) const fn uses_immersive_artwork(self) -> bool {
         matches!(self, Self::Cinema | Self::Ambient)
@@ -79,6 +84,10 @@ mod tests {
                 !matches!(display_mode, DisplayMode::LightsOff)
             );
         }
+
+        assert!(!DisplayMode::Classic.shows_track_info(true));
+        assert!(DisplayMode::Classic.shows_track_info(false));
+        assert!(DisplayMode::LightsOff.shows_track_info(true));
     }
 
     #[test]

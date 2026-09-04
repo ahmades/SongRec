@@ -1,5 +1,6 @@
 //! Context-menu construction and preference-update signal bindings.
 
+use super::style::load_text_css;
 use super::track::TrackPresentation;
 use super::ui::apply_classic_track_info_alignment;
 use super::{
@@ -9,7 +10,7 @@ use super::{
     BACKGROUND_MOTION_ZOOM_MAX_PERCENT, BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
     BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, DisplayMode, NowPlayingSettings,
     NowPlayingWindow, TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS,
-    TRANSITION_DURATION_MIN_MS, TrackInfoAlignment, TransitionEffect,
+    TRANSITION_DURATION_MIN_MS, TextSize, TrackInfoAlignment, TransitionEffect,
     clamp_background_motion_zoom_percent, normalize_background_motion_reversal_duration_secs,
     transition_duration_from_scale,
 };
@@ -106,6 +107,8 @@ pub(super) struct NowPlayingControls {
     pub(super) round_corners: gtk::Switch,
     pub(super) hide_track_info_label: gtk::Label,
     pub(super) hide_track_info: gtk::Switch,
+    pub(super) text_size_label: gtk::Label,
+    pub(super) text_size: gtk::Scale,
     pub(super) background_motion_enabled_label: gtk::Label,
     pub(super) background_motion_enabled: gtk::Switch,
     pub(super) background_motion_zoom_label: gtk::Label,
@@ -147,6 +150,17 @@ pub(super) fn build_controls() -> NowPlayingControls {
     let round_corners = gtk::Switch::new();
     let hide_track_info_label = gtk::Label::new(Some(&gettext("Hide track info")));
     let hide_track_info = gtk::Switch::new();
+    let text_size_label = gtk::Label::new(Some(&gettext("Text size")));
+    let text_size = gtk::Scale::with_range(
+        gtk::Orientation::Horizontal,
+        TextSize::MIN_SCALE_VALUE,
+        TextSize::MAX_SCALE_VALUE,
+        TextSize::SCALE_STEP,
+    );
+    TextSize::configure_scale(&text_size);
+    TextSize::install_slider_snap(&text_size);
+    text_size.set_value(TextSize::default().scale_value());
+    text_size.set_width_request(190);
     let background_motion_enabled_label = gtk::Label::new(Some(&gettext("Bakground motion")));
     let background_motion_enabled = gtk::Switch::new();
     let background_motion_zoom_label = gtk::Label::new(Some(&gettext("Zoom level (%)")));
@@ -224,6 +238,8 @@ pub(super) fn build_controls() -> NowPlayingControls {
         round_corners,
         hide_track_info_label,
         hide_track_info,
+        text_size_label,
+        text_size,
         background_motion_enabled_label,
         background_motion_enabled,
         background_motion_zoom_label,
@@ -297,9 +313,20 @@ impl NowPlayingWindow {
         self.controls
             .hide_track_info
             .set_visible(show_hide_track_info);
-        self.add_switch_menu_row(
+        self.add_scale_menu_row_with_label(
             &shared_grid,
             2,
+            &self.controls.text_size_label,
+            &self.controls.text_size,
+            settings.shared.text_size.scale_value(),
+        );
+        self.update_text_size_control_visibility(
+            settings.display_mode,
+            settings.shared.hide_track_info,
+        );
+        self.add_switch_menu_row(
+            &shared_grid,
+            3,
             &gettext("Always display last recognized song"),
             &self.controls.always_display_last_recognized_song,
             settings.shared.always_display_last_recognized_song,
@@ -307,13 +334,13 @@ impl NowPlayingWindow {
         );
         self.add_transition_menu_row(
             &shared_grid,
-            3,
+            4,
             &self.controls.transition_menu,
             settings.shared.transition,
         );
         self.add_transition_duration_menu_row(
             &shared_grid,
-            4,
+            5,
             &self.controls.transition_duration,
             settings.shared.transition_duration_ms,
             !matches!(settings.shared.transition, TransitionEffect::None),
@@ -606,6 +633,16 @@ impl NowPlayingWindow {
         menu_grid.attach(scale, 1, row, 1, 1);
     }
 
+    pub(super) fn update_text_size_control_visibility(
+        &self,
+        display_mode: DisplayMode,
+        hide_track_info: bool,
+    ) {
+        let visible = display_mode.shows_track_info(hide_track_info);
+        self.controls.text_size_label.set_visible(visible);
+        self.controls.text_size.set_visible(visible);
+    }
+
     pub(super) fn update_background_motion_control_visibility(
         &self,
         display_mode: DisplayMode,
@@ -775,6 +812,8 @@ impl NowPlayingWindow {
         let classic_settings_for_display_mode = self.controls.classic_settings.clone();
         let hide_track_info_label_for_display_mode = self.controls.hide_track_info_label.clone();
         let hide_track_info_for_display_mode = self.controls.hide_track_info.clone();
+        let text_size_label_for_display_mode = self.controls.text_size_label.clone();
+        let text_size_for_display_mode = self.controls.text_size.clone();
         let background_motion_settings_for_display_mode =
             self.controls.background_motion_settings.clone();
         let background_motion_enabled_for_display_mode =
@@ -805,6 +844,10 @@ impl NowPlayingWindow {
                     .set_visible(display_mode.supports_hiding_track_info());
                 hide_track_info_for_display_mode
                     .set_visible(display_mode.supports_hiding_track_info());
+                let show_text_size =
+                    display_mode.shows_track_info(hide_track_info_for_display_mode.is_active());
+                text_size_label_for_display_mode.set_visible(show_text_size);
+                text_size_for_display_mode.set_visible(show_text_size);
                 let supports_background_motion = display_mode.supports_background_motion();
                 background_motion_settings_for_display_mode.set_visible(supports_background_motion);
                 let show_motion_details = supports_background_motion
@@ -843,6 +886,8 @@ impl NowPlayingWindow {
         let alignment_left_for_hide = self.controls.track_info_alignment_left.clone();
         let alignment_center_for_hide = self.controls.track_info_alignment_center.clone();
         let alignment_right_for_hide = self.controls.track_info_alignment_right.clone();
+        let text_size_label_for_hide = self.controls.text_size_label.clone();
+        let text_size_for_hide = self.controls.text_size.clone();
         let presentation_for_hide = TrackPresentation::from_window(self);
         self.controls
             .hide_track_info
@@ -858,8 +903,25 @@ impl NowPlayingWindow {
                 alignment_left_for_hide.set_sensitive(!hide_track_info);
                 alignment_center_for_hide.set_sensitive(!hide_track_info);
                 alignment_right_for_hide.set_sensitive(!hide_track_info);
+                text_size_label_for_hide.set_visible(!hide_track_info);
+                text_size_for_hide.set_visible(!hide_track_info);
                 presentation_for_hide.refresh_mode();
             });
+
+        let applying_settings_for_text_size = self.state.applying_settings.clone();
+        let controller_for_text_size = self.controller.clone();
+        let text_css_for_text_size = self.text_css.clone();
+        let viewport_for_text_size = self.ui.background_area.clone();
+        self.controls.text_size.connect_value_changed(move |scale| {
+            if applying_settings_for_text_size.get() {
+                return;
+            }
+
+            let text_size = TextSize::from_scale_value(scale.value());
+            load_text_css(&text_css_for_text_size, &viewport_for_text_size, text_size);
+            controller_for_text_size
+                .update_debounced(NowPlayingPreferenceChange::TextSize(text_size));
+        });
 
         let applying_settings_for_background_motion = self.state.applying_settings.clone();
         let controller_for_background_motion = self.controller.clone();

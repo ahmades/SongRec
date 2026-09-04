@@ -3,9 +3,9 @@
 use super::track::TrackPresentation;
 use super::ui::apply_classic_track_info_alignment;
 use super::{
-    AlbumCoverSize, DisplayMode, NowPlayingSettings, NowPlayingWindow, TrackInfoAlignment,
-    TransitionEffect, clamp_background_motion_zoom_percent, clamp_transition_duration_ms,
-    normalize_background_motion_reversal_duration_secs,
+    AlbumCoverSize, DisplayMode, NowPlayingSettings, NowPlayingWindow, TextSize,
+    TrackInfoAlignment, TransitionEffect, clamp_background_motion_zoom_percent,
+    clamp_transition_duration_ms, normalize_background_motion_reversal_duration_secs,
 };
 use adw::prelude::*;
 
@@ -29,6 +29,7 @@ impl NowPlayingWindow {
             self.set_display_mode(settings.display_mode);
             self.set_round_corners(settings.classic.round_corners);
             self.set_show_track_info(!settings.shared.hide_track_info);
+            self.set_text_size(settings.shared.text_size);
             self.set_background_motion(
                 settings.shared.background_motion_enabled,
                 settings.shared.background_motion_zoom_percent,
@@ -68,6 +69,10 @@ impl NowPlayingWindow {
             self.controls
                 .hide_track_info
                 .set_visible(display_mode.supports_hiding_track_info());
+            self.update_text_size_control_visibility(
+                display_mode,
+                self.controls.hide_track_info.is_active(),
+            );
             self.update_background_motion_control_visibility(
                 display_mode,
                 self.controls.background_motion_enabled.is_active(),
@@ -205,6 +210,16 @@ impl NowPlayingWindow {
         });
     }
 
+    /// Applies the track-info scale and synchronizes the context-menu slider.
+    pub(super) fn set_text_size(&self, size: TextSize) {
+        self.refresh_text_css(size);
+        self.with_preference_updates_suspended(|| {
+            if self.controls.text_size.value() != size.scale_value() {
+                self.controls.text_size.set_value(size.scale_value());
+            }
+        });
+    }
+
     /// Shows or hides the metadata block for the current track.
     pub(super) fn set_show_track_info(&self, show: bool) {
         let hide_track_info = !show;
@@ -218,6 +233,10 @@ impl NowPlayingWindow {
                 .track_info_alignment_center
                 .set_sensitive(show);
             self.controls.track_info_alignment_right.set_sensitive(show);
+            self.update_text_size_control_visibility(
+                self.state.settings.get().display_mode,
+                hide_track_info,
+            );
         });
         TrackPresentation::from_window(self).refresh_mode();
     }

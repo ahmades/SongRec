@@ -6,7 +6,7 @@ use super::{
     BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS, BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
     BACKGROUND_MOTION_ZOOM_MAX_PERCENT, BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
     BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, NowPlayingSettings, SettingsController,
-    TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
+    TextSize, TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
 use crate::core::preferences::{DisplayMode, NowPlayingPreferenceChange};
 use adw::prelude::*;
@@ -21,6 +21,8 @@ struct PreferencesWidgets {
     background_motion_settings: adw::PreferencesGroup,
     round_corners: adw::SwitchRow,
     hide_track_info: adw::SwitchRow,
+    text_size_row: adw::ActionRow,
+    text_size: gtk::Scale,
     background_motion_enabled: adw::SwitchRow,
     background_motion_zoom_row: adw::ActionRow,
     background_motion_zoom: gtk::Scale,
@@ -55,6 +57,8 @@ impl NowPlayingPreferencesView {
             background_motion_settings: builder.object("background_motion_preferences").unwrap(),
             round_corners: builder.object("round_corners_setting").unwrap(),
             hide_track_info: builder.object("hide_track_info_setting").unwrap(),
+            text_size_row: builder.object("text_size_setting").unwrap(),
+            text_size: builder.object("text_size_setting_scale").unwrap(),
             background_motion_enabled: builder.object("background_motion_enabled_setting").unwrap(),
             background_motion_zoom_row: builder.object("background_motion_zoom_setting").unwrap(),
             background_motion_zoom: builder
@@ -82,6 +86,8 @@ impl NowPlayingPreferencesView {
 
         AlbumCoverSize::configure_scale(&widgets.album_cover_size);
         AlbumCoverSize::install_slider_snap(&widgets.album_cover_size);
+        TextSize::configure_scale(&widgets.text_size);
+        TextSize::install_slider_snap(&widgets.text_size);
         configure_integer_scale(
             &widgets.background_motion_zoom,
             f64::from(BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT),
@@ -147,6 +153,9 @@ impl NowPlayingPreferencesView {
             .hide_track_info
             .set_active(settings.shared.hide_track_info);
         self.widgets
+            .text_size
+            .set_value(settings.shared.text_size.scale_value());
+        self.widgets
             .background_motion_enabled
             .set_active(settings.shared.background_motion_enabled);
         self.widgets
@@ -198,6 +207,11 @@ impl NowPlayingPreferencesView {
         self.widgets
             .hide_track_info
             .set_visible(settings.display_mode.supports_hiding_track_info());
+        self.widgets.text_size_row.set_visible(
+            settings
+                .display_mode
+                .shows_track_info(settings.shared.hide_track_info),
+        );
         let supports_background_motion = settings.display_mode.supports_background_motion();
         self.widgets
             .background_motion_settings
@@ -229,6 +243,7 @@ impl NowPlayingPreferencesView {
         let controller_for_display_mode = controller.clone();
         let classic_settings = self.widgets.classic_settings.clone();
         let hide_track_info = self.widgets.hide_track_info.clone();
+        let text_size_row = self.widgets.text_size_row.clone();
         let background_motion_settings = self.widgets.background_motion_settings.clone();
         let background_motion_enabled = self.widgets.background_motion_enabled.clone();
         let background_motion_zoom_row = self.widgets.background_motion_zoom_row.clone();
@@ -246,6 +261,8 @@ impl NowPlayingPreferencesView {
                     .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
                 classic_settings.set_visible(display_mode.shows_classic_settings());
                 hide_track_info.set_visible(display_mode.supports_hiding_track_info());
+                text_size_row
+                    .set_visible(display_mode.shows_track_info(hide_track_info.is_active()));
                 let supports_background_motion = display_mode.supports_background_motion();
                 background_motion_settings.set_visible(supports_background_motion);
                 let show_motion_controls =
@@ -268,6 +285,7 @@ impl NowPlayingPreferencesView {
         let applying = self.applying.clone();
         let controller_for_hide_track_info = controller.clone();
         let track_info_alignment = self.widgets.track_info_alignment.clone();
+        let text_size_row = self.widgets.text_size_row.clone();
         self.widgets
             .hide_track_info
             .connect_active_notify(move |switch| {
@@ -279,7 +297,18 @@ impl NowPlayingPreferencesView {
                     switch.is_active(),
                 ));
                 track_info_alignment.set_sensitive(!switch.is_active());
+                text_size_row.set_visible(!switch.is_active());
             });
+
+        let applying = self.applying.clone();
+        let controller_for_text_size = controller.clone();
+        self.widgets.text_size.connect_value_changed(move |scale| {
+            if !applying.get() {
+                controller_for_text_size.update_debounced(NowPlayingPreferenceChange::TextSize(
+                    TextSize::from_scale_value(scale.value()),
+                ));
+            }
+        });
 
         let applying = self.applying.clone();
         let controller_for_background_motion_enabled = controller.clone();

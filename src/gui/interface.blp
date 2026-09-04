@@ -469,6 +469,20 @@ Adw.ApplicationWindow main_window {
               title: _("Hide track info");
             }
 
+            Adw.ActionRow text_size_setting {
+              subtitle: _("Choose a text size or use one of the marked presets");
+              title: _("Text size");
+
+              [suffix]
+              Scale text_size_setting_scale {
+                orientation: horizontal;
+                width-request: 300;
+                hexpand: true;
+                draw-value: false;
+                adjustment: Adjustment {};
+              }
+            }
+
             Adw.SwitchRow always_display_last_recognized_song_setting {
               subtitle: _("Keep showing the last recognized song when there is no current match");
               title: _("Always display last recognized song");

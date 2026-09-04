@@ -16,6 +16,7 @@ mod palette;
 mod preferences;
 mod state;
 mod style;
+mod text_size;
 mod track;
 mod transition;
 mod ui;
@@ -27,7 +28,7 @@ use state::NowPlayingState;
 use ui::NowPlayingWidgets;
 
 pub use crate::core::preferences::{
-    AlbumCoverSize, BackgroundStyle, DisplayMode, TrackInfoAlignment, TransitionEffect,
+    AlbumCoverSize, BackgroundStyle, DisplayMode, TextSize, TrackInfoAlignment, TransitionEffect,
 };
 pub(crate) use crate::core::preferences::{
     BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS,
@@ -48,6 +49,7 @@ pub struct NowPlayingWindow {
     controls: NowPlayingControls,
     state: NowPlayingState,
     controller: NowPlayingSettingsController,
+    text_css: gtk::CssProvider,
 }
 
 impl NowPlayingWindow {
@@ -62,9 +64,10 @@ impl NowPlayingWindow {
             controls,
             state,
             controller,
+            text_css,
         };
 
-        now_playing.setup_rendering(&text_css);
+        now_playing.setup_rendering();
         now_playing.setup_track_transition_handlers();
         now_playing.apply_initial_preferences(settings);
         now_playing.setup_context_menu(settings);

@@ -1,7 +1,7 @@
 //! Background rendering, gradient caching, and responsive metadata typography.
 
 use super::palette::Background;
-use super::style::font_css_for_size;
+use super::style::load_text_css;
 use super::ui::{CinemaFraming, configure_classic_content, configure_immersive_info};
 use super::{BackgroundStyle, DisplayMode, NowPlayingWindow};
 use adw::prelude::*;
@@ -23,7 +23,7 @@ pub(super) struct CachedGradient {
 
 impl NowPlayingWindow {
     /// Connects background drawing and resize handling for the window.
-    pub(super) fn setup_rendering(&self, text_css: &gtk::CssProvider) {
+    pub(super) fn setup_rendering(&self) {
         let background_state_for_draw = self.state.current_background.clone();
         let settings_for_draw = self.state.settings.clone();
         let gradient_surface_for_draw = self.state.gradient_surface.clone();
@@ -56,7 +56,7 @@ impl NowPlayingWindow {
                 );
             });
 
-        let text_css_for_resize = text_css.clone();
+        let text_css_for_resize = self.text_css.clone();
         let gradient_surface_for_resize = self.state.gradient_surface.clone();
         let background_state_for_resize = self.state.current_background.clone();
         let settings_for_resize = self.state.settings.clone();
@@ -75,10 +75,10 @@ impl NowPlayingWindow {
                     return;
                 }
 
-                text_css_for_resize.load_from_string(&font_css_for_size((width, height)));
+                let settings = settings_for_resize.get();
+                load_text_css(&text_css_for_resize, area, settings.shared.text_size);
                 configure_classic_content(&classic_content_for_resize, width, height);
 
-                let settings = settings_for_resize.get();
                 let (background, style) = effective_background(
                     background_state_for_resize.get(),
                     settings.classic.background_style,

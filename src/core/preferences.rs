@@ -206,6 +206,89 @@ impl<'de> Deserialize<'de> for AlbumCoverSize {
     }
 }
 
+/// Controls the size of track metadata relative to the responsive default.
+///
+/// The value is a percentage so the named positions remain predictable while
+/// every whole-percent size between them can still be selected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextSize(u16);
+
+impl Default for TextSize {
+    fn default() -> Self {
+        Self::MEDIUM
+    }
+}
+
+impl TextSize {
+    pub const SMALL: Self = Self(80);
+    pub const MEDIUM: Self = Self(100);
+    pub const LARGE: Self = Self(120);
+    pub const ALL: [Self; 3] = [Self::SMALL, Self::MEDIUM, Self::LARGE];
+    pub(crate) const MIN_SCALE_VALUE: f64 = Self::SMALL.0 as f64;
+    pub(crate) const MAX_SCALE_VALUE: f64 = Self::LARGE.0 as f64;
+    pub(crate) const SCALE_STEP: f64 = 1.0;
+    pub(crate) const PAGE_STEP: f64 = 10.0;
+
+    // A small acquisition range makes the presets convenient without taking
+    // away any of the custom positions between them.
+    const SNAP_DISTANCE: f64 = Self::SCALE_STEP * 2.0;
+
+    /// Returns this size as the percentage persisted in the preferences file.
+    pub(crate) fn percent(self) -> u16 {
+        self.0
+    }
+
+    /// Returns this size as a multiplier for the responsive typography scale.
+    pub(crate) fn multiplier(self) -> f64 {
+        f64::from(self.0) / 100.0
+    }
+
+    /// Returns the exact value represented by this size on the slider.
+    pub(crate) fn scale_value(self) -> f64 {
+        f64::from(self.0)
+    }
+
+    /// Converts a slider value into a valid custom text size.
+    pub(crate) fn from_scale_value(value: f64) -> Self {
+        if !value.is_finite() {
+            return Self::default();
+        }
+
+        Self(
+            value
+                .round()
+                .clamp(Self::MIN_SCALE_VALUE, Self::MAX_SCALE_VALUE) as u16,
+        )
+    }
+
+    /// Returns the nearest named preset when the slider is close enough to it.
+    pub(crate) fn snapped_scale_value(value: f64) -> f64 {
+        let value = Self::from_scale_value(value).scale_value();
+        Self::ALL
+            .into_iter()
+            .find(|anchor| (value - anchor.scale_value()).abs() <= Self::SNAP_DISTANCE)
+            .map_or(value, Self::scale_value)
+    }
+}
+
+impl Serialize for TextSize {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u16(self.percent())
+    }
+}
+
+impl<'de> Deserialize<'de> for TextSize {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        u16::deserialize(deserializer).map(|value| Self::from_scale_value(f64::from(value)))
+    }
+}
+
 /// Defines the lightweight visual transition used when a new track is displayed.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TransitionEffect {
@@ -477,6 +560,8 @@ impl Default for ClassicNowPlayingPreferences {
 pub struct SharedNowPlayingPreferences {
     #[serde(rename = "hide_now_playing_info")]
     pub hide_track_info: bool,
+    #[serde(rename = "now_playing_text_size_percent")]
+    pub text_size: TextSize,
     #[serde(rename = "now_playing_background_motion_enabled")]
     pub background_motion_enabled: bool,
     #[serde(rename = "now_playing_background_motion_zoom_percent")]
@@ -494,6 +579,7 @@ impl Default for SharedNowPlayingPreferences {
     fn default() -> Self {
         Self {
             hide_track_info: false,
+            text_size: TextSize::default(),
             background_motion_enabled: false,
             background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
             background_motion_reversal_duration_secs:
@@ -537,6 +623,8 @@ struct NowPlayingPreferencesWire {
     round_corners: Option<bool>,
     #[serde(rename = "hide_now_playing_info")]
     hide_track_info: Option<bool>,
+    #[serde(rename = "now_playing_text_size_percent")]
+    text_size: Option<TextSize>,
     #[serde(rename = "now_playing_background_motion_enabled")]
     background_motion_enabled: Option<bool>,
     #[serde(rename = "now_playing_background_motion_zoom_percent")]
@@ -589,6 +677,7 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
                 hide_track_info: wire
                     .hide_track_info
                     .unwrap_or(defaults.shared.hide_track_info),
+                text_size: wire.text_size.unwrap_or(defaults.shared.text_size),
                 background_motion_enabled: wire
                     .background_motion_enabled
                     .unwrap_or(defaults.shared.background_motion_enabled),
@@ -632,6 +721,9 @@ impl NowPlayingPreferences {
             NowPlayingPreferenceChange::HideTrackInfo(value) => {
                 self.shared.hide_track_info = value;
             }
+            NowPlayingPreferenceChange::TextSize(value) => {
+                self.shared.text_size = value;
+            }
             NowPlayingPreferenceChange::BackgroundMotionEnabled(value) => {
                 self.shared.background_motion_enabled = value;
             }
@@ -669,6 +761,7 @@ pub enum NowPlayingPreferenceChange {
     DisplayMode(DisplayMode),
     RoundCorners(bool),
     HideTrackInfo(bool),
+    TextSize(TextSize),
     BackgroundMotionEnabled(bool),
     BackgroundMotionZoomPercent(u16),
     BackgroundMotionReversalDurationSecs(u64),
@@ -855,7 +948,7 @@ mod tests {
         DisplayMode, NowPlayingPreferenceChange, NowPlayingPreferences, Preferences,
         PreferencesInterface, PreferencesPatch, SharedNowPlayingPreferences,
         TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
-        TrackInfoAlignment, TransitionEffect,
+        TextSize, TrackInfoAlignment, TransitionEffect,
     };
 
     #[test]
@@ -874,6 +967,7 @@ mod tests {
         );
         assert_eq!(defaults.classic.background_style, BackgroundStyle::Gradient);
         assert!(!defaults.shared.hide_track_info);
+        assert_eq!(defaults.shared.text_size, TextSize::MEDIUM);
         assert!(!defaults.shared.background_motion_enabled);
         assert_eq!(
             defaults.shared.background_motion_zoom_percent,
@@ -901,6 +995,10 @@ mod tests {
         assert_eq!(table["now_playing_display_mode"].as_str(), Some("classic"));
         assert_eq!(table["now_playing_round_corners"].as_bool(), Some(true));
         assert_eq!(table["hide_now_playing_info"].as_bool(), Some(false));
+        assert_eq!(
+            table["now_playing_text_size_percent"].as_integer(),
+            Some(100)
+        );
         assert_eq!(
             table["now_playing_background_motion_enabled"].as_bool(),
             Some(false)
@@ -962,6 +1060,7 @@ lights_off_enabled = false
                 },
                 shared: SharedNowPlayingPreferences {
                     hide_track_info: true,
+                    text_size: TextSize::MEDIUM,
                     background_motion_enabled: false,
                     background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
                     background_motion_reversal_duration_secs:
@@ -972,6 +1071,27 @@ lights_off_enabled = false
                 },
             }
         );
+    }
+
+    #[test]
+    fn text_size_defaults_clamps_and_round_trips() {
+        let missing: Preferences = toml::from_str("hide_now_playing_info = false").unwrap();
+        assert_eq!(missing.now_playing.shared.text_size, TextSize::MEDIUM);
+
+        let too_small: Preferences = toml::from_str("now_playing_text_size_percent = 1").unwrap();
+        assert_eq!(too_small.now_playing.shared.text_size, TextSize::SMALL);
+
+        let too_large: Preferences = toml::from_str("now_playing_text_size_percent = 999").unwrap();
+        assert_eq!(too_large.now_playing.shared.text_size, TextSize::LARGE);
+
+        let custom: Preferences = toml::from_str("now_playing_text_size_percent = 113").unwrap();
+        assert_eq!(
+            custom.now_playing.shared.text_size,
+            TextSize::from_scale_value(113.0)
+        );
+        let serialized = toml::to_string(&custom).unwrap();
+        let deserialized: Preferences = toml::from_str(&serialized).unwrap();
+        assert_eq!(deserialized.now_playing, custom.now_playing);
     }
 
     #[test]
@@ -1080,6 +1200,7 @@ now_playing_background_motion_reversal_duration_secs = 23
                     },
                     shared: SharedNowPlayingPreferences {
                         hide_track_info: true,
+                        text_size: TextSize::from_scale_value(113.0),
                         background_motion_enabled: true,
                         background_motion_zoom_percent: 117,
                         background_motion_reversal_duration_secs: 45,
@@ -1136,6 +1257,7 @@ now_playing_background_motion_reversal_duration_secs = 23
                 },
                 shared: SharedNowPlayingPreferences {
                     hide_track_info: true,
+                    text_size: TextSize::LARGE,
                     background_motion_enabled: true,
                     background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
                     background_motion_reversal_duration_secs:
@@ -1169,6 +1291,9 @@ now_playing_background_motion_reversal_duration_secs = 23
         };
 
         interface.update_now_playing(NowPlayingPreferenceChange::HideTrackInfo(true));
+        interface.update_now_playing(NowPlayingPreferenceChange::TextSize(
+            TextSize::from_scale_value(113.0),
+        ));
         interface.update_now_playing(NowPlayingPreferenceChange::RoundCorners(false));
         interface.update_now_playing(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Ambient,
@@ -1180,6 +1305,10 @@ now_playing_background_motion_reversal_duration_secs = 23
             DisplayMode::Classic,
         ));
         assert!(interface.preferences.now_playing.shared.hide_track_info);
+        assert_eq!(
+            interface.preferences.now_playing.shared.text_size,
+            TextSize::from_scale_value(113.0)
+        );
         assert!(!interface.preferences.now_playing.classic.round_corners);
 
         interface.update_now_playing(NowPlayingPreferenceChange::BackgroundMotionEnabled(true));
@@ -1306,6 +1435,16 @@ now_playing_background_motion_reversal_duration_secs = 23
                 size
             );
         }
+
+        for size in TextSize::ALL {
+            assert_eq!(TextSize::from_scale_value(size.scale_value()), size);
+            assert_eq!(
+                TextSize::snapped_scale_value(size.scale_value() + 1.0),
+                size.scale_value()
+            );
+        }
+        assert_eq!(TextSize::snapped_scale_value(93.0), 93.0);
+        assert_eq!(TextSize::snapped_scale_value(107.0), 107.0);
     }
 
     #[test]

@@ -664,7 +664,10 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
     }
-    text_css.load_from_string(&font_css_for_size((WINDOW_WIDTH, WINDOW_HEIGHT)));
+    text_css.load_from_string(&font_css_for_size(
+        (WINDOW_WIDTH, WINDOW_HEIGHT),
+        super::TextSize::default(),
+    ));
 
     let key_controller = gtk::EventControllerKey::new();
     let window_for_key = window.downgrade();

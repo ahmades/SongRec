@@ -16,6 +16,7 @@ enum SettingKey {
     DisplayMode,
     RoundCorners,
     HideTrackInfo,
+    TextSize,
     BackgroundMotionEnabled,
     BackgroundMotionZoom,
     BackgroundMotionReversalDuration,
@@ -34,6 +35,7 @@ impl From<NowPlayingPreferenceChange> for SettingKey {
             NowPlayingPreferenceChange::DisplayMode(_) => Self::DisplayMode,
             NowPlayingPreferenceChange::RoundCorners(_) => Self::RoundCorners,
             NowPlayingPreferenceChange::HideTrackInfo(_) => Self::HideTrackInfo,
+            NowPlayingPreferenceChange::TextSize(_) => Self::TextSize,
             NowPlayingPreferenceChange::BackgroundMotionEnabled(_) => Self::BackgroundMotionEnabled,
             NowPlayingPreferenceChange::BackgroundMotionZoomPercent(_) => {
                 Self::BackgroundMotionZoom
@@ -160,7 +162,7 @@ mod tests {
     use super::{NowPlayingSettingsController, SettingKey};
     use crate::core::preferences::{
         BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
-        DisplayMode, NowPlayingPreferenceChange, NowPlayingPreferences,
+        DisplayMode, NowPlayingPreferenceChange, NowPlayingPreferences, TextSize,
     };
 
     #[test]
@@ -218,6 +220,14 @@ mod tests {
         assert_eq!(
             SettingKey::from(NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(30)),
             SettingKey::BackgroundMotionReversalDuration
+        );
+    }
+
+    #[test]
+    fn text_size_has_an_independent_persistence_key() {
+        assert_eq!(
+            SettingKey::from(NowPlayingPreferenceChange::TextSize(TextSize::LARGE)),
+            SettingKey::TextSize
         );
     }
 }
