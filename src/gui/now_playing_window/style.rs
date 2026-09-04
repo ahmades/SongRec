@@ -19,6 +19,10 @@ pub(super) const TITLE_CSS_CLASS: &str = "now-playing-title";
 pub(super) const ARTIST_CSS_CLASS: &str = "now-playing-artist";
 pub(super) const ALBUM_CSS_CLASS: &str = "now-playing-album";
 pub(super) const DETAILS_CSS_CLASS: &str = "now-playing-details";
+pub(super) const TITLE_RESERVATION_CSS_CLASS: &str = "now-playing-title-reservation";
+pub(super) const ARTIST_RESERVATION_CSS_CLASS: &str = "now-playing-artist-reservation";
+pub(super) const ALBUM_RESERVATION_CSS_CLASS: &str = "now-playing-album-reservation";
+pub(super) const DETAILS_RESERVATION_CSS_CLASS: &str = "now-playing-details-reservation";
 
 /// Loads metadata CSS for the current viewport and selected relative size.
 pub(super) fn load_text_css(
@@ -54,13 +58,25 @@ struct MetadataFontSizes {
 /// Generates CSS for metadata font sizes scaled to the supplied window dimensions.
 pub(super) fn font_css_for_size(size: (i32, i32), text_size: TextSize) -> String {
     let sizes = metadata_font_sizes_for_size(size, text_size);
+    let reservation_sizes = metadata_font_sizes_for_size(size, TextSize::LARGE);
 
     format!(
         ".{TITLE_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
          .{ARTIST_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
          .{ALBUM_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
-         .{DETAILS_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}",
-        sizes.title, sizes.artist, sizes.album, sizes.details,
+         .{DETAILS_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
+         .{TITLE_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
+         .{ARTIST_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
+         .{ALBUM_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
+         .{DETAILS_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}",
+        sizes.title,
+        sizes.artist,
+        sizes.album,
+        sizes.details,
+        reservation_sizes.title,
+        reservation_sizes.artist,
+        reservation_sizes.album,
+        reservation_sizes.details,
     )
 }
 
@@ -141,5 +157,9 @@ mod tests {
                 details: 22,
             }
         );
+
+        let small_css = font_css_for_size((720, 820), TextSize::SMALL);
+        assert!(small_css.contains(".now-playing-title { font-size: 26px"));
+        assert!(small_css.contains(".now-playing-title-reservation { font-size: 38px"));
     }
 }

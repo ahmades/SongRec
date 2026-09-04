@@ -227,7 +227,7 @@ impl NowPlayingWindow {
             if self.controls.hide_track_info.is_active() != hide_track_info {
                 self.controls.hide_track_info.set_active(hide_track_info);
             }
-            self.ui.info_box.set_visible(show);
+            self.ui.classic_info_layout.set_visible(show);
             self.controls.track_info_alignment_left.set_sensitive(show);
             self.controls
                 .track_info_alignment_center

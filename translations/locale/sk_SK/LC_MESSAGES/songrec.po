@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-04 14:35+0200\n"
+"POT-Creation-Date: 2026-09-04 15:07+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -392,7 +392,7 @@ msgstr ""
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:129 src/gui/now_playing_window/ui.rs:535
+#: src/gui/now_playing_window/track.rs:129 src/gui/now_playing_window/ui.rs:538
 msgid "Listening..."
 msgstr ""
 
@@ -436,7 +436,7 @@ msgstr ""
 msgid "Swing down"
 msgstr ""
 
-#: src/gui/now_playing_window/ui.rs:503
+#: src/gui/now_playing_window/ui.rs:506
 msgid "Now playing"
 msgstr ""
 

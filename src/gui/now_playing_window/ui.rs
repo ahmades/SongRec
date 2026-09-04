@@ -2,7 +2,9 @@
 
 use super::motion::BackdropMotion;
 use super::style::{
-    ALBUM_CSS_CLASS, ARTIST_CSS_CLASS, DETAILS_CSS_CLASS, TITLE_CSS_CLASS, font_css_for_size,
+    ALBUM_CSS_CLASS, ALBUM_RESERVATION_CSS_CLASS, ARTIST_CSS_CLASS, ARTIST_RESERVATION_CSS_CLASS,
+    DETAILS_CSS_CLASS, DETAILS_RESERVATION_CSS_CLASS, TITLE_CSS_CLASS, TITLE_RESERVATION_CSS_CLASS,
+    font_css_for_size,
 };
 use super::track::transition_leg_duration_ms;
 use super::transition::RevealerLayout;
@@ -479,6 +481,7 @@ pub(super) struct NowPlayingWidgets {
     pub(super) album_label: gtk::Label,
     pub(super) details_label: gtk::Label,
     pub(super) info_box: gtk::Box,
+    pub(super) classic_info_layout: gtk::Overlay,
     pub(super) immersive_title_label: gtk::Label,
     pub(super) immersive_artist_label: gtk::Label,
     pub(super) immersive_album_label: gtk::Label,
@@ -553,14 +556,37 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
         .orientation(gtk::Orientation::Vertical)
         .spacing(INFO_BOX_SPACING)
         .halign(gtk::Align::Center)
+        .valign(gtk::Align::End)
         .build();
     info_box.append(&title_label);
     info_box.append(&artist_label);
     info_box.append(&album_label);
     info_box.append(&details_label);
 
+    // Measure Classic metadata at the largest selectable text size. The real
+    // labels are unmeasured overlays, so changing their size cannot take space
+    // away from the independently sized artwork above them.
+    let info_reservation = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(INFO_BOX_SPACING)
+        .opacity(0.0)
+        .can_target(false)
+        .build();
+    for css_class in [
+        TITLE_RESERVATION_CSS_CLASS,
+        ARTIST_RESERVATION_CSS_CLASS,
+        ALBUM_RESERVATION_CSS_CLASS,
+        DETAILS_RESERVATION_CSS_CLASS,
+    ] {
+        info_reservation.append(&metadata_reservation_label(css_class));
+    }
+    let classic_info_layout = gtk::Overlay::builder().hexpand(true).build();
+    classic_info_layout.set_child(Some(&info_reservation));
+    classic_info_layout.add_overlay(&info_box);
+    classic_info_layout.set_measure_overlay(&info_box, false);
+
     root.append(&cover_frame);
-    root.append(&info_box);
+    root.append(&classic_info_layout);
 
     let immersive_title_label = metadata_label(TITLE_CSS_CLASS);
     let immersive_artist_label = metadata_label(ARTIST_CSS_CLASS);
@@ -703,6 +729,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
             album_label,
             details_label,
             info_box,
+            classic_info_layout,
             immersive_title_label,
             immersive_artist_label,
             immersive_album_label,
@@ -722,6 +749,15 @@ fn metadata_label(css_class: &str) -> gtk::Label {
         .wrap(false)
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .css_classes([css_class])
+        .build()
+}
+
+fn metadata_reservation_label(css_class: &str) -> gtk::Label {
+    gtk::Label::builder()
+        // Ascenders and descenders ensure Pango contributes a complete line box.
+        .label("Ag")
+        .css_classes([css_class])
+        .accessible_role(gtk::AccessibleRole::None)
         .build()
 }
 

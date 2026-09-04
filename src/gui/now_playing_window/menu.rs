@@ -882,7 +882,7 @@ impl NowPlayingWindow {
 
         let applying_settings_for_hide = self.state.applying_settings.clone();
         let controller_for_hide = self.controller.clone();
-        let info_box_for_hide = self.ui.info_box.clone();
+        let classic_info_layout_for_hide = self.ui.classic_info_layout.clone();
         let alignment_left_for_hide = self.controls.track_info_alignment_left.clone();
         let alignment_center_for_hide = self.controls.track_info_alignment_center.clone();
         let alignment_right_for_hide = self.controls.track_info_alignment_right.clone();
@@ -899,7 +899,7 @@ impl NowPlayingWindow {
                 let hide_track_info = button.is_active();
                 controller_for_hide
                     .update(NowPlayingPreferenceChange::HideTrackInfo(hide_track_info));
-                info_box_for_hide.set_visible(!hide_track_info);
+                classic_info_layout_for_hide.set_visible(!hide_track_info);
                 alignment_left_for_hide.set_sensitive(!hide_track_info);
                 alignment_center_for_hide.set_sensitive(!hide_track_info);
                 alignment_right_for_hide.set_sensitive(!hide_track_info);
