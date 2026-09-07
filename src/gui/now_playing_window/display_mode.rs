@@ -39,6 +39,11 @@ impl DisplayMode {
         }
     }
 
+    /// Whether a track-change scene should wait for its prepared artwork.
+    pub(crate) const fn uses_artwork(self) -> bool {
+        !matches!(self, Self::LightsOff)
+    }
+
     /// Returns the zero-based index used by display-mode dropdowns.
     pub(crate) fn index(self) -> u32 {
         Self::ALL
@@ -96,6 +101,16 @@ mod tests {
             let is_immersive = matches!(display_mode, DisplayMode::Cinema | DisplayMode::Ambient);
             assert_eq!(display_mode.supports_background_motion(), is_immersive);
             assert_eq!(display_mode.uses_immersive_artwork(), is_immersive);
+        }
+    }
+
+    #[test]
+    fn every_visual_mode_except_lights_off_uses_artwork() {
+        for display_mode in DisplayMode::ALL {
+            assert_eq!(
+                display_mode.uses_artwork(),
+                !matches!(display_mode, DisplayMode::LightsOff)
+            );
         }
     }
 }

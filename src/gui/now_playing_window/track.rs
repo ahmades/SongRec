@@ -249,10 +249,7 @@ impl NowPlayingWindow {
                     return;
                 }
 
-                let wait_for_artwork = settings_for_completion
-                    .get()
-                    .display_mode
-                    .uses_immersive_artwork();
+                let wait_for_artwork = settings_for_completion.get().display_mode.uses_artwork();
                 let action = track_state_for_completion
                     .borrow_mut()
                     .transition_hidden(wait_for_artwork);
@@ -306,7 +303,7 @@ impl NowPlayingWindow {
         let action = self.state.track_presentation.borrow_mut().receive_track(
             track,
             can_animate,
-            settings.display_mode.uses_immersive_artwork(),
+            settings.display_mode.uses_artwork(),
         );
 
         match action {
@@ -344,10 +341,7 @@ impl NowPlayingWindow {
             .state
             .track_presentation
             .borrow_mut()
-            .reconcile_pending_transition(
-                animations_enabled,
-                settings.display_mode.uses_immersive_artwork(),
-            );
+            .reconcile_pending_transition(animations_enabled, settings.display_mode.uses_artwork());
 
         match action {
             PresentationAction::BeginTransition => {
