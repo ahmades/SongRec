@@ -344,9 +344,9 @@ pub(super) fn rebuild_gradient_surface(
         let t = ((position - TRANSITION_START) / (1.0 - TRANSITION_START)).clamp(0.0, 1.0);
         let t = t * t * (3.0 - 2.0 * t);
 
-        let red = linear_to_srgb(top.0 + (bottom.0 - top.0) * t) * 255.0;
-        let green = linear_to_srgb(top.1 + (bottom.1 - top.1) * t) * 255.0;
-        let blue = linear_to_srgb(top.2 + (bottom.2 - top.2) * t) * 255.0;
+        let red = DitheredChannel::new(linear_to_srgb(top.0 + (bottom.0 - top.0) * t) * 255.0);
+        let green = DitheredChannel::new(linear_to_srgb(top.1 + (bottom.1 - top.1) * t) * 255.0);
+        let blue = DitheredChannel::new(linear_to_srgb(top.2 + (bottom.2 - top.2) * t) * 255.0);
 
         for x in 0..width {
             // Unbiased stochastic rounding removes visible 8-bit steps without
@@ -354,9 +354,9 @@ pub(super) fn rebuild_gradient_surface(
             // is tiny compared with the actual window and is generated only when
             // the background or window height changes.
             let noise = hash_noise(x as u32, y as u32);
-            let r = stochastic_round(red, noise);
-            let g = stochastic_round(green, noise);
-            let b = stochastic_round(blue, noise);
+            let r = red.round(noise);
+            let g = green.round(noise);
+            let b = blue.round(noise);
             let offset = y * stride + x * 4;
             data[offset..offset + 4].copy_from_slice(&argb32_pixel_bytes(r, g, b));
         }
@@ -399,13 +399,31 @@ fn linear_to_srgb(channel: f64) -> f64 {
     }
 }
 
-/// Applies unbiased stochastic rounding to an 8-bit channel value.
-fn stochastic_round(value: f64, noise: f64) -> u8 {
-    let value = value.clamp(0.0, 255.0);
-    let floor = value.floor();
-    let fraction = value - floor;
-    let rounded = if noise < fraction { floor + 1.0 } else { floor };
-    rounded.clamp(0.0, 255.0) as u8
+/// Computes row-invariant rounding operands once instead of for every pixel.
+struct DitheredChannel {
+    floor: u8,
+    ceil: u8,
+    fraction: f64,
+}
+
+impl DitheredChannel {
+    fn new(value: f64) -> Self {
+        let value = value.clamp(0.0, 255.0);
+        let floor = value.floor();
+        Self {
+            floor: floor as u8,
+            ceil: (floor as u8).saturating_add(1),
+            fraction: value - floor,
+        }
+    }
+
+    fn round(&self, noise: f64) -> u8 {
+        if noise < self.fraction {
+            self.ceil
+        } else {
+            self.floor
+        }
+    }
 }
 
 /// Produces deterministic pseudo-random noise in the range `[0, 1]` for dithering.

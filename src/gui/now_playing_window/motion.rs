@@ -25,6 +25,16 @@ struct MotionConfiguration {
     direction_change_interval_secs: u64,
 }
 
+impl MotionConfiguration {
+    fn scale(self) -> f64 {
+        if self.enabled {
+            f64::from(self.zoom_percent) / 100.0
+        } else {
+            RESTING_SCALE
+        }
+    }
+}
+
 impl Default for MotionConfiguration {
     fn default() -> Self {
         Self {
@@ -62,7 +72,9 @@ impl MotionOffset {
 /// regenerated while the animation is running.
 #[derive(Clone)]
 pub(super) struct BackdropMotion {
-    widget: gtk::Widget,
+    // Overlay allocation callbacks retain this controller, so it must not keep
+    // the same overlay alive through a strong reference back to its owner.
+    widget: glib::WeakRef<gtk::Widget>,
     animation: adw::TimedAnimation,
     offset: Rc<Cell<MotionOffset>>,
     configuration: Rc<Cell<MotionConfiguration>>,
@@ -76,10 +88,23 @@ impl BackdropMotion {
         let offset_for_target = offset.clone();
         let path_for_target = path;
         let widget_for_target = widget.downgrade();
+        let configuration = Rc::new(Cell::new(MotionConfiguration::default()));
+        let configuration_for_target = configuration.clone();
         let target = adw::CallbackAnimationTarget::new(move |path_position| {
-            offset_for_target.set(path_offset_at(&path_for_target, path_position));
+            let next_offset = path_offset_at(&path_for_target, path_position);
+            let previous_offset = offset_for_target.replace(next_offset);
             if let Some(widget) = widget_for_target.upgrade() {
-                widget.queue_allocate();
+                let scale = configuration_for_target.get().scale();
+                let previous_rect =
+                    scaled_backdrop_rect(widget.width(), widget.height(), scale, previous_offset);
+                let next_rect =
+                    scaled_backdrop_rect(widget.width(), widget.height(), scale, next_offset);
+                // The slowly moving background is allocated at integer pixel
+                // positions. Most animation frames do not move it by a pixel;
+                // avoid relaying out both artwork layers for identical frames.
+                if previous_rect != next_rect {
+                    widget.queue_allocate();
+                }
             }
         });
         let animation = adw::TimedAnimation::new(
@@ -92,7 +117,6 @@ impl BackdropMotion {
         animation.set_easing(adw::Easing::Linear);
         animation.set_repeat_count(0);
 
-        let configuration = Rc::new(Cell::new(MotionConfiguration::default()));
         let configuration_for_map = configuration.clone();
         let animation_for_map = animation.downgrade();
         widget.connect_map(move |_| {
@@ -114,7 +138,7 @@ impl BackdropMotion {
         });
 
         Self {
-            widget,
+            widget: widget.downgrade(),
             animation,
             offset,
             configuration,
@@ -143,7 +167,10 @@ impl BackdropMotion {
         self.animation.set_duration(path_duration_ms(
             configuration.direction_change_interval_secs,
         ));
-        self.widget.queue_allocate();
+        let widget = self.widget.upgrade();
+        if let Some(widget) = widget.as_ref() {
+            widget.queue_allocate();
+        }
 
         if previous.enabled == configuration.enabled {
             return;
@@ -151,19 +178,14 @@ impl BackdropMotion {
 
         self.animation.reset();
         self.offset.set(MotionOffset::CENTER);
-        if configuration.enabled && self.widget.is_mapped() {
+        if configuration.enabled && widget.is_some_and(|widget| widget.is_mapped()) {
             self.animation.play();
         }
     }
 
     pub(super) fn backdrop_rect(&self, width: i32, height: i32) -> gdk::Rectangle {
         let configuration = self.configuration.get();
-        let scale = if configuration.enabled {
-            f64::from(configuration.zoom_percent) / 100.0
-        } else {
-            RESTING_SCALE
-        };
-        scaled_backdrop_rect(width, height, scale, self.offset.get())
+        scaled_backdrop_rect(width, height, configuration.scale(), self.offset.get())
     }
 }
 

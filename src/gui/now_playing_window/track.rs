@@ -14,6 +14,7 @@ use gettextrs::gettext;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// Converts the user-facing total transition duration into one hide/reveal leg.
 pub(super) fn transition_leg_duration_ms(total_duration_ms: u64) -> u32 {
@@ -22,6 +23,11 @@ pub(super) fn transition_leg_duration_ms(total_duration_ms: u64) -> u32 {
 
 /// Starts the hide leg using the currently selected, already-supported effect.
 fn begin_track_transition(transition: &TrackTransitionLayout, settings: NowPlayingSettings) {
+    log::debug!(
+        "Now Playing transition: begin {:?}, total {} ms",
+        settings.shared.transition,
+        settings.shared.transition_duration_ms
+    );
     transition.begin(
         settings.shared.transition,
         transition_leg_duration_ms(settings.shared.transition_duration_ms),
@@ -93,6 +99,7 @@ impl TrackPresentation {
 
     /// Renders a recognized track whose artwork has already been decoded.
     fn render_track(&self, track: &PresentedTrack) {
+        let started = Instant::now();
         // The global placeholder belongs exclusively to Listening mode; a
         // recognized track without artwork intentionally leaves this empty.
         self.artwork_placeholder.set_label("");
@@ -122,6 +129,12 @@ impl TrackPresentation {
 
         self.apply_background();
         self.sync_artwork_visibility();
+        log::debug!(
+            "Now Playing track {}: scene applied in {:?}, artwork ready={}",
+            track.track_key,
+            started.elapsed(),
+            track.artwork.is_some()
+        );
     }
 
     /// Renders the deterministic empty/listening state while preserving the background.
@@ -246,8 +259,10 @@ impl NowPlayingWindow {
             .content_transition
             .connect_child_revealed_notify(move |revealer| {
                 if revealer.is_child_revealed() {
+                    log::debug!("Now Playing transition: fully revealed");
                     return;
                 }
+                log::debug!("Now Playing transition: hidden midpoint");
 
                 let wait_for_artwork = settings_for_completion.get().display_mode.uses_artwork();
                 let action = track_state_for_completion
@@ -279,13 +294,20 @@ impl NowPlayingWindow {
 
     /// Refreshes the displayed song metadata and artwork from a recognition result.
     pub fn update(&self, message: &SongRecognizedMessage) {
+        self.state.deferred_artwork.borrow_mut().take();
         let prepared_artwork = message.cover_image.as_ref().and_then(|artwork| {
             self.state
                 .track_presentation
                 .borrow()
-                .prepared_artwork_for(&message.track_key, artwork)
+                .prepared_artwork_for(artwork)
         });
         let visuals_pending = message.cover_image.is_some() && prepared_artwork.is_none();
+        log::debug!(
+            "Now Playing track {}: received, download pending={}, preparation needed={}",
+            message.track_key,
+            message.artwork_pending,
+            visuals_pending
+        );
         let track = Rc::new(PresentedTrack::from_message(
             message,
             prepared_artwork,
@@ -322,7 +344,6 @@ impl NowPlayingWindow {
 
         if visuals_pending {
             self.prepare_artwork_visuals(
-                message.track_key.clone(),
                 message
                     .cover_image
                     .as_ref()
@@ -361,60 +382,120 @@ impl NowPlayingWindow {
     }
 
     /// Prepares Now Playing-only palettes and Ambient pixels away from GTK's main thread.
-    fn prepare_artwork_visuals(&self, track_key: String, artwork: Arc<Artwork>) {
-        if !self
+    fn prepare_artwork_visuals(&self, artwork: Arc<Artwork>) {
+        if !self.ui.window.is_visible() || !self.state.settings.get().display_mode.uses_artwork() {
+            *self.state.deferred_artwork.borrow_mut() = Some(artwork);
+            return;
+        }
+        let Some(job) = self
             .state
             .artwork_preparations
             .borrow_mut()
-            .start(&track_key, &artwork)
-        {
+            .enqueue(artwork)
+        else {
+            log::debug!("Now Playing artwork: preparation already active or queued");
             return;
-        }
+        };
 
         let preparation_jobs = self.state.artwork_preparations.clone();
         let track_state = self.state.track_presentation.clone();
         let presentation = TrackPresentation::from_window(self);
         let transition = self.ui.content_transition.clone();
         let settings = self.state.settings.clone();
+        let window = self.ui.window.downgrade();
+        let deferred_artwork = self.state.deferred_artwork.clone();
         glib::spawn_future_local(async move {
-            let artwork_for_worker = artwork.clone();
-            let visuals = match gio::spawn_blocking(move || {
-                visuals_from_artwork(&artwork_for_worker)
-            })
-            .await
-            {
-                Ok(visuals) => visuals,
-                Err(_) => {
-                    log::warn!("Now Playing artwork preparation task panicked");
-                    ArtworkVisuals::fallback()
-                }
-            };
+            let mut next_artwork = Some(job);
+            while let Some(job) = next_artwork {
+                let artwork = job.artwork;
+                // A newer recognition may supersede queued work before this future runs.
+                let Some(job_track_key) = track_state.borrow().track_key_for_artwork(&artwork)
+                else {
+                    next_artwork = preparation_jobs.borrow_mut().finish(&artwork);
+                    continue;
+                };
 
-            if !preparation_jobs.borrow_mut().finish(&track_key, &artwork) {
-                return;
-            }
+                // Visibility or mode may change while a previous job is finishing.
+                if !window.upgrade().is_some_and(|window| window.is_visible())
+                    || !settings.get().display_mode.uses_artwork()
+                {
+                    next_artwork = preparation_jobs.borrow_mut().finish(&artwork);
+                    *deferred_artwork.borrow_mut() = Some(artwork);
+                    continue;
+                }
 
-            let prepared = prepare_artwork(&artwork, visuals);
-            let action = track_state
-                .borrow_mut()
-                .apply_prepared_artwork(&track_key, &artwork, prepared);
-            match action {
-                PresentationAction::BeginTransition => {
-                    begin_track_transition(&transition, settings.get());
+                let artwork_for_worker = artwork.clone();
+                let visuals = match gio::spawn_blocking(move || {
+                    let started = Instant::now();
+                    let queue_time = started.duration_since(job.queued_at);
+                    let visuals = visuals_from_artwork(&artwork_for_worker);
+                    log::debug!(
+                        "Now Playing track {job_track_key}, artwork {}x{}: queue {:?}, processing {:?}",
+                        artwork_for_worker.width(),
+                        artwork_for_worker.height(),
+                        queue_time,
+                        started.elapsed()
+                    );
+                    visuals
+                })
+                .await
+                {
+                    Ok(visuals) => visuals,
+                    Err(_) => {
+                        log::warn!("Now Playing artwork preparation task panicked");
+                        ArtworkVisuals::fallback()
+                    }
+                };
+
+                // Check again before allocating textures on GTK's thread. A completed
+                // source can serve a newer track on the same album, but never stale art.
+                let track_key = track_state.borrow().track_key_for_artwork(&artwork);
+                if let Some(track_key) = track_key {
+                    let texture_started = Instant::now();
+                    let prepared = prepare_artwork(&artwork, visuals);
+                    log::debug!(
+                        "Now Playing track {track_key}: textures prepared in {:?}",
+                        texture_started.elapsed()
+                    );
+                    let action = track_state
+                        .borrow_mut()
+                        .apply_prepared_artwork(&track_key, &artwork, prepared);
+                    match action {
+                        PresentationAction::BeginTransition => {
+                            begin_track_transition(&transition, settings.get());
+                        }
+                        PresentationAction::RenderTrack(track) => {
+                            presentation.apply_action(PresentationAction::RenderTrack(track));
+                            transition.reveal();
+                        }
+                        PresentationAction::None
+                        | PresentationAction::HoldTransition
+                        | PresentationAction::RenderListening => {}
+                    }
                 }
-                PresentationAction::RenderTrack(track) => {
-                    presentation.apply_action(PresentationAction::RenderTrack(track));
-                    transition.reveal();
-                }
-                PresentationAction::None
-                | PresentationAction::HoldTransition
-                | PresentationAction::RenderListening => {}
+                next_artwork = preparation_jobs.borrow_mut().finish(&artwork);
             }
         });
     }
 
+    /// Resumes the latest deferred source when artwork becomes useful again.
+    pub(super) fn resume_artwork_preparation(&self) {
+        let artwork = self.state.deferred_artwork.borrow_mut().take();
+        if let Some(artwork) = artwork
+            && self
+                .state
+                .track_presentation
+                .borrow()
+                .track_key_for_artwork(&artwork)
+                .is_some()
+        {
+            self.prepare_artwork_visuals(artwork);
+        }
+    }
+
     /// Clears the current track and shows the listening placeholder.
     pub fn set_listening_state(&self) {
+        self.state.deferred_artwork.borrow_mut().take();
         let action = self.state.track_presentation.borrow_mut().show_listening();
         TrackPresentation::from_window(self).apply_action(action);
         self.ui.content_transition.reveal();
@@ -428,6 +509,9 @@ impl NowPlayingWindow {
             .get()
             .shared
             .always_display_last_recognized_song;
+        if !keep_last {
+            self.state.deferred_artwork.borrow_mut().take();
+        }
         let action = self
             .state
             .track_presentation
@@ -525,6 +609,115 @@ mod tests {
     use crate::gui::now_playing_window::DisplayMode;
     use crate::gui::now_playing_window::palette::Background;
     use crate::gui::now_playing_window::state::PresentationMode;
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn deferred_artwork_resumes_and_transitions_with_metadata() {
+        use crate::core::artwork::Artwork;
+        use crate::core::thread_messages::SongRecognizedMessage;
+        use crate::gui::now_playing_window::controller::NowPlayingSettingsController;
+        use crate::gui::now_playing_window::{
+            NowPlayingSettings, NowPlayingWindow, TransitionEffect,
+        };
+        use adw::prelude::*;
+        use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
+        use std::io::Cursor;
+        use std::sync::Arc;
+        use std::time::{Duration, Instant};
+
+        fn message(key: &str, red: u8) -> SongRecognizedMessage {
+            let image =
+                DynamicImage::ImageRgba8(RgbaImage::from_pixel(32, 32, Rgba([red, 0, 0, 255])));
+            let mut bytes = Cursor::new(Vec::new());
+            image.write_to(&mut bytes, ImageFormat::Png).unwrap();
+            SongRecognizedMessage {
+                track_key: key.to_string(),
+                song_name: key.to_string(),
+                artist_name: "Artist".to_string(),
+                album_name: None,
+                release_year: None,
+                genre: None,
+                shazam_json: String::new(),
+                cover_image: Some(Arc::new(Artwork::decode(bytes.into_inner()).unwrap())),
+                artwork_pending: false,
+            }
+        }
+        fn wait_until(predicate: impl Fn() -> bool) {
+            glib::MainContext::default().block_on(async {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                while !predicate() {
+                    assert!(Instant::now() < deadline, "presentation did not settle");
+                    glib::timeout_future(Duration::from_millis(10)).await;
+                }
+            });
+        }
+        fn displayed(window: &NowPlayingWindow, key: &str) -> bool {
+            window
+                .state
+                .track_presentation
+                .borrow()
+                .displayed_track
+                .as_ref()
+                .is_some_and(|track| track.track_key == key && track.artwork.is_some())
+                && window.ui.content_transition.is_child_revealed()
+        }
+
+        adw::init().expect("GTK initialization");
+        let mut settings = NowPlayingSettings::default();
+        settings.shared.transition = TransitionEffect::Crossfade;
+        settings.shared.transition_duration_ms = 500;
+        let window = NowPlayingWindow::new_with_controller(NowPlayingSettingsController::new(
+            settings, None,
+        ));
+        window.update(&message("a", 40));
+        assert!(window.state.deferred_artwork.borrow().is_some());
+        assert!(!displayed(&window, "a"));
+        window.present();
+        wait_until(|| displayed(&window, "a") && window.ui.window.is_mapped());
+
+        let second = message("b", 80);
+        let mut metadata_only = second.clone();
+        metadata_only.cover_image = None;
+        metadata_only.artwork_pending = true;
+        window.update(&metadata_only);
+        glib::MainContext::default().block_on(glib::timeout_future(Duration::from_millis(600)));
+        assert!(
+            displayed(&window, "a"),
+            "old scene must stay visible during the download"
+        );
+        window.update(&second);
+        wait_until(|| displayed(&window, "b"));
+        assert_eq!(window.ui.title_label.label(), "b");
+        assert!(window.ui.artwork.paintable().is_some());
+
+        settings.display_mode = DisplayMode::LightsOff;
+        window.state.settings.set(settings);
+        window.set_display_mode(DisplayMode::LightsOff);
+        window.update(&message("c", 120));
+        assert!(window.state.deferred_artwork.borrow().is_some());
+        assert!(!displayed(&window, "c"));
+        settings.display_mode = DisplayMode::Classic;
+        window.state.settings.set(settings);
+        window.set_display_mode(DisplayMode::Classic);
+        wait_until(|| displayed(&window, "c"));
+
+        window.close();
+        window.update(&message("d", 160));
+        window.update(&message("e", 200));
+        assert!(!displayed(&window, "e"));
+        window.present();
+        wait_until(|| displayed(&window, "e"));
+        // The reusable window normally lives until shutdown. Explicit test
+        // teardown must also detach its manually parented context popover.
+        if let Some(popover) = window
+            .controls
+            .display_mode_menu
+            .ancestor(gtk::Popover::static_type())
+        {
+            popover.unparent();
+        }
+        window.ui.window.destroy();
+    }
 
     #[test]
     fn transition_duration_is_split_across_hide_and_reveal() {

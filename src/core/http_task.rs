@@ -1,11 +1,11 @@
 use serde_json::Value;
 use soup::prelude::SessionExt;
 use std::cell::RefCell;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque, hash_map::Entry};
 use std::error::Error;
 use std::rc::Rc;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
 
 use crate::core::artwork::Artwork;
 use crate::core::thread_messages::*;
@@ -17,12 +17,14 @@ use crate::core::fingerprinting::signature_format::DecodedSignature;
 
 const PREFERRED_COVER_ART_SIZE_PX: u32 = 1_600;
 const ARTWORK_REQUEST_TIMEOUT_SECS: u32 = 4;
+const ARTWORK_IDLE_TIMEOUT_SECS: u32 = 60;
 const ARTWORK_FETCH_BUDGET: Duration = Duration::from_secs(6);
 const COVER_IMAGE_CACHE_CAPACITY: usize = 8;
 const COVER_IMAGE_CACHE_MAX_BYTES: usize = 96 * 1024 * 1024;
 
 /// A small process-local LRU cache avoids downloading the same artwork on each
-/// recognition interval while keeping the memory bound predictable.
+/// recognition interval or for different tracks on the same album. Keys are
+/// preferred artwork URLs, and retained image data has a predictable memory bound.
 #[derive(Default)]
 struct CoverImageCache {
     entries: VecDeque<(String, Arc<Artwork>)>,
@@ -30,22 +32,22 @@ struct CoverImageCache {
 }
 
 impl CoverImageCache {
-    fn get(&mut self, track_key: &str) -> Option<Arc<Artwork>> {
+    fn get(&mut self, artwork_key: &str) -> Option<Arc<Artwork>> {
         let position = self
             .entries
             .iter()
-            .position(|(cached_track_key, _)| cached_track_key == track_key)?;
+            .position(|(cached_key, _)| cached_key == artwork_key)?;
         let entry = self.entries.remove(position)?;
         let image = Arc::clone(&entry.1);
         self.entries.push_back(entry);
         Some(image)
     }
 
-    fn insert(&mut self, track_key: String, image: Arc<Artwork>) {
+    fn insert(&mut self, artwork_key: String, image: Arc<Artwork>) {
         if let Some(position) = self
             .entries
             .iter()
-            .position(|(cached_track_key, _)| cached_track_key == &track_key)
+            .position(|(cached_key, _)| cached_key == &artwork_key)
         {
             if let Some((_, previous)) = self.entries.remove(position) {
                 self.retained_bytes = self.retained_bytes.saturating_sub(previous.storage_bytes());
@@ -66,14 +68,82 @@ impl CoverImageCache {
         }
 
         self.retained_bytes = self.retained_bytes.saturating_add(image_bytes);
-        self.entries.push_back((track_key, image));
+        self.entries.push_back((artwork_key, image));
     }
 }
 
 #[derive(Default)]
 struct ArtworkRequestState {
     cache: CoverImageCache,
-    in_flight: HashSet<String>,
+    in_flight: HashMap<String, HashSet<String>>,
+    recent_tracks: VecDeque<(String, Weak<Artwork>)>,
+}
+
+impl ArtworkRequestState {
+    /// Preserve track-key cache hits when Shazam changes or omits its CDN URL.
+    /// Weak aliases share the URL cache's images without increasing its pixel budget.
+    fn cached_artwork(
+        &mut self,
+        track_key: &str,
+        artwork_key: Option<&str>,
+    ) -> Option<Arc<Artwork>> {
+        let known = self
+            .recent_tracks
+            .iter()
+            .find(|(key, _)| key == track_key)
+            .and_then(|(_, artwork)| artwork.upgrade());
+        let artwork = known.or_else(|| artwork_key.and_then(|key| self.cache.get(key)))?;
+        self.remember_track(track_key, &artwork);
+        Some(artwork)
+    }
+
+    fn remember_track(&mut self, track_key: &str, artwork: &Arc<Artwork>) {
+        self.recent_tracks
+            .retain(|(key, source)| key != track_key && source.strong_count() > 0);
+        if self.recent_tracks.len() >= COVER_IMAGE_CACHE_CAPACITY {
+            self.recent_tracks.pop_front();
+        }
+        self.recent_tracks
+            .push_back((track_key.to_owned(), Arc::downgrade(artwork)));
+    }
+
+    /// Coalesce tracks that reference the same image into a single request.
+    /// Returns whether the caller should start the download.
+    fn begin_request(&mut self, artwork_key: &str, track_key: &str) -> bool {
+        if self
+            .in_flight
+            .values()
+            .any(|tracks| tracks.contains(track_key))
+        {
+            return false;
+        }
+        match self.in_flight.entry(artwork_key.to_owned()) {
+            Entry::Occupied(mut request) => {
+                request.get_mut().insert(track_key.to_owned());
+                false
+            }
+            Entry::Vacant(request) => {
+                request.insert(HashSet::from([track_key.to_owned()]));
+                true
+            }
+        }
+    }
+
+    fn finish_request(
+        &mut self,
+        artwork_key: &str,
+        artwork: Option<&Arc<Artwork>>,
+    ) -> HashSet<String> {
+        let waiting_tracks = self.in_flight.remove(artwork_key).unwrap_or_default();
+        if let Some(artwork) = artwork {
+            self.cache
+                .insert(artwork_key.to_owned(), Arc::clone(artwork));
+            for track_key in &waiting_tracks {
+                self.remember_track(track_key, artwork);
+            }
+        }
+        waiting_tracks
+    }
 }
 
 struct ParsedRecognition {
@@ -180,15 +250,33 @@ async fn obtain_preferred_cover_image(
     session: &soup::Session,
     urls: Vec<String>,
 ) -> Option<Arc<Artwork>> {
-    for url in urls {
+    for (index, url) in urls.into_iter().enumerate() {
+        let started = Instant::now();
         match obtain_raw_cover_image(session, &url).await {
             Ok(bytes) => {
+                log::debug!(
+                    "Artwork candidate {}: downloaded {} bytes in {:?}",
+                    index + 1,
+                    bytes.len(),
+                    started.elapsed()
+                );
+                let decode_started = Instant::now();
                 if let Some(artwork) = decode_artwork(bytes).await {
+                    log::debug!(
+                        "Artwork candidate {}: decoded {}x{} in {:?}",
+                        index + 1,
+                        artwork.width(),
+                        artwork.height(),
+                        decode_started.elapsed()
+                    );
                     return Some(artwork);
                 }
                 log::debug!("Artwork candidate {url} contained invalid image data");
             }
-            Err(error) => log::debug!("Artwork candidate {url} was unavailable: {error}"),
+            Err(error) => log::debug!(
+                "Artwork candidate {url} failed after {:?}: {error}",
+                started.elapsed()
+            ),
         }
     }
 
@@ -286,8 +374,9 @@ mod tests {
     use std::sync::Arc;
 
     use super::{
-        COVER_IMAGE_CACHE_CAPACITY, COVER_IMAGE_CACHE_MAX_BYTES, CoverImageCache,
-        PREFERRED_COVER_ART_SIZE_PX, preferred_cover_image_urls, upscale_mzstatic_artwork_url,
+        ArtworkRequestState, COVER_IMAGE_CACHE_CAPACITY, COVER_IMAGE_CACHE_MAX_BYTES,
+        CoverImageCache, PREFERRED_COVER_ART_SIZE_PX, preferred_cover_image_urls,
+        upscale_mzstatic_artwork_url,
     };
     use crate::core::artwork::Artwork;
 
@@ -412,6 +501,80 @@ mod tests {
         assert_eq!(cache.entries.len(), COVER_IMAGE_CACHE_CAPACITY);
         assert!(cache.retained_bytes <= COVER_IMAGE_CACHE_MAX_BYTES);
     }
+
+    #[test]
+    fn tracks_on_the_same_album_share_one_download_and_cached_image() {
+        let mut state = ArtworkRequestState::default();
+        let url = "https://example.com/album.jpg";
+        assert!(state.begin_request(url, "track-a"));
+        assert!(!state.begin_request(url, "track-b"));
+        assert!(!state.begin_request(url, "track-a"));
+
+        let image = artwork(10);
+        let waiting_tracks = state.finish_request(url, Some(&image));
+        assert_eq!(waiting_tracks.len(), 2);
+        assert!(waiting_tracks.contains("track-a"));
+        assert!(waiting_tracks.contains("track-b"));
+        assert!(state.in_flight.is_empty());
+        assert!(Arc::ptr_eq(&state.cache.get(url).unwrap(), &image));
+        assert_eq!(state.cache.retained_bytes, image.storage_bytes());
+    }
+
+    #[test]
+    fn failed_shared_download_releases_all_waiters_and_allows_retry() {
+        let mut state = ArtworkRequestState::default();
+        let url = "https://example.com/album.jpg";
+        assert!(state.begin_request(url, "track-a"));
+        assert!(!state.begin_request(url, "track-b"));
+
+        assert_eq!(state.finish_request(url, None).len(), 2);
+        assert!(state.in_flight.is_empty());
+        assert!(state.cache.get(url).is_none());
+        assert!(state.begin_request(url, "track-b"));
+    }
+
+    #[test]
+    fn changed_or_missing_artwork_url_preserves_the_track_cache_hit() {
+        let mut state = ArtworkRequestState::default();
+        let image = artwork(10);
+        assert!(state.begin_request("https://cdn-a/album.jpg", "track-a"));
+        assert!(!state.begin_request("https://cdn-b/album.jpg", "track-a"));
+        state.finish_request("https://cdn-a/album.jpg", Some(&image));
+        assert!(Arc::ptr_eq(
+            &state
+                .cached_artwork("track-a", Some("https://cdn-b/album.jpg"))
+                .unwrap(),
+            &image
+        ));
+        assert!(Arc::ptr_eq(
+            &state.cached_artwork("track-a", None).unwrap(),
+            &image
+        ));
+        assert!(Arc::ptr_eq(
+            &state
+                .cached_artwork("track-b", Some("https://cdn-a/album.jpg"))
+                .unwrap(),
+            &image
+        ));
+        assert!(
+            state
+                .cached_artwork("track-c", Some("https://unrelated/other.jpg"))
+                .is_none()
+        );
+        assert_eq!(state.cache.retained_bytes, image.storage_bytes());
+    }
+
+    #[test]
+    fn track_cache_aliases_are_bounded_and_do_not_keep_evicted_pixels_alive() {
+        let mut state = ArtworkRequestState::default();
+        let image = artwork(10);
+        for i in 0..=super::COVER_IMAGE_CACHE_CAPACITY {
+            state.remember_track(&format!("track-{i}"), &image);
+        }
+        assert_eq!(state.recent_tracks.len(), super::COVER_IMAGE_CACHE_CAPACITY);
+        drop(image);
+        assert!(state.cached_artwork("track-1", None).is_none());
+    }
 }
 
 pub async fn http_task(
@@ -425,7 +588,9 @@ pub async fn http_task(
 
     let artwork_session = soup::Session::new();
     artwork_session.set_timeout(ARTWORK_REQUEST_TIMEOUT_SECS);
-    artwork_session.set_idle_timeout(2);
+    // Recognition intervals commonly exceed two seconds; retain the CDN
+    // connection so the next album does not need another TCP/TLS handshake.
+    artwork_session.set_idle_timeout(ARTWORK_IDLE_TIMEOUT_SECS);
     let artwork_state = Rc::new(RefCell::new(ArtworkRequestState::default()));
 
     while let Ok(message) = http_rx.recv().await {
@@ -435,7 +600,18 @@ pub async fn http_task(
                 match try_recognize_song(&recognition_session, *signature).await {
                     Ok(Some(parsed)) => {
                         let track_key = parsed.message.track_key.clone();
-                        let cached_artwork = artwork_state.borrow_mut().cache.get(&track_key);
+                        let artwork_key = parsed.artwork_urls.first().cloned();
+                        let cached_artwork = artwork_state
+                            .borrow_mut()
+                            .cached_artwork(&track_key, artwork_key.as_deref());
+                        log::debug!(
+                            "Artwork for track {track_key}: download cache {}",
+                            if cached_artwork.is_some() {
+                                "hit"
+                            } else {
+                                "miss"
+                            }
+                        );
                         let recognized_song = Arc::new(match cached_artwork {
                             Some(artwork) => parsed.message.with_cover_image(artwork),
                             None => parsed.message,
@@ -448,38 +624,39 @@ pub async fn http_task(
                         gui_tx.try_send(GUIMessage::RateLimitState(false)).unwrap();
 
                         if should_fetch_artwork
+                            && let Some(artwork_key) = artwork_key
                             && artwork_state
                                 .borrow_mut()
-                                .in_flight
-                                .insert(track_key.clone())
+                                .begin_request(&artwork_key, &track_key)
                         {
                             let artwork_session = artwork_session.clone();
                             let artwork_state = artwork_state.clone();
                             let gui_tx = gui_tx.clone();
                             glib::spawn_future_local(async move {
+                                let fetch_started = Instant::now();
+                                log::debug!("Artwork for track {track_key}: fetch started");
                                 let artwork =
                                     fetch_artwork(&artwork_session, parsed.artwork_urls).await;
-                                artwork_state.borrow_mut().in_flight.remove(&track_key);
+                                log::debug!(
+                                    "Artwork for track {track_key}: fetch/decode completed in {:?}, success={}",
+                                    fetch_started.elapsed(),
+                                    artwork.is_some()
+                                );
+                                let waiting_tracks = artwork_state
+                                    .borrow_mut()
+                                    .finish_request(&artwork_key, artwork.as_ref());
 
-                                if let Some(artwork) = artwork {
-                                    artwork_state
-                                        .borrow_mut()
-                                        .cache
-                                        .insert(track_key.clone(), artwork.clone());
-                                    if let Err(error) =
-                                        gui_tx.try_send(GUIMessage::ArtworkDownloaded {
+                                for track_key in waiting_tracks {
+                                    let message = match &artwork {
+                                        Some(artwork) => GUIMessage::ArtworkDownloaded {
                                             track_key,
-                                            artwork,
-                                        })
-                                    {
-                                        log::debug!(
-                                            "Unable to deliver downloaded artwork: {error}"
-                                        );
+                                            artwork: Arc::clone(artwork),
+                                        },
+                                        None => GUIMessage::ArtworkUnavailable { track_key },
+                                    };
+                                    if let Err(error) = gui_tx.try_send(message) {
+                                        log::debug!("Unable to deliver artwork result: {error}");
                                     }
-                                } else if let Err(error) =
-                                    gui_tx.try_send(GUIMessage::ArtworkUnavailable { track_key })
-                                {
-                                    log::debug!("Unable to report unavailable artwork: {error}");
                                 }
                             });
                         }

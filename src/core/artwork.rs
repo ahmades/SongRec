@@ -62,7 +62,7 @@ impl Artwork {
             return None;
         }
 
-        let rgba = image.to_rgba8();
+        let rgba = image.into_rgba8();
         let width = rgba.width();
         let height = rgba.height();
         let stride = usize::try_from(width).ok()?.checked_mul(4)?;

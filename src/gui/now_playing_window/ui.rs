@@ -4,7 +4,7 @@ use super::motion::BackdropMotion;
 use super::style::{
     ALBUM_CSS_CLASS, ALBUM_RESERVATION_CSS_CLASS, ARTIST_CSS_CLASS, ARTIST_RESERVATION_CSS_CLASS,
     DETAILS_CSS_CLASS, DETAILS_RESERVATION_CSS_CLASS, TITLE_CSS_CLASS, TITLE_RESERVATION_CSS_CLASS,
-    font_css_for_size,
+    TextCss,
 };
 use super::track::transition_leg_duration_ms;
 use super::transition::RevealerLayout;
@@ -492,7 +492,7 @@ pub(super) struct NowPlayingWidgets {
 }
 
 /// Builds the window, artwork presentation, metadata widgets, and static CSS providers.
-pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
+pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
     let window = gtk::Window::builder()
         .title("SongRec")
         .default_width(WINDOW_WIDTH)
@@ -682,18 +682,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, gtk::CssProvider) {
          .now-playing-artwork-rounded {{ border-radius: {ARTWORK_CORNER_RADIUS_PX}px; }}"
     ));
 
-    let text_css = gtk::CssProvider::new();
-    if let Some(display) = gdk::Display::default() {
-        gtk::style_context_add_provider_for_display(
-            &display,
-            &text_css,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-    }
-    text_css.load_from_string(&font_css_for_size(
-        (WINDOW_WIDTH, WINDOW_HEIGHT),
-        super::TextSize::default(),
-    ));
+    let text_css = TextCss::new((WINDOW_WIDTH, WINDOW_HEIGHT), super::TextSize::default());
 
     let key_controller = gtk::EventControllerKey::new();
     let window_for_key = window.downgrade();
@@ -946,6 +935,23 @@ mod tests {
         immersive_info_placement,
     };
     use crate::gui::now_playing_window::DisplayMode;
+    use adw::prelude::*;
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn artwork_layout_callbacks_do_not_retain_containers() {
+        gtk::init().expect("GTK initialization");
+
+        let cinema = super::CinemaArtworkLayout::new();
+        let cinema_container = cinema.container.downgrade();
+        drop(cinema);
+        assert!(cinema_container.upgrade().is_none());
+
+        let ambient = super::AmbientArtworkLayout::new();
+        let ambient_container = ambient.container.downgrade();
+        drop(ambient);
+        assert!(ambient_container.upgrade().is_none());
+    }
 
     #[test]
     fn classic_padding_adapts_between_minimum_and_desktop_sizes() {

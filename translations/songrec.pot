@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-04 15:07+0200\n"
+"POT-Creation-Date: 2026-09-07 23:26+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -366,7 +366,7 @@ msgstr ""
 msgid "Background style"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:129 src/gui/now_playing_window/ui.rs:538
+#: src/gui/now_playing_window/track.rs:142 src/gui/now_playing_window/ui.rs:538
 msgid "Listening..."
 msgstr ""
 

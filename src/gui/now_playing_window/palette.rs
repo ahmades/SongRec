@@ -1,7 +1,8 @@
 //! Derives Now Playing colors and combines them with GTK artwork textures.
 
 use crate::core::artwork::Artwork;
-use image::{ImageBuffer, Rgba};
+use gdk::prelude::TextureExt;
+use image::{DynamicImage, ImageBuffer, Rgba};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
@@ -47,6 +48,16 @@ impl PreparedArtwork {
     /// Whether this presentation was derived from the same decoded artwork.
     pub(super) fn matches(&self, artwork: &Arc<Artwork>) -> bool {
         Weak::ptr_eq(&self.source, &Arc::downgrade(artwork))
+    }
+
+    /// RGBA payload retained by the two textures, for the presentation cache budget.
+    pub(super) fn storage_bytes(&self) -> usize {
+        let rgba_bytes = |texture: &gdk::MemoryTexture| {
+            (texture.width() as usize)
+                .saturating_mul(texture.height() as usize)
+                .saturating_mul(4)
+        };
+        rgba_bytes(&self.texture).saturating_add(rgba_bytes(&self.ambient_texture))
     }
 }
 
@@ -131,13 +142,22 @@ where
 {
     let (width, height) =
         thumbnail_dimensions(image.width(), image.height(), AMBIENT_MAXIMUM_DIMENSION);
-    let mut thumbnail = image::imageops::thumbnail(image, width, height);
+    let mut thumbnail = if image.dimensions() == (width, height) {
+        // No resampling is needed for covers already within the ambient bound.
+        ImageBuffer::from_raw(width, height, image.as_raw().to_vec())
+            .expect("source image has a complete RGBA pixel buffer")
+    } else {
+        image::imageops::thumbnail(image, width, height)
+    };
 
     // Album covers are normally opaque, but compositing transparent pixels
     // before blurring avoids dark color fringes and guarantees an opaque GTK
     // background texture.
     for pixel in thumbnail.pixels_mut() {
         let [red, green, blue, alpha] = pixel.0;
+        if alpha == 255 {
+            continue;
+        }
         let alpha = f32::from(alpha) / 255.0;
         pixel.0 = [
             composite_channel(red, background.top.0, alpha),
@@ -147,7 +167,11 @@ where
         ];
     }
 
-    let mut ambient = image::imageops::blur(&thumbnail, AMBIENT_BLUR_SIGMA);
+    // DynamicImage selects the packed-u8 Gaussian implementation. The generic
+    // imageops route expands RGBA into two full-size f32 scratch buffers first.
+    let mut ambient = DynamicImage::ImageRgba8(thumbnail)
+        .blur(AMBIENT_BLUR_SIGMA)
+        .into_rgba8();
     apply_ambient_tone(&mut ambient);
 
     AmbientImage {
@@ -169,17 +193,31 @@ fn apply_ambient_tone(image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>) {
 
     for (x, y, pixel) in image.enumerate_pixels_mut() {
         let [red, green, blue, _alpha] = pixel.0;
-        let source = (red, green, blue);
-        let (hue, _saturation, lightness) = rgb_to_hsl(source);
-        let target_chroma = rgb_chroma(source) * colorfulness_strength(source);
-        let lightness = (lightness * AMBIENT_LIGHTNESS_MULTIPLIER).min(AMBIENT_MAX_LIGHTNESS);
-        let available_chroma = 1.0 - (2.0 * lightness - 1.0).abs();
-        let saturation = if available_chroma <= f32::EPSILON {
+        let channels = [red, green, blue].map(|channel| f32::from(channel) / 255.0);
+        let maximum = channels[0].max(channels[1]).max(channels[2]);
+        let minimum = channels[0].min(channels[1]).min(channels[2]);
+        let chroma = maximum - minimum;
+        let lightness = (maximum + minimum) / 2.0;
+        let colorfulness = if maximum <= f32::EPSILON {
             0.0
         } else {
-            (target_chroma / available_chroma).min(AMBIENT_MAX_SATURATION)
+            chroma / maximum
         };
-        let (red, green, blue) = hsl_to_rgb((hue, saturation, lightness));
+        let lightness = (lightness * AMBIENT_LIGHTNESS_MULTIPLIER).min(AMBIENT_MAX_LIGHTNESS);
+        let available_chroma = 1.0 - (2.0 * lightness - 1.0).abs();
+        let target_chroma = (chroma * colorfulness_from_saturation(colorfulness))
+            .min(available_chroma * AMBIENT_MAX_SATURATION);
+        let chroma_scale = if chroma <= f32::EPSILON {
+            0.0
+        } else {
+            target_chroma / chroma
+        };
+        let offset = lightness - target_chroma / 2.0;
+        // Scaling RGB around its minimum preserves hue without the per-pixel
+        // RGB -> HSL -> RGB conversion and its hue divisions/remainders.
+        let [red, green, blue] = channels.map(|channel| {
+            (((channel - minimum) * chroma_scale + offset).clamp(0.0, 1.0) * 255.0).round() as u8
+        });
 
         let normalized_x = ((x as f32 + 0.5) / width) * 2.0 - 1.0;
         let normalized_y = ((y as f32 + 0.5) / height) * 2.0 - 1.0;
@@ -341,7 +379,11 @@ fn hsv_saturation(rgb @ (red, green, blue): Rgb) -> f32 {
 
 /// Smoothly suppresses near-neutral color while avoiding threshold jumps from JPEG noise.
 fn colorfulness_strength(rgb: Rgb) -> f32 {
-    let progress = ((hsv_saturation(rgb) - NEUTRAL_COLORFULNESS_START)
+    colorfulness_from_saturation(hsv_saturation(rgb))
+}
+
+fn colorfulness_from_saturation(saturation: f32) -> f32 {
+    let progress = ((saturation - NEUTRAL_COLORFULNESS_START)
         / (FULL_COLORFULNESS_START - NEUTRAL_COLORFULNESS_START))
         .clamp(0.0, 1.0);
     progress * progress * (3.0 - 2.0 * progress)
@@ -396,8 +438,10 @@ fn contrast_ratio(first: Rgb, second: Rgb) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        AMBIENT_MAXIMUM_DIMENSION, ArtworkVisuals, Background, colorfulness_strength,
-        contrast_ratio, generate_ambient_image, generate_background, hsv_saturation,
+        AMBIENT_BLUR_SIGMA, AMBIENT_LIGHTNESS_MULTIPLIER, AMBIENT_MAX_LIGHTNESS,
+        AMBIENT_MAX_SATURATION, AMBIENT_MAXIMUM_DIMENSION, ArtworkVisuals, Background,
+        apply_ambient_tone, colorfulness_strength, contrast_ratio, generate_ambient_image,
+        generate_background, hsl_to_rgb, hsv_saturation, rgb_chroma, rgb_to_hsl,
         thumbnail_dimensions, visuals_from_artwork,
     };
     use crate::core::artwork::Artwork;
@@ -551,6 +595,65 @@ mod tests {
 
         assert!(output[0] > output[1] && output[1] > output[2]);
         assert!(channel_range(output) >= 150);
+    }
+
+    #[test]
+    fn ambient_rgb_tone_matches_the_hsl_treatment_within_rounding() {
+        // Include black/white, nearly neutral colors, and both sides of byte
+        // midpoints to exercise low-chroma and saturation-clamped colors.
+        let levels = [0, 1, 16, 32, 64, 96, 127, 128, 160, 192, 224, 254, 255];
+        for red in levels {
+            let mut image =
+                ImageBuffer::from_fn(levels.len() as u32, levels.len() as u32, |x, y| {
+                    Rgba([red, levels[x as usize], levels[y as usize], 255])
+                });
+            apply_ambient_tone(&mut image);
+            for (x, y, actual) in image.enumerate_pixels() {
+                let source = (red, levels[x as usize], levels[y as usize]);
+                let (hue, _, lightness) = rgb_to_hsl(source);
+                let lightness =
+                    (lightness * AMBIENT_LIGHTNESS_MULTIPLIER).min(AMBIENT_MAX_LIGHTNESS);
+                let available_chroma = 1.0 - (2.0 * lightness - 1.0).abs();
+                let saturation = if available_chroma <= f32::EPSILON {
+                    0.0
+                } else {
+                    (rgb_chroma(source) * colorfulness_strength(source) / available_chroma)
+                        .min(AMBIENT_MAX_SATURATION)
+                };
+                let (r, g, b) = hsl_to_rgb((hue, saturation, lightness));
+                for (actual, expected) in actual.0.into_iter().zip([r, g, b, 255]) {
+                    assert!(
+                        actual.abs_diff(expected) <= 1,
+                        "tone changed for {source:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn packed_gaussian_preserves_the_generic_background_treatment() {
+        // Odd dimensions and abrupt color changes exercise filter edges as
+        // well as its interior; both paths use the same Gaussian sigma.
+        let image = ImageBuffer::from_fn(97, 67, |x, y| {
+            Rgba([
+                ((x * 13 + y * 7) % 256) as u8,
+                ((x * 3 + y * 19) % 256) as u8,
+                ((x * 23 + y * 5) % 256) as u8,
+                255,
+            ])
+        });
+        let mut reference = image::imageops::blur(&image, AMBIENT_BLUR_SIGMA);
+        apply_ambient_tone(&mut reference);
+        let actual = generate_ambient_image(&image, Background::fallback());
+
+        assert_eq!((actual.width, actual.height), reference.dimensions());
+        for (actual, expected) in actual.rgba.iter().zip(reference.as_raw()) {
+            assert!(
+                actual.abs_diff(*expected) <= 2,
+                "Gaussian treatment changed"
+            );
+        }
     }
 
     #[test]

@@ -6,9 +6,14 @@ use super::palette::{Background, PreparedArtwork};
 use crate::core::artwork::Artwork;
 use crate::core::thread_messages::SongRecognizedMessage;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
+use std::time::Instant;
+
+const PREPARED_ARTWORK_CACHE_CAPACITY: usize = 4;
+const PREPARED_ARTWORK_CACHE_MAX_BYTES: usize = 32 * 1024 * 1024;
+const MAX_ARTWORK_PREPARATIONS: usize = 2;
 
 /// The content currently represented by the artwork portion of the window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +100,30 @@ impl PresentedTrack {
                 .as_ref()
                 .is_some_and(|expected| Weak::ptr_eq(expected, &Arc::downgrade(source)))
     }
+
+    fn same_presentation(&self, other: &Self) -> bool {
+        self.track_key == other.track_key
+            && self.song_name == other.song_name
+            && self.artist_name == other.artist_name
+            && self.album_name == other.album_name
+            && self.release_year == other.release_year
+            && self.artwork_pending == other.artwork_pending
+            && match (
+                &self.expected_artwork_source,
+                &other.expected_artwork_source,
+            ) {
+                (Some(a), Some(b)) => Weak::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+            && match (&self.artwork, &other.artwork) {
+                (Some(a), Some(b)) => {
+                    a.texture == b.texture && a.ambient_texture == b.ambient_texture
+                }
+                (None, None) => true,
+                _ => false,
+            }
+    }
 }
 
 /// A rendering operation produced by the pure track state machine.
@@ -112,6 +141,7 @@ pub(super) struct TrackPresentationState {
     pub(super) displayed_track: Option<Rc<PresentedTrack>>,
     pub(super) pending_track: Option<Rc<PresentedTrack>>,
     pending_transition_phase: Option<PendingTransitionPhase>,
+    prepared_cache: VecDeque<PreparedArtwork>,
     pub(super) mode: PresentationMode,
 }
 
@@ -137,6 +167,7 @@ impl Default for TrackPresentationState {
             displayed_track: None,
             pending_track: None,
             pending_transition_phase: None,
+            prepared_cache: VecDeque::new(),
             mode: PresentationMode::Listening,
         }
     }
@@ -144,23 +175,50 @@ impl Default for TrackPresentationState {
 
 impl TrackPresentationState {
     /// Reuses already prepared UI artwork for a repeated recognition update.
-    pub(super) fn prepared_artwork_for(
-        &self,
-        track_key: &str,
-        artwork: &Arc<Artwork>,
-    ) -> Option<PreparedArtwork> {
+    pub(super) fn prepared_artwork_for(&self, artwork: &Arc<Artwork>) -> Option<PreparedArtwork> {
         self.pending_track
             .as_ref()
             .into_iter()
             .chain(self.displayed_track.as_ref())
-            .filter(|track| track.track_key == track_key)
-            .find_map(|track| {
-                track
-                    .artwork
-                    .as_ref()
-                    .filter(|prepared| prepared.matches(artwork))
-                    .cloned()
+            .filter_map(|track| track.artwork.as_ref())
+            .chain(self.prepared_cache.iter())
+            .find(|prepared| prepared.matches(artwork))
+            .cloned()
+    }
+
+    /// Finds the current recipient before spending main-thread work on textures.
+    /// Album tracks can share the same decoded source, including while a job runs.
+    pub(super) fn track_key_for_artwork(&self, source: &Arc<Artwork>) -> Option<String> {
+        self.pending_track
+            .as_ref()
+            .or(self.displayed_track.as_ref())
+            .filter(|track| {
+                track.artwork.is_none() && track.matches_artwork_source(&track.track_key, source)
             })
+            .map(|track| track.track_key.clone())
+    }
+
+    fn cache_artwork(&mut self, artwork: &PreparedArtwork) {
+        let bytes = artwork.storage_bytes();
+        if bytes > PREPARED_ARTWORK_CACHE_MAX_BYTES {
+            return;
+        }
+        self.prepared_cache
+            .retain(|cached| cached.texture != artwork.texture);
+        let mut total_bytes = self
+            .prepared_cache
+            .iter()
+            .map(PreparedArtwork::storage_bytes)
+            .sum::<usize>();
+        while self.prepared_cache.len() >= PREPARED_ARTWORK_CACHE_CAPACITY
+            || total_bytes + bytes > PREPARED_ARTWORK_CACHE_MAX_BYTES
+        {
+            let Some(oldest) = self.prepared_cache.pop_front() else {
+                break;
+            };
+            total_bytes -= oldest.storage_bytes();
+        }
+        self.prepared_cache.push_back(artwork.clone());
     }
 
     /// Attaches worker-prepared artwork only to the latest matching track.
@@ -173,7 +231,11 @@ impl TrackPresentationState {
         source: &Arc<Artwork>,
         artwork: PreparedArtwork,
     ) -> PresentationAction {
-        match self.prepared_artwork_target(track_key, source) {
+        let target = self.prepared_artwork_target(track_key, source);
+        if target.is_some() {
+            self.cache_artwork(&artwork);
+        }
+        match target {
             Some(PreparedArtworkTarget::Pending) => {
                 let pending = self
                     .pending_track
@@ -213,6 +275,16 @@ impl TrackPresentationState {
         can_animate: bool,
         wait_for_artwork: bool,
     ) -> PresentationAction {
+        // Repeated recognition of an unchanged scene must not rebuild its labels,
+        // textures, layouts and background, or restart the current reveal leg.
+        if self
+            .pending_track
+            .as_ref()
+            .or(self.displayed_track.as_ref())
+            .is_some_and(|current| current.same_presentation(&track))
+        {
+            return PresentationAction::None;
+        }
         if let Some(phase) = self.pending_transition_phase {
             self.pending_track = Some(track.clone());
             return match phase {
@@ -387,37 +459,54 @@ impl TrackPresentationState {
     }
 }
 
-/// Coalesces palette jobs and lets a newer artwork source supersede an older one.
+pub(super) struct ArtworkPreparationJob {
+    pub(super) artwork: Arc<Artwork>,
+    pub(super) queued_at: Instant,
+}
+
+/// Allows the newest image to start beside obsolete work, with bounded concurrency.
 #[derive(Default)]
 pub(super) struct ArtworkPreparationJobs {
-    sources: HashMap<String, Weak<Artwork>>,
+    active: Vec<Weak<Artwork>>,
+    queued: Option<ArtworkPreparationJob>,
 }
 
 impl ArtworkPreparationJobs {
-    pub(super) fn start(&mut self, track_key: &str, artwork: &Arc<Artwork>) -> bool {
-        let source = Arc::downgrade(artwork);
+    /// Returns work when a worker is available; otherwise retains only the newest job.
+    pub(super) fn enqueue(&mut self, artwork: Arc<Artwork>) -> Option<ArtworkPreparationJob> {
+        let source = Arc::downgrade(&artwork);
         if self
-            .sources
-            .get(track_key)
-            .is_some_and(|current| Weak::ptr_eq(current, &source))
+            .active
+            .iter()
+            .any(|active| Weak::ptr_eq(active, &source))
         {
-            return false;
+            self.queued = None;
+            return None;
         }
-
-        self.sources.insert(track_key.to_string(), source);
-        true
+        let job = ArtworkPreparationJob {
+            artwork,
+            queued_at: Instant::now(),
+        };
+        if self.active.len() >= MAX_ARTWORK_PREPARATIONS {
+            self.queued = Some(job);
+            return None;
+        }
+        self.active.push(source);
+        Some(job)
     }
 
-    pub(super) fn finish(&mut self, track_key: &str, artwork: &Arc<Artwork>) -> bool {
+    pub(super) fn finish(&mut self, artwork: &Arc<Artwork>) -> Option<ArtworkPreparationJob> {
         let source = Arc::downgrade(artwork);
-        let is_current = self
-            .sources
-            .get(track_key)
-            .is_some_and(|current| Weak::ptr_eq(current, &source));
-        if is_current {
-            self.sources.remove(track_key);
+        let index = self
+            .active
+            .iter()
+            .position(|active| Weak::ptr_eq(active, &source))?;
+        self.active.swap_remove(index);
+        let next = self.queued.take();
+        if let Some(job) = &next {
+            self.active.push(Arc::downgrade(&job.artwork));
         }
-        is_current
+        next
     }
 }
 
@@ -432,6 +521,8 @@ pub(super) struct NowPlayingState {
     pub(super) current_background: Rc<Cell<Background>>,
     pub(super) track_presentation: Rc<RefCell<TrackPresentationState>>,
     pub(super) artwork_preparations: Rc<RefCell<ArtworkPreparationJobs>>,
+    /// Only the latest source is needed when presentation is hidden or artwork-free.
+    pub(super) deferred_artwork: Rc<RefCell<Option<Arc<Artwork>>>>,
 }
 
 impl NowPlayingState {
@@ -443,6 +534,7 @@ impl NowPlayingState {
             current_background: Rc::new(Cell::new(Background::fallback())),
             track_presentation: Rc::new(RefCell::new(TrackPresentationState::default())),
             artwork_preparations: Rc::new(RefCell::new(ArtworkPreparationJobs::default())),
+            deferred_artwork: Rc::new(RefCell::new(None)),
         }
     }
 }
@@ -451,8 +543,9 @@ impl NowPlayingState {
 mod tests {
     use super::super::palette::{ArtworkVisuals, prepare_artwork};
     use super::{
-        ArtworkPreparationJobs, PendingTransitionPhase, PreparedArtworkTarget, PresentationAction,
-        PresentationMode, PresentedTrack, TrackPresentationState,
+        ArtworkPreparationJobs, PREPARED_ARTWORK_CACHE_CAPACITY, PendingTransitionPhase,
+        PreparedArtworkTarget, PresentationAction, PresentationMode, PresentedTrack,
+        TrackPresentationState,
     };
     use crate::core::artwork::Artwork;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
@@ -840,17 +933,108 @@ mod tests {
     }
 
     #[test]
-    fn palette_jobs_coalesce_and_new_artwork_supersedes_old_work() {
+    fn new_artwork_starts_beside_obsolete_work_and_the_queue_stays_bounded() {
         let first = artwork(1);
-        let same_source = first.clone();
         let replacement = artwork(2);
+        let newest = artwork(3);
+        let skipped = artwork(4);
         let mut jobs = ArtworkPreparationJobs::default();
 
-        assert!(jobs.start("track", &first));
-        assert!(!jobs.start("track", &same_source));
-        assert!(jobs.start("track", &replacement));
-        assert!(!jobs.finish("track", &first));
-        assert!(jobs.finish("track", &replacement));
-        assert!(jobs.start("track", &first));
+        assert!(Arc::ptr_eq(
+            &jobs.enqueue(first.clone()).unwrap().artwork,
+            &first
+        ));
+        assert!(jobs.enqueue(first.clone()).is_none());
+        assert!(Arc::ptr_eq(
+            &jobs.enqueue(replacement.clone()).unwrap().artwork,
+            &replacement
+        ));
+        assert!(jobs.enqueue(skipped).is_none());
+        assert!(jobs.enqueue(newest.clone()).is_none());
+        assert!(Arc::ptr_eq(&jobs.finish(&first).unwrap().artwork, &newest));
+        assert_eq!(jobs.active.len(), 2);
+        assert!(jobs.finish(&replacement).is_none());
+        assert!(jobs.finish(&newest).is_none());
+        assert!(jobs.active.is_empty());
+    }
+
+    #[test]
+    fn returning_to_active_artwork_cancels_the_obsolete_queued_source() {
+        let first = artwork(1);
+        let second = artwork(2);
+        let mut jobs = ArtworkPreparationJobs::default();
+        jobs.enqueue(first.clone());
+        jobs.enqueue(second.clone());
+        jobs.enqueue(artwork(3));
+        assert!(jobs.enqueue(first.clone()).is_none());
+        assert!(jobs.finish(&second).is_none());
+        assert!(jobs.finish(&first).is_none());
+    }
+
+    #[test]
+    fn unchanged_recognition_does_not_reapply_the_scene_but_metadata_changes_do() {
+        let source = artwork(1);
+        let track = Rc::new(track_expecting("a", &source).with_artwork(prepared_artwork(&source)));
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track.clone(), false, true);
+        assert!(matches!(
+            state.receive_track(track.clone(), true, true),
+            PresentationAction::None
+        ));
+
+        let mut changed = (*track).clone();
+        changed.album_name = Some("Updated album".to_string());
+        assert_rendered_track(state.receive_track(Rc::new(changed), true, true), "a");
+    }
+
+    #[test]
+    fn shared_album_artwork_is_reused_after_listening_without_another_preparation() {
+        let source = artwork(1);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(pending_track_expecting("a", &source), false, true);
+        state.apply_prepared_artwork("a", &source, prepared_artwork(&source));
+        assert!(state.track_key_for_artwork(&source).is_none());
+        let texture = state.prepared_artwork_for(&source).unwrap().texture;
+        state.show_listening();
+        let cached = state.prepared_artwork_for(&source).unwrap();
+        assert_eq!(cached.texture, texture);
+        let next = Rc::new(track_expecting("b", &source).with_artwork(cached));
+        assert_rendered_track(state.receive_track(next, true, true), "b");
+        assert_eq!(state.mode, PresentationMode::TrackWithArtwork);
+    }
+
+    #[test]
+    fn prepared_cache_evicts_old_entries_and_rejects_an_unrelated_source() {
+        let mut state = TrackPresentationState::default();
+        let sources = (0..=PREPARED_ARTWORK_CACHE_CAPACITY)
+            .map(|i| artwork(i as u8))
+            .collect::<Vec<_>>();
+        for source in &sources {
+            state.cache_artwork(&prepared_artwork(source));
+        }
+        assert_eq!(state.prepared_cache.len(), PREPARED_ARTWORK_CACHE_CAPACITY);
+        assert!(state.prepared_artwork_for(&sources[0]).is_none());
+        assert!(
+            state
+                .prepared_artwork_for(sources.last().unwrap())
+                .is_some()
+        );
+        assert!(state.prepared_artwork_for(&artwork(4)).is_none());
+    }
+
+    #[test]
+    fn shared_in_flight_artwork_follows_the_latest_track_on_the_album() {
+        let source = artwork(1);
+        let stale = artwork(2);
+        let mut state = TrackPresentationState::default();
+        state.receive_track(pending_track_expecting("a", &source), false, true);
+        state.receive_track(pending_track_expecting("b", &source), true, true);
+        assert_eq!(state.track_key_for_artwork(&source).as_deref(), Some("b"));
+        assert!(state.track_key_for_artwork(&stale).is_none());
+        assert!(matches!(
+            state.apply_prepared_artwork("b", &source, prepared_artwork(&source)),
+            PresentationAction::BeginTransition
+        ));
+        assert_rendered_track(state.transition_hidden(true), "b");
     }
 }

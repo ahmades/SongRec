@@ -5,6 +5,8 @@
 
 use super::{NowPlayingWindow, TextSize};
 use adw::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 const BASE_SCALE_WIDTH: f64 = 720.0;
 const BASE_SCALE_HEIGHT: f64 = 820.0;
@@ -24,12 +26,48 @@ pub(super) const ARTIST_RESERVATION_CSS_CLASS: &str = "now-playing-artist-reserv
 pub(super) const ALBUM_RESERVATION_CSS_CLASS: &str = "now-playing-album-reservation";
 pub(super) const DETAILS_RESERVATION_CSS_CLASS: &str = "now-playing-details-reservation";
 
+/// Shares responsive typography and its cache across resize and setting callbacks.
+#[derive(Clone)]
+pub(super) struct TextCss {
+    provider: gtk::CssProvider,
+    sizes: Rc<Cell<Option<(MetadataFontSizes, MetadataFontSizes)>>>,
+}
+
+impl TextCss {
+    pub(super) fn new(size: (i32, i32), text_size: TextSize) -> Self {
+        let provider = gtk::CssProvider::new();
+        if let Some(display) = gdk::Display::default() {
+            gtk::style_context_add_provider_for_display(
+                &display,
+                &provider,
+                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+        }
+        let text_css = Self {
+            provider,
+            sizes: Rc::new(Cell::new(None)),
+        };
+        text_css.load_for_size(size, text_size);
+        text_css
+    }
+
+    fn load_for_size(&self, size: (i32, i32), text_size: TextSize) {
+        let sizes = (
+            metadata_font_sizes_for_size(size, text_size),
+            metadata_font_sizes_for_size(size, TextSize::LARGE),
+        );
+        if self.sizes.replace(Some(sizes)) == Some(sizes) {
+            return;
+        }
+        // Reloading a display-wide provider invalidates styles and text layout.
+        // Many one-pixel resizes produce exactly the same rounded font sizes.
+        self.provider
+            .load_from_string(&font_css_for_size(size, text_size));
+    }
+}
+
 /// Loads metadata CSS for the current viewport and selected relative size.
-pub(super) fn load_text_css(
-    provider: &gtk::CssProvider,
-    viewport: &gtk::DrawingArea,
-    text_size: TextSize,
-) {
+pub(super) fn load_text_css(provider: &TextCss, viewport: &gtk::DrawingArea, text_size: TextSize) {
     let width = viewport.width();
     let height = viewport.height();
     let viewport_size = if width > 0 && height > 0 {
@@ -37,7 +75,7 @@ pub(super) fn load_text_css(
     } else {
         (BASE_SCALE_WIDTH as i32, BASE_SCALE_HEIGHT as i32)
     };
-    provider.load_from_string(&font_css_for_size(viewport_size, text_size));
+    provider.load_for_size(viewport_size, text_size);
 }
 
 impl NowPlayingWindow {

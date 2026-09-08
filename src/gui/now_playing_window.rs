@@ -49,7 +49,7 @@ pub struct NowPlayingWindow {
     controls: NowPlayingControls,
     state: NowPlayingState,
     controller: NowPlayingSettingsController,
-    text_css: gtk::CssProvider,
+    text_css: style::TextCss,
 }
 
 impl NowPlayingWindow {
@@ -79,6 +79,7 @@ impl NowPlayingWindow {
     /// Presents the Now Playing window to the user.
     pub fn present(&self) {
         self.ui.window.present();
+        self.resume_artwork_preparation();
     }
 
     /// Closes the window while keeping its internal state available for reuse.

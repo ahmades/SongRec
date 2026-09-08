@@ -80,6 +80,7 @@ impl NowPlayingWindow {
         });
         TrackPresentation::from_window(self).refresh_mode();
         self.reconcile_pending_transition();
+        self.resume_artwork_preparation();
     }
 
     /// Synchronizes the shared immersive-background motion controls and renderer.
