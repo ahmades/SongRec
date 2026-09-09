@@ -8,6 +8,7 @@ use super::style::{
 };
 use super::track::transition_leg_duration_ms;
 use super::transition::RevealerLayout;
+use super::tuning::layout::*;
 use super::{
     AlbumCoverSize, DisplayMode, TRANSITION_DURATION_DEFAULT_MS, TrackInfoAlignment,
     TransitionEffect,
@@ -17,23 +18,6 @@ use gettextrs::gettext;
 use std::cell::Cell;
 use std::rc::Rc;
 
-const WINDOW_WIDTH: i32 = 720;
-const WINDOW_HEIGHT: i32 = 820;
-const MIN_WINDOW_WIDTH: i32 = 360;
-const MIN_WINDOW_HEIGHT: i32 = 410;
-const MIN_ARTWORK_SIZE: i32 = 135;
-const ARTWORK_MARGIN_PX: i32 = 24;
-const ARTWORK_CORNER_RADIUS_PX: i32 = 18;
-const ROOT_SPACING: i32 = 18;
-const INFO_BOX_SPACING: i32 = 2;
-const CLASSIC_PADDING_MIN_PX: i32 = 32;
-const CLASSIC_PADDING_MAX_PX: i32 = 96;
-const IMMERSIVE_MARGIN_MIN_PX: i32 = 28;
-const IMMERSIVE_MARGIN_MAX_PX: i32 = 96;
-const CINEMA_CROP_RETENTION_MINIMUM: f64 = 0.75;
-const CINEMA_PORTRAIT_ARTWORK_MAX_HEIGHT_FRACTION: f64 = 0.70;
-pub(super) const AMBIENT_FOREGROUND_OPACITY: f64 = 0.4;
-const SECONDARY_METADATA_OPACITY: f64 = 0.72;
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
 const IMMERSIVE_INFO_CSS_CLASS: &str = "now-playing-immersive-info";
 
@@ -47,6 +31,30 @@ pub(super) enum CinemaFraming {
     Wide,
     /// Preserve the complete artwork on one side and use Ambient fill beside it.
     Tall,
+}
+
+/// Artwork and metadata use the same aspect-ratio decision and remaining space.
+pub(super) struct CinemaLayout {
+    framing: CinemaFraming,
+    artwork: gdk::Rectangle,
+    metadata: gdk::Rectangle,
+}
+
+fn cinema_layout(width: i32, height: i32, source: (i32, i32)) -> CinemaLayout {
+    let framing = cinema_framing(width, height, source);
+    let artwork = cinema_artwork_rect(width, height, source);
+    let metadata = if height > width && artwork.y() > 0 {
+        gdk::Rectangle::new(0, 0, width.max(0), artwork.y())
+    } else if framing == CinemaFraming::Wide {
+        gdk::Rectangle::new(0, 0, artwork.x(), height.max(0))
+    } else {
+        gdk::Rectangle::new(0, 0, width.max(0), height.max(0))
+    };
+    CinemaLayout {
+        framing,
+        artwork,
+        metadata,
+    }
 }
 
 /// Cinema artwork with an automatic non-destructive fallback for mismatched aspect ratios.
@@ -104,11 +112,14 @@ impl CinemaArtworkLayout {
                 return None;
             }
 
-            Some(cinema_artwork_rect(
-                overlay.width(),
-                overlay.height(),
-                source_dimensions_for_position.get(),
-            ))
+            Some(
+                cinema_layout(
+                    overlay.width(),
+                    overlay.height(),
+                    source_dimensions_for_position.get(),
+                )
+                .artwork,
+            )
         });
 
         Self {
@@ -149,7 +160,11 @@ impl CinemaArtworkLayout {
     }
 
     pub(super) fn framing(&self, width: i32, height: i32) -> CinemaFraming {
-        cinema_framing(width, height, self.source_dimensions.get())
+        self.layout(width, height).framing
+    }
+
+    pub(super) fn layout(&self, width: i32, height: i32) -> CinemaLayout {
+        cinema_layout(width, height, self.source_dimensions.get())
     }
 }
 
@@ -299,50 +314,174 @@ impl AlbumCoverLayout {
 /// Temporarily anchoring the revealer and fixing its child's natural size to the
 /// viewport lets GTK take its bounded natural-size path instead.
 #[derive(Clone)]
-pub(super) struct TrackTransitionLayout {
+pub(super) struct TrackTransitionLayout(Rc<TrackTransitionInner>);
+
+type TransitionCompletion = Rc<dyn Fn(bool) -> Option<(TransitionEffect, u32)>>;
+
+struct TrackTransitionInner {
     revealer: gtk::Revealer,
     reservation: gtk::Box,
     viewport_sync_generation: Rc<Cell<u64>>,
+    canvas: glib::WeakRef<gtk::Overlay>,
+    outgoing: gtk::Picture,
+    crossfade: adw::TimedAnimation,
+    crossfading: Cell<bool>,
+    generation: Cell<u64>,
+    completion: std::cell::RefCell<Option<TransitionCompletion>>,
 }
 
 impl TrackTransitionLayout {
-    fn new(revealer: gtk::Revealer, reservation: gtk::Box) -> Self {
-        Self {
+    fn new(revealer: gtk::Revealer, reservation: gtk::Box, canvas: &gtk::Overlay) -> Self {
+        // Snapshot pixels/render nodes are retained only while a crossfade is
+        // active. The incoming live scene is never reparented or inverse-scaled.
+        let outgoing = gtk::Picture::builder()
+            .content_fit(gtk::ContentFit::Fill)
+            .can_shrink(true)
+            .hexpand(true)
+            .vexpand(true)
+            .can_target(false)
+            .visible(false)
+            .build();
+        canvas.add_overlay(&outgoing);
+        canvas.set_measure_overlay(&outgoing, false);
+        canvas.set_clip_overlay(&outgoing, true);
+        let outgoing_weak = outgoing.downgrade();
+        let target = adw::CallbackAnimationTarget::new(move |opacity| {
+            if let Some(outgoing) = outgoing_weak.upgrade() {
+                outgoing.set_opacity(opacity);
+            }
+        });
+        let crossfade = adw::TimedAnimation::new(canvas, 1.0, 0.0, 1, target);
+        crossfade.set_easing(adw::Easing::Linear);
+        let transition = Self(Rc::new(TrackTransitionInner {
             revealer,
             reservation,
             viewport_sync_generation: Rc::new(Cell::new(0)),
+            canvas: canvas.downgrade(),
+            outgoing,
+            crossfade,
+            crossfading: Cell::new(false),
+            generation: Cell::new(0),
+            completion: std::cell::RefCell::new(None),
+        }));
+        let weak = Rc::downgrade(&transition.0);
+        transition.0.crossfade.connect_done(move |_| {
+            let Some(inner) = weak.upgrade() else {
+                return;
+            };
+            let transition = Self(inner);
+            if transition.0.crossfading.replace(false) {
+                transition.clear_snapshot();
+                transition.completed(true);
+            }
+        });
+        let weak = Rc::downgrade(&transition.0);
+        transition
+            .0
+            .revealer
+            .connect_child_revealed_notify(move |revealer| {
+                let Some(inner) = weak.upgrade() else {
+                    return;
+                };
+                let transition = Self(inner);
+                if transition.0.crossfading.get() {
+                    return;
+                }
+                let revealed = revealer.is_child_revealed();
+                if revealed {
+                    transition.restore_layout();
+                }
+                transition.completed(revealed);
+            });
+        transition
+    }
+
+    pub(super) fn connect_completed<F>(&self, callback: F)
+    where
+        F: Fn(bool) -> Option<(TransitionEffect, u32)> + 'static,
+    {
+        *self.0.completion.borrow_mut() = Some(Rc::new(callback));
+    }
+
+    fn completed(&self, revealed: bool) {
+        let callback = self.0.completion.borrow().clone();
+        let next = callback.and_then(|callback| callback(revealed));
+        if !revealed {
+            if self.0.crossfading.get() {
+                self.reveal();
+            } else {
+                // Let the outgoing completion dispatch finish before starting
+                // the reverse leg. The generation guard also discards a queued
+                // continuation if the scene is cleared or the window is hidden.
+                self.after_completion_notify(|transition| transition.reveal());
+            }
+        } else if let Some((effect, duration)) = next {
+            self.after_completion_notify(move |transition| transition.begin(effect, duration));
         }
     }
 
-    pub(super) fn revealer(&self) -> &gtk::Revealer {
-        &self.revealer
+    fn after_completion_notify(&self, action: impl FnOnce(Self) + 'static) {
+        let weak = Rc::downgrade(&self.0);
+        let generation = self.0.generation.get();
+        glib::idle_add_local_once(move || {
+            if let Some(inner) = weak.upgrade()
+                && inner.generation.get() == generation
+            {
+                action(Self(inner));
+            }
+        });
+    }
+
+    fn clear_snapshot(&self) {
+        self.0.outgoing.set_visible(false);
+        self.0
+            .outgoing
+            .set_paintable(Option::<&gdk::Paintable>::None);
+    }
+
+    fn begin_crossfade(&self, leg_duration_ms: u32) -> bool {
+        let Some(canvas) = self.0.canvas.upgrade() else {
+            return false;
+        };
+        let snapshot = gtk::WidgetPaintable::new(Some(&canvas)).current_image();
+        if snapshot.intrinsic_width() <= 0 || snapshot.intrinsic_height() <= 0 {
+            return false;
+        }
+        self.restore_layout();
+        self.0.crossfading.set(true);
+        self.0.crossfade.reset();
+        self.0.outgoing.set_paintable(Some(&snapshot));
+        self.0.outgoing.set_opacity(1.0);
+        self.0.outgoing.set_visible(true);
+        self.0
+            .revealer
+            .set_transition_type(gtk::RevealerTransitionType::None);
+        // The old immutable canvas covers the immediate replacement. Fade it
+        // out over the complete user-facing duration, blending old directly
+        // into new instead of exposing the palette at a hidden midpoint.
+        self.completed(false);
+        self.0
+            .crossfade
+            .set_duration(leg_duration_ms.saturating_mul(2));
+        self.0.crossfade.play();
+        true
     }
 
     pub(super) fn is_child_revealed(&self) -> bool {
-        self.revealer.is_child_revealed()
-    }
-
-    /// Connects transition completion without retaining the revealer from its own signal.
-    pub(super) fn connect_child_revealed_notify<F>(&self, callback: F)
-    where
-        F: Fn(&gtk::Revealer) + 'static,
-    {
-        let reservation = self.reservation.clone();
-        let viewport_sync_generation = self.viewport_sync_generation.clone();
-        self.revealer
-            .connect_child_revealed_notify(move |revealer| {
-                if revealer.is_child_revealed() {
-                    Self::restore_layout_for(revealer, &reservation, &viewport_sync_generation);
-                }
-                callback(revealer);
-            });
+        !self.0.crossfading.get() && self.0.revealer.is_child_revealed()
     }
 
     /// Starts one hide leg, constraining size-changing effects to the viewport.
     pub(super) fn begin(&self, effect: TransitionEffect, duration_ms: u32) {
+        self.0
+            .generation
+            .set(self.0.generation.get().wrapping_add(1));
+        if effect == TransitionEffect::Crossfade && self.begin_crossfade(duration_ms) {
+            return;
+        }
         let transition_type = match effect.revealer_layout() {
             Some(layout)
-                if Self::sync_reservation_to_viewport(&self.revealer, &self.reservation) =>
+                if Self::sync_reservation_to_viewport(&self.0.revealer, &self.0.reservation) =>
             {
                 self.apply_layout(layout);
                 self.start_viewport_sync();
@@ -361,34 +500,42 @@ impl TrackTransitionLayout {
             }
         };
 
-        self.revealer.set_transition_duration(duration_ms);
-        self.revealer.set_transition_type(transition_type);
-        self.revealer.set_reveal_child(false);
+        self.0.revealer.set_transition_duration(duration_ms);
+        self.0.revealer.set_transition_type(transition_type);
+        self.0.revealer.set_reveal_child(false);
     }
 
     /// Reveals the staged replacement using the same bounded layout as the hide leg.
     pub(super) fn reveal(&self) {
-        if self.revealer.halign() != gtk::Align::Fill || self.revealer.valign() != gtk::Align::Fill
+        if self.0.revealer.halign() != gtk::Align::Fill
+            || self.0.revealer.valign() != gtk::Align::Fill
         {
-            Self::sync_reservation_to_viewport(&self.revealer, &self.reservation);
+            Self::sync_reservation_to_viewport(&self.0.revealer, &self.0.reservation);
         }
-        self.revealer.set_reveal_child(true);
+        self.0.revealer.set_reveal_child(true);
     }
 
     /// Cancels a transition for an unpresented window without inverse-scaling its child.
     pub(super) fn reveal_immediately(&self) {
-        self.revealer
+        self.0
+            .generation
+            .set(self.0.generation.get().wrapping_add(1));
+        self.0.crossfading.set(false);
+        self.0.crossfade.reset();
+        self.clear_snapshot();
+        self.0
+            .revealer
             .set_transition_type(gtk::RevealerTransitionType::None);
-        self.revealer.set_reveal_child(true);
+        self.0.revealer.set_reveal_child(true);
         self.restore_layout();
     }
 
     /// Restores normal fill behavior after the replacement is fully visible.
     fn restore_layout(&self) {
         Self::restore_layout_for(
-            &self.revealer,
-            &self.reservation,
-            &self.viewport_sync_generation,
+            &self.0.revealer,
+            &self.0.reservation,
+            &self.0.viewport_sync_generation,
         );
     }
 
@@ -408,38 +555,38 @@ impl TrackTransitionLayout {
     fn apply_layout(&self, layout: RevealerLayout) {
         match layout {
             RevealerLayout::HorizontalStart => {
-                self.revealer.set_halign(gtk::Align::Start);
-                self.revealer.set_valign(gtk::Align::Fill);
-                self.revealer.set_hexpand(false);
-                self.revealer.set_vexpand(true);
+                self.0.revealer.set_halign(gtk::Align::Start);
+                self.0.revealer.set_valign(gtk::Align::Fill);
+                self.0.revealer.set_hexpand(false);
+                self.0.revealer.set_vexpand(true);
             }
             RevealerLayout::HorizontalEnd => {
-                self.revealer.set_halign(gtk::Align::End);
-                self.revealer.set_valign(gtk::Align::Fill);
-                self.revealer.set_hexpand(false);
-                self.revealer.set_vexpand(true);
+                self.0.revealer.set_halign(gtk::Align::End);
+                self.0.revealer.set_valign(gtk::Align::Fill);
+                self.0.revealer.set_hexpand(false);
+                self.0.revealer.set_vexpand(true);
             }
             RevealerLayout::VerticalStart => {
-                self.revealer.set_halign(gtk::Align::Fill);
-                self.revealer.set_valign(gtk::Align::Start);
-                self.revealer.set_hexpand(true);
-                self.revealer.set_vexpand(false);
+                self.0.revealer.set_halign(gtk::Align::Fill);
+                self.0.revealer.set_valign(gtk::Align::Start);
+                self.0.revealer.set_hexpand(true);
+                self.0.revealer.set_vexpand(false);
             }
             RevealerLayout::VerticalEnd => {
-                self.revealer.set_halign(gtk::Align::Fill);
-                self.revealer.set_valign(gtk::Align::End);
-                self.revealer.set_hexpand(true);
-                self.revealer.set_vexpand(false);
+                self.0.revealer.set_halign(gtk::Align::Fill);
+                self.0.revealer.set_valign(gtk::Align::End);
+                self.0.revealer.set_hexpand(true);
+                self.0.revealer.set_vexpand(false);
             }
         }
     }
 
     fn start_viewport_sync(&self) {
-        let generation = self.viewport_sync_generation.get().wrapping_add(1);
-        self.viewport_sync_generation.set(generation);
-        let current_generation = self.viewport_sync_generation.clone();
-        let reservation = self.reservation.clone();
-        self.revealer.add_tick_callback(move |revealer, _| {
+        let generation = self.0.viewport_sync_generation.get().wrapping_add(1);
+        self.0.viewport_sync_generation.set(generation);
+        let current_generation = self.0.viewport_sync_generation.clone();
+        let reservation = self.0.reservation.clone();
+        self.0.revealer.add_tick_callback(move |revealer, _| {
             if current_generation.get() != generation {
                 return glib::ControlFlow::Break;
             }
@@ -650,7 +797,6 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
         .vexpand(true)
         .build();
     content_revealer.set_child(Some(&content_layer));
-    let content_transition = TrackTransitionLayout::new(content_revealer, content_reservation);
 
     let background_area = gtk::DrawingArea::new();
     background_area.set_hexpand(true);
@@ -659,11 +805,13 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
 
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&background_area));
-    overlay.add_overlay(content_transition.revealer());
+    overlay.add_overlay(&content_revealer);
     overlay.add_overlay(&artwork_placeholder);
     artwork_placeholder.set_halign(gtk::Align::Center);
     artwork_placeholder.set_valign(gtk::Align::Center);
     artwork_placeholder.set_css_classes(&[TITLE_CSS_CLASS]);
+    let content_transition =
+        TrackTransitionLayout::new(content_revealer, content_reservation, &overlay);
     window.set_child(Some(&overlay));
 
     let background_css = gtk::CssProvider::new();
@@ -798,7 +946,7 @@ pub(super) fn configure_immersive_info(
     info_box: &gtk::Box,
     labels: [&gtk::Label; 4],
     mode: DisplayMode,
-    cinema_framing: CinemaFraming,
+    cinema_layout: CinemaLayout,
     width: i32,
     height: i32,
 ) {
@@ -806,9 +954,14 @@ pub(super) fn configure_immersive_info(
     let height = height.max(1);
     let margin = ((width.min(height) as f64 * 0.065).round() as i32)
         .clamp(IMMERSIVE_MARGIN_MIN_PX, IMMERSIVE_MARGIN_MAX_PX);
-    let (alignment, vertical_alignment, width_fraction, maximum_width_chars) =
-        immersive_info_placement(mode, cinema_framing, width, height);
-    let available_width = (width - margin * 2).max(1);
+    let (alignment, vertical_alignment, width_fraction, _) =
+        immersive_info_placement(mode, cinema_layout.framing, width, height);
+    let region_width = if mode == DisplayMode::Cinema {
+        cinema_layout.metadata.width()
+    } else {
+        width
+    };
+    let available_width = (region_width - margin * 2).max(1);
     let info_width = ((width as f64 * width_fraction).round() as i32)
         .min(available_width)
         .max(1);
@@ -821,8 +974,15 @@ pub(super) fn configure_immersive_info(
     info_box.set_margin_bottom(margin);
     info_box.set_size_request(info_width, -1);
     for label in labels {
-        label.set_halign(alignment);
-        label.set_max_width_chars(maximum_width_chars);
+        // Let the block's exact width, not a long label's natural size, bound
+        // text beside the cover. Ellipsizing still uses all allocated space.
+        label.set_halign(gtk::Align::Fill);
+        label.set_xalign(if alignment == gtk::Align::Center {
+            0.5
+        } else {
+            0.0
+        });
+        label.set_max_width_chars(1);
         label.set_justify(if matches!(alignment, gtk::Align::Center) {
             gtk::Justification::Center
         } else {
@@ -939,6 +1099,76 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
+    fn mapped_transitions_retain_crossfade_scene_and_bound_slide_allocations() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        use std::time::{Duration, Instant};
+        adw::init().unwrap();
+        gtk::Settings::default()
+            .unwrap()
+            .set_gtk_enable_animations(true);
+        let (ui, _) = super::build_ui();
+        ui.title_label.set_label("Old scene");
+        ui.window.present();
+        let context = glib::MainContext::default();
+        context.block_on(glib::timeout_future(Duration::from_millis(120)));
+        assert!(ui.window.is_mapped());
+
+        let completions = Rc::new(RefCell::new(Vec::new()));
+        let output = completions.clone();
+        let title = ui.title_label.clone();
+        ui.content_transition.connect_completed(move |revealed| {
+            output.borrow_mut().push(revealed);
+            if !revealed {
+                title.set_label("New scene");
+            }
+            None
+        });
+        for effect in crate::core::preferences::TransitionEffect::ALL {
+            if effect == crate::core::preferences::TransitionEffect::None {
+                continue;
+            }
+            completions.borrow_mut().clear();
+            ui.content_transition.begin(effect, 100);
+            if effect == crate::core::preferences::TransitionEffect::Crossfade {
+                assert!(
+                    ui.content_transition.0.crossfading.get(),
+                    "crossfade must use a retained scene, not a fade through the palette"
+                );
+                assert!(ui.content_transition.0.outgoing.paintable().is_some());
+                assert_eq!(ui.title_label.label(), "New scene");
+                assert_eq!(&*completions.borrow(), &[false]);
+            }
+            context.block_on(async {
+                let deadline = Instant::now() + Duration::from_secs(3);
+                while completions.borrow().last() != Some(&true) {
+                    assert!(
+                        Instant::now() < deadline,
+                        "transition {effect:?} did not settle: notifications={:?}, revealed={}, target={}, mapped={}, size={}x{}",
+                        completions.borrow(), ui.content_transition.0.revealer.is_child_revealed(),
+                        ui.content_transition.0.revealer.reveals_child(), ui.content_transition.0.revealer.is_mapped(),
+                        ui.content_transition.0.revealer.width(), ui.content_transition.0.revealer.height()
+                    );
+                    let content = ui.content_transition.0.revealer.child().unwrap();
+                    assert!(
+                        content.width() <= ui.window.width() + 2,
+                        "unbounded transition width"
+                    );
+                    assert!(
+                        content.height() <= ui.window.height() + 2,
+                        "unbounded transition height"
+                    );
+                    glib::timeout_future(Duration::from_millis(5)).await;
+                }
+            });
+            assert_eq!(&*completions.borrow(), &[false, true], "effect {effect:?}");
+            assert!(ui.content_transition.0.outgoing.paintable().is_none());
+        }
+        ui.window.destroy();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
     fn artwork_layout_callbacks_do_not_retain_containers() {
         gtk::init().expect("GTK initialization");
 
@@ -1032,6 +1262,31 @@ mod tests {
             immersive_info_placement(DisplayMode::Cinema, CinemaFraming::Wide, 1_920, 1_080);
         assert_eq!(wide_horizontal, gtk::Align::Start);
         assert_eq!(wide_vertical, gtk::Align::Center);
+    }
+
+    #[test]
+    fn cinema_text_region_uses_the_space_left_by_the_actual_cover() {
+        for (width, height) in [
+            (1400, 1000),
+            (1600, 1000),
+            (1920, 1080),
+            (720, 820),
+            (360, 410),
+        ] {
+            let layout = super::cinema_layout(width, height, (1000, 1000));
+            if height > width {
+                assert!(layout.metadata.y() + layout.metadata.height() <= layout.artwork.y());
+            } else {
+                assert_eq!(layout.framing, CinemaFraming::Wide);
+                assert!(layout.metadata.x() + layout.metadata.width() <= layout.artwork.x());
+            }
+        }
+        assert_eq!(
+            super::cinema_layout(1400, 1000, (1000, 1000))
+                .metadata
+                .width(),
+            400
+        );
     }
 
     #[test]

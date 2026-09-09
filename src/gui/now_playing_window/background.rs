@@ -2,17 +2,12 @@
 
 use super::palette::Background;
 use super::style::load_text_css;
+use super::tuning::background::*;
 use super::ui::{CinemaFraming, configure_classic_content, configure_immersive_info};
 use super::{BackgroundStyle, DisplayMode, NowPlayingWindow};
 use adw::prelude::*;
 use cairo::{Context, Format, ImageSurface, LinearGradient};
 use std::cell::RefCell;
-
-const GRADIENT_SURFACE_WIDTH: i32 = 256;
-const TRANSITION_START: f64 = 0.20;
-const AMBIENT_BASE_SCRIM_ALPHA: f64 = 0.18;
-const AMBIENT_TOP_SCRIM_ALPHA: f64 = 0.05;
-const AMBIENT_BOTTOM_SCRIM_ALPHA: f64 = 0.08;
 
 #[derive(Debug, Clone)]
 pub(super) struct CachedGradient {
@@ -98,7 +93,7 @@ impl NowPlayingWindow {
                         &immersive_details_for_resize,
                     ],
                     settings.display_mode,
-                    cinema_for_resize.framing(width, height),
+                    cinema_for_resize.layout(width, height),
                     width,
                     height,
                 );
@@ -261,38 +256,34 @@ fn draw_immersive_scrim(
             }
         }
         DisplayMode::Cinema => {
-            context.set_source_rgba(0.0, 0.0, 0.0, 0.08);
+            use super::tuning::cinema::*;
+            context.set_source_rgba(0.0, 0.0, 0.0, BASE_SCRIM_ALPHA);
             let _ = context.paint();
 
-            let gradient = if height > width {
-                let gradient = LinearGradient::new(0.0, 0.0, 0.0, f64::from(height) * 0.52);
-                gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.74);
-                gradient.add_color_stop_rgba(0.40, 0.0, 0.0, 0.0, 0.28);
-                gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0);
-                gradient
+            let (gradient, stops) = if height > width {
+                (
+                    LinearGradient::new(0.0, 0.0, 0.0, f64::from(height) * PORTRAIT_SCRIM_EXTENT),
+                    PORTRAIT_SCRIM_STOPS,
+                )
+            } else if framing == CinemaFraming::Wide {
+                (
+                    LinearGradient::new(0.0, 0.0, f64::from(width) * WIDE_SCRIM_EXTENT, 0.0),
+                    WIDE_SCRIM_STOPS,
+                )
             } else {
-                match framing {
-                    CinemaFraming::Wide => {
-                        let gradient = LinearGradient::new(0.0, 0.0, f64::from(width) * 0.62, 0.0);
-                        gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.72);
-                        gradient.add_color_stop_rgba(0.72, 0.0, 0.0, 0.0, 0.26);
-                        gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0);
-                        gradient
-                    }
-                    CinemaFraming::Cover | CinemaFraming::Tall => {
-                        let gradient = LinearGradient::new(
-                            0.0,
-                            f64::from(height) * 0.50,
-                            0.0,
-                            f64::from(height),
-                        );
-                        gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.0);
-                        gradient.add_color_stop_rgba(0.60, 0.0, 0.0, 0.0, 0.28);
-                        gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.74);
-                        gradient
-                    }
-                }
+                (
+                    LinearGradient::new(
+                        0.0,
+                        f64::from(height) * COVER_SCRIM_START,
+                        0.0,
+                        f64::from(height),
+                    ),
+                    COVER_SCRIM_STOPS,
+                )
             };
+            for (position, alpha) in stops {
+                gradient.add_color_stop_rgba(position, 0.0, 0.0, 0.0, alpha);
+            }
             if context.set_source(gradient).is_ok() {
                 let _ = context.paint();
             }
@@ -451,7 +442,7 @@ mod tests {
         srgb_to_linear,
     };
     use crate::gui::now_playing_window::palette::Background;
-    use crate::gui::now_playing_window::ui::AMBIENT_FOREGROUND_OPACITY;
+    use crate::gui::now_playing_window::tuning::layout::AMBIENT_FOREGROUND_OPACITY;
     use crate::gui::now_playing_window::{BackgroundStyle, DisplayMode};
 
     #[test]

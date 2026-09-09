@@ -1,23 +1,33 @@
 //! Derives Now Playing colors and combines them with GTK artwork textures.
 
+use super::tuning::ambient::*;
 use crate::core::artwork::Artwork;
 use gdk::prelude::TextureExt;
 use image::{DynamicImage, ImageBuffer, Rgba};
 use std::collections::HashMap;
 use std::ops::Deref;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
+
+/// The visuals needed before a mode can present an artwork-bearing track.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ArtworkRequirement {
+    None,
+    Cover,
+    Immersive,
+}
+
+impl ArtworkRequirement {
+    pub(super) fn for_mode(mode: super::DisplayMode) -> Self {
+        match mode {
+            super::DisplayMode::LightsOff => Self::None,
+            super::DisplayMode::Classic => Self::Cover,
+            super::DisplayMode::Cinema | super::DisplayMode::Ambient => Self::Immersive,
+        }
+    }
+}
 
 type Rgb = (u8, u8, u8);
 type Hsl = (f32, f32, f32);
-
-const AMBIENT_MAXIMUM_DIMENSION: u32 = 1024;
-const AMBIENT_BLUR_SIGMA: f32 = 4.0;
-const AMBIENT_MAX_SATURATION: f32 = 0.60;
-const AMBIENT_LIGHTNESS_MULTIPLIER: f32 = 0.80;
-const AMBIENT_MAX_LIGHTNESS: f32 = 0.50;
-const AMBIENT_VIGNETTE_STRENGTH: f32 = 0.0;
-const NEUTRAL_COLORFULNESS_START: f32 = 0.10;
-const FULL_COLORFULNESS_START: f32 = 0.28;
 
 /// Dark colors derived from an album cover for the Now Playing background.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,15 +49,23 @@ impl Background {
 #[derive(Clone)]
 pub(super) struct PreparedArtwork {
     pub(super) texture: gdk::MemoryTexture,
-    pub(super) ambient_texture: gdk::MemoryTexture,
+    pub(super) ambient_texture: Option<gdk::MemoryTexture>,
     pub(super) background: Background,
-    source: Weak<Artwork>,
+    source: Arc<Artwork>,
 }
 
 impl PreparedArtwork {
+    pub(super) fn source(&self) -> &Arc<Artwork> {
+        &self.source
+    }
+
     /// Whether this presentation was derived from the same decoded artwork.
     pub(super) fn matches(&self, artwork: &Arc<Artwork>) -> bool {
-        Weak::ptr_eq(&self.source, &Arc::downgrade(artwork))
+        self.source.content_id() == artwork.content_id()
+    }
+
+    pub(super) fn is_ready(&self, requirement: ArtworkRequirement) -> bool {
+        requirement != ArtworkRequirement::Immersive || self.ambient_texture.is_some()
     }
 
     /// RGBA payload retained by the two textures, for the presentation cache budget.
@@ -57,7 +75,9 @@ impl PreparedArtwork {
                 .saturating_mul(texture.height() as usize)
                 .saturating_mul(4)
         };
-        rgba_bytes(&self.texture).saturating_add(rgba_bytes(&self.ambient_texture))
+        rgba_bytes(&self.texture)
+            .saturating_add(self.ambient_texture.as_ref().map_or(0, rgba_bytes))
+            .saturating_add(self.source.encoded().len())
     }
 }
 
@@ -65,7 +85,7 @@ impl PreparedArtwork {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ArtworkVisuals {
     background: Background,
-    ambient: AmbientImage,
+    ambient: Option<AmbientImage>,
 }
 
 impl ArtworkVisuals {
@@ -74,11 +94,11 @@ impl ArtworkVisuals {
         let background = Background::fallback();
         Self {
             background,
-            ambient: AmbientImage {
+            ambient: Some(AmbientImage {
                 width: 1,
                 height: 1,
                 rgba: vec![background.top.0, background.top.1, background.top.2, 255],
-            },
+            }),
         }
     }
 }
@@ -97,7 +117,10 @@ struct AmbientImage {
 /// source image is not copied; only small thumbnails used for color analysis
 /// and the Ambient background are allocated. This function is safe to run on a
 /// blocking worker.
-pub(super) fn visuals_from_artwork(artwork: &Artwork) -> ArtworkVisuals {
+pub(super) fn visuals_from_artwork(
+    artwork: &Artwork,
+    requirement: ArtworkRequirement,
+) -> ArtworkVisuals {
     let image =
         ImageBuffer::<Rgba<u8>, _>::from_raw(artwork.width(), artwork.height(), artwork.rgba())
             .expect("validated artwork has a complete RGBA pixel buffer");
@@ -105,31 +128,43 @@ pub(super) fn visuals_from_artwork(artwork: &Artwork) -> ArtworkVisuals {
 
     ArtworkVisuals {
         background,
-        ambient: generate_ambient_image(&image, background),
+        ambient: (requirement == ArtworkRequirement::Immersive)
+            .then(|| generate_ambient_image(&image, background)),
     }
 }
 
 /// Creates GTK textures on the main thread after worker-side visual preparation.
-pub(super) fn prepare_artwork(artwork: &Arc<Artwork>, visuals: ArtworkVisuals) -> PreparedArtwork {
+pub(super) fn prepare_artwork(
+    artwork: &Arc<Artwork>,
+    visuals: ArtworkVisuals,
+    previous: Option<&PreparedArtwork>,
+) -> PreparedArtwork {
     let ArtworkVisuals {
         background,
         ambient,
     } = visuals;
-    let ambient_stride = ambient.width as usize * 4;
-    let ambient_bytes = glib::Bytes::from_owned(ambient.rgba);
-    let ambient_texture = gdk::MemoryTexture::new(
-        i32::try_from(ambient.width).expect("bounded ambient width fits i32"),
-        i32::try_from(ambient.height).expect("bounded ambient height fits i32"),
-        gdk::MemoryFormat::R8g8b8a8,
-        &ambient_bytes,
-        ambient_stride,
-    );
+    let ambient_texture = ambient.map(|ambient| {
+        let ambient_stride = ambient.width as usize * 4;
+        let ambient_bytes = glib::Bytes::from_owned(ambient.rgba);
+        gdk::MemoryTexture::new(
+            i32::try_from(ambient.width).expect("bounded ambient width fits i32"),
+            i32::try_from(ambient.height).expect("bounded ambient height fits i32"),
+            gdk::MemoryFormat::R8g8b8a8,
+            &ambient_bytes,
+            ambient_stride,
+        )
+    });
+    let previous = previous.filter(|previous| previous.matches(artwork));
 
     PreparedArtwork {
-        texture: crate::gui::artwork::texture(artwork),
-        ambient_texture,
+        texture: previous.map_or_else(
+            || crate::gui::artwork::texture(artwork),
+            |previous| previous.texture.clone(),
+        ),
+        ambient_texture: ambient_texture
+            .or_else(|| previous.and_then(|previous| previous.ambient_texture.clone())),
         background,
-        source: Arc::downgrade(artwork),
+        source: artwork.clone(),
     }
 }
 
@@ -499,7 +534,7 @@ mod tests {
         let artwork = Artwork::decode(encoded.into_inner()).unwrap();
 
         assert_eq!(
-            visuals_from_artwork(&artwork).background,
+            visuals_from_artwork(&artwork, super::ArtworkRequirement::Cover).background,
             generate_background(&image)
         );
     }
@@ -657,11 +692,25 @@ mod tests {
     }
 
     #[test]
+    fn classic_preparation_does_not_generate_an_immersive_background() {
+        let image = image::DynamicImage::new_rgb8(48, 48);
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+        let artwork = crate::core::artwork::Artwork::decode(bytes.into_inner()).unwrap();
+        let cover = super::visuals_from_artwork(&artwork, super::ArtworkRequirement::Cover);
+        let immersive = super::visuals_from_artwork(&artwork, super::ArtworkRequirement::Immersive);
+        assert!(cover.ambient.is_none());
+        assert!(immersive.ambient.is_some());
+        assert_eq!(cover.background, immersive.background);
+    }
+
+    #[test]
     fn fallback_visuals_have_an_opaque_neutral_ambient_image() {
         let visuals = ArtworkVisuals::fallback();
 
         assert_eq!(visuals.background, Background::fallback());
-        assert_eq!((visuals.ambient.width, visuals.ambient.height), (1, 1));
-        assert_eq!(visuals.ambient.rgba, vec![38, 38, 38, 255]);
+        let ambient = visuals.ambient.unwrap();
+        assert_eq!((ambient.width, ambient.height), (1, 1));
+        assert_eq!(ambient.rgba, vec![38, 38, 38, 255]);
     }
 }

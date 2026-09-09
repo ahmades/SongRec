@@ -1,9 +1,9 @@
 //! This module contains code used from message-based communication between threads.
 
-use crate::core::artwork::Artwork;
+use crate::core::artwork::{Artwork, ArtworkStatus};
 use crate::core::fingerprinting::signature_format::DecodedSignature;
 #[cfg(feature = "gui")]
-use crate::core::preferences::{NowPlayingPreferenceChange, PreferencesPatch};
+use crate::core::preferences::{NowPlayingPreferences, PreferencesPatch};
 
 use std::sync::Arc;
 use std::thread;
@@ -25,9 +25,7 @@ pub struct SongRecognizedMessage {
     pub artist_name: String,
     pub album_name: Option<String>,
     pub song_name: String,
-    pub cover_image: Option<Arc<Artwork>>,
-    /// Whether an out-of-band artwork request is still in progress.
-    pub artwork_pending: bool,
+    pub artwork: ArtworkStatus,
 
     // Used only in the CSV export for now:
     pub track_key: String,
@@ -38,16 +36,23 @@ pub struct SongRecognizedMessage {
 }
 
 impl SongRecognizedMessage {
+    pub fn cover_image(&self) -> Option<&Arc<Artwork>> {
+        self.artwork.image()
+    }
+
+    pub fn artwork_pending(&self) -> bool {
+        self.artwork.is_pending()
+    }
+
     pub fn with_cover_image(&self, cover_image: Arc<Artwork>) -> Self {
         let mut updated = self.clone();
-        updated.cover_image = Some(cover_image);
-        updated.artwork_pending = false;
+        updated.artwork = ArtworkStatus::Ready(cover_image);
         updated
     }
 
     pub fn with_artwork_unavailable(&self) -> Self {
         let mut updated = self.clone();
-        updated.artwork_pending = false;
+        updated.artwork = ArtworkStatus::Unavailable;
         updated
     }
 }
@@ -184,7 +189,7 @@ pub enum GUIMessage {
     UpdatePreference(PreferencesPatch),
     #[cfg(feature = "gui")]
     NowPlayingPreferenceChanged {
-        change: NowPlayingPreferenceChange,
+        settings: NowPlayingPreferences,
         persist: bool,
     },
     NetworkStatus(bool),  // Is the network reachable?
@@ -227,6 +232,7 @@ pub enum HTTPMessage {
 mod tests {
     use super::{RecognitionState, SongRecognizedMessage};
     use crate::core::artwork::Artwork;
+    use crate::core::artwork::ArtworkStatus;
     use image::{DynamicImage, ImageFormat};
     use std::io::Cursor;
     use std::sync::Arc;
@@ -236,8 +242,7 @@ mod tests {
             artist_name: "Artist".to_string(),
             album_name: None,
             song_name: format!("Song {key}"),
-            cover_image: None,
-            artwork_pending: true,
+            artwork: ArtworkStatus::Pending,
             track_key: key.to_string(),
             release_year: None,
             genre: None,
@@ -292,8 +297,8 @@ mod tests {
 
         assert!(state.apply_artwork("a", artwork()));
         let updated = state.last_recognized().unwrap();
-        assert!(updated.cover_image.is_some());
-        assert!(!updated.artwork_pending);
+        assert!(updated.cover_image().is_some());
+        assert!(!updated.artwork_pending());
     }
 
     #[test]
@@ -301,13 +306,13 @@ mod tests {
         let mut recognized = RecognitionState::default();
         recognized.record_recognition(track("a"));
         assert!(recognized.apply_artwork_unavailable("a"));
-        assert!(!recognized.last_recognized().unwrap().artwork_pending);
+        assert!(!recognized.last_recognized().unwrap().artwork_pending());
 
         let mut retained = RecognitionState::default();
         retained.record_recognition(track("b"));
         retained.record_no_match();
         assert!(retained.apply_artwork_unavailable("b"));
-        assert!(!retained.last_recognized().unwrap().artwork_pending);
+        assert!(!retained.last_recognized().unwrap().artwork_pending());
     }
 
     #[test]
@@ -316,10 +321,10 @@ mod tests {
         state.record_recognition(track("current"));
 
         assert!(!state.apply_artwork_unavailable("stale"));
-        assert!(state.last_recognized().unwrap().artwork_pending);
+        assert!(state.last_recognized().unwrap().artwork_pending());
         assert!(!state.apply_artwork("stale", artwork()));
         let current = state.last_recognized().unwrap();
-        assert!(current.cover_image.is_none());
-        assert!(current.artwork_pending);
+        assert!(current.cover_image().is_none());
+        assert!(current.artwork_pending());
     }
 }

@@ -2,8 +2,12 @@
 
 pub mod cli_main;
 
+#[cfg(test)]
+pub(crate) static MAIN_CONTEXT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 mod core {
     pub mod artwork;
+    pub mod artwork_service;
     pub mod http_task;
     pub mod logging;
     pub mod microphone_thread;
@@ -32,6 +36,7 @@ mod gui {
     pub mod artwork;
     pub mod main_window;
     pub mod now_playing_window;
+    mod recognition_notification;
     pub mod song_history_interface;
 
     pub mod context_menu;

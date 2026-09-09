@@ -1,11 +1,39 @@
 //! Validated, decoded artwork shared by recognition and presentation layers.
 
 use std::fmt;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Cursor;
 use std::sync::Arc;
 
 pub const MAX_ARTWORK_BYTES: usize = 10 * 1024 * 1024;
 pub const MAX_ARTWORK_DIMENSION_PX: u32 = 4_096;
+
+/// Acquisition state; an image cannot simultaneously be ready and pending.
+#[derive(Debug, Clone, Default)]
+pub enum ArtworkStatus {
+    #[default]
+    Unavailable,
+    Pending,
+    Ready(Arc<Artwork>),
+}
+
+impl ArtworkStatus {
+    pub fn image(&self) -> Option<&Arc<Artwork>> {
+        match self {
+            Self::Ready(image) => Some(image),
+            _ => None,
+        }
+    }
+
+    pub fn is_pending(&self) -> bool {
+        matches!(self, Self::Pending)
+    }
+}
+
+/// Process-local identity of decoded content, independent of CDN URLs or allocations.
+/// This is a cache key, not a cryptographic digest or a persisted file identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ArtworkId([u64; 2]);
 
 /// One validated cover image, decoded once for downstream consumers.
 ///
@@ -18,6 +46,7 @@ pub struct Artwork {
     width: u32,
     height: u32,
     stride: usize,
+    content_id: ArtworkId,
 }
 
 impl fmt::Debug for Artwork {
@@ -66,6 +95,14 @@ impl Artwork {
         let width = rgba.width();
         let height = rgba.height();
         let stride = usize::try_from(width).ok()?.checked_mul(4)?;
+        let fingerprint = |domain: u8| {
+            let mut hasher = DefaultHasher::new();
+            domain.hash(&mut hasher);
+            (width, height).hash(&mut hasher);
+            rgba.as_raw().hash(&mut hasher);
+            hasher.finish()
+        };
+        let content_id = ArtworkId([fingerprint(0), fingerprint(1)]);
 
         Some(Self {
             encoded: encoded.into(),
@@ -73,11 +110,21 @@ impl Artwork {
             width,
             height,
             stride,
+            content_id,
         })
     }
 
     pub fn encoded(&self) -> &[u8] {
         &self.encoded
+    }
+
+    pub const fn content_id(&self) -> ArtworkId {
+        self.content_id
+    }
+
+    /// Collision-safe comparison when interning independently downloaded images.
+    pub fn same_content(&self, other: &Self) -> bool {
+        self.content_id == other.content_id && self.rgba == other.rgba
     }
 
     pub fn rgba(&self) -> Arc<[u8]> {

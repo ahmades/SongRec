@@ -19,6 +19,14 @@ impl AlbumCoverSize {
     /// Configures a continuous slider with three labeled snap anchors and two
     /// unlabeled midpoint ticks.
     pub(crate) fn configure_scale(scale: &gtk::Scale) {
+        scale.adjustment().configure(
+            Self::default().scale_value(),
+            Self::MIN_SCALE_VALUE,
+            Self::MAX_SCALE_VALUE,
+            Self::SCALE_STEP,
+            10.0,
+            0.0,
+        );
         scale.set_round_digits(0);
         scale.set_digits(0);
         scale.set_draw_value(false);
@@ -34,11 +42,13 @@ impl AlbumCoverSize {
 
     /// Snaps a drag near one of the labeled slider marks once it ends.
     pub(crate) fn install_slider_snap(scale: &gtk::Scale) {
-        let scale = scale.clone();
-        let scale_for_drag_end = scale.clone();
+        let scale_for_drag_end = scale.downgrade();
         let drag = gtk::GestureDrag::new();
         drag.set_propagation_phase(gtk::PropagationPhase::Capture);
         drag.connect_drag_end(move |_, _, _| {
+            let Some(scale_for_drag_end) = scale_for_drag_end.upgrade() else {
+                return;
+            };
             let snapped_value =
                 Self::from_snapped_scale_value(scale_for_drag_end.value()).scale_value();
             if scale_for_drag_end.value() != snapped_value {

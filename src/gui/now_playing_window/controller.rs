@@ -1,66 +1,20 @@
-//! Shared Now Playing settings state, persistence commands, and debouncing.
+//! Shared Now Playing settings state and debounced snapshot persistence.
 
 use super::NowPlayingSettings;
 use crate::core::preferences::NowPlayingPreferenceChange;
 use crate::core::thread_messages::GUIMessage;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
 const PERSISTENCE_DEBOUNCE_MS: u64 = 150;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum SettingKey {
-    Reset,
-    DisplayMode,
-    RoundCorners,
-    HideTrackInfo,
-    TextSize,
-    BackgroundMotionEnabled,
-    BackgroundMotionZoom,
-    BackgroundMotionReversalDuration,
-    TrackInfoAlignment,
-    AlbumCoverSize,
-    BackgroundStyle,
-    AlwaysDisplayLastRecognizedSong,
-    Transition,
-    TransitionDuration,
-}
-
-impl From<NowPlayingPreferenceChange> for SettingKey {
-    fn from(change: NowPlayingPreferenceChange) -> Self {
-        match change {
-            NowPlayingPreferenceChange::Reset => Self::Reset,
-            NowPlayingPreferenceChange::DisplayMode(_) => Self::DisplayMode,
-            NowPlayingPreferenceChange::RoundCorners(_) => Self::RoundCorners,
-            NowPlayingPreferenceChange::HideTrackInfo(_) => Self::HideTrackInfo,
-            NowPlayingPreferenceChange::TextSize(_) => Self::TextSize,
-            NowPlayingPreferenceChange::BackgroundMotionEnabled(_) => Self::BackgroundMotionEnabled,
-            NowPlayingPreferenceChange::BackgroundMotionZoomPercent(_) => {
-                Self::BackgroundMotionZoom
-            }
-            NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(_) => {
-                Self::BackgroundMotionReversalDuration
-            }
-            NowPlayingPreferenceChange::TrackInfoAlignment(_) => Self::TrackInfoAlignment,
-            NowPlayingPreferenceChange::AlbumCoverSize(_) => Self::AlbumCoverSize,
-            NowPlayingPreferenceChange::BackgroundStyle(_) => Self::BackgroundStyle,
-            NowPlayingPreferenceChange::AlwaysDisplayLastRecognizedSong(_) => {
-                Self::AlwaysDisplayLastRecognizedSong
-            }
-            NowPlayingPreferenceChange::Transition(_) => Self::Transition,
-            NowPlayingPreferenceChange::TransitionDurationMs(_) => Self::TransitionDuration,
-        }
-    }
-}
 
 /// One model shared by the preferences page, context menu, and renderer.
 #[derive(Clone)]
 pub(crate) struct NowPlayingSettingsController {
     settings: Rc<Cell<NowPlayingSettings>>,
     gui_tx: Option<async_channel::Sender<GUIMessage>>,
-    pending: Rc<RefCell<HashMap<SettingKey, glib::SourceId>>>,
+    pending_save: Rc<RefCell<Option<glib::SourceId>>>,
 }
 
 impl NowPlayingSettingsController {
@@ -71,7 +25,7 @@ impl NowPlayingSettingsController {
         Self {
             settings: Rc::new(Cell::new(settings)),
             gui_tx,
-            pending: Rc::new(RefCell::new(HashMap::new())),
+            pending_save: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -84,53 +38,41 @@ impl NowPlayingSettingsController {
     }
 
     pub(crate) fn update(&self, change: NowPlayingPreferenceChange) {
-        if matches!(change, NowPlayingPreferenceChange::Reset) {
-            self.reset();
-            return;
-        }
-        self.cancel(SettingKey::from(change));
+        self.cancel_all();
         self.apply(change);
-        self.send(change, true);
+        self.send(true);
     }
 
-    /// Applies a value immediately to the shared model but coalesces disk persistence.
+    /// Updates both views and the in-memory preferences immediately, coalescing
+    /// only disk writes. Every control contributes to one latest snapshot.
     pub(crate) fn update_debounced(&self, change: NowPlayingPreferenceChange) {
         if matches!(change, NowPlayingPreferenceChange::Reset) {
             self.reset();
             return;
         }
-        let key = SettingKey::from(change);
-        self.cancel(key);
+        self.cancel_all();
         self.apply(change);
-        self.send(change, false);
+        self.send(false);
 
-        let pending = self.pending.clone();
-        let sender = self.gui_tx.clone();
+        let controller = self.clone();
         let source_id = glib::timeout_add_local_once(
             Duration::from_millis(PERSISTENCE_DEBOUNCE_MS),
             move || {
-                pending.borrow_mut().remove(&key);
-                if let Some(sender) = sender
-                    && let Err(error) = sender.try_send(GUIMessage::NowPlayingPreferenceChanged {
-                        change,
-                        persist: true,
-                    })
-                {
-                    log::error!("Failed to persist Now Playing preference: {error}");
-                }
+                controller.pending_save.borrow_mut().take();
+                controller.send(true);
             },
         );
-        self.pending.borrow_mut().insert(key, source_id);
+        self.pending_save.borrow_mut().replace(source_id);
     }
 
     pub(crate) fn reset(&self) {
-        self.cancel_all();
-        self.apply(NowPlayingPreferenceChange::Reset);
-        self.send(NowPlayingPreferenceChange::Reset, true);
+        self.update(NowPlayingPreferenceChange::Reset);
     }
 
+    /// Stops delayed saves. At shutdown the owner also saves `settings()`
+    /// synchronously, rather than relying on another GUI message.
     pub(crate) fn cancel_all(&self) {
-        for (_, source_id) in self.pending.borrow_mut().drain() {
+        if let Some(source_id) = self.pending_save.borrow_mut().take() {
             source_id.remove();
         }
     }
@@ -141,25 +83,21 @@ impl NowPlayingSettingsController {
         self.settings.set(settings);
     }
 
-    fn send(&self, change: NowPlayingPreferenceChange, persist: bool) {
+    fn send(&self, persist: bool) {
         if let Some(sender) = self.gui_tx.as_ref()
-            && let Err(error) =
-                sender.try_send(GUIMessage::NowPlayingPreferenceChanged { change, persist })
+            && let Err(error) = sender.try_send(GUIMessage::NowPlayingPreferenceChanged {
+                settings: self.settings(),
+                persist,
+            })
         {
             log::error!("Failed to update Now Playing preference: {error}");
-        }
-    }
-
-    fn cancel(&self, key: SettingKey) {
-        if let Some(source_id) = self.pending.borrow_mut().remove(&key) {
-            source_id.remove();
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{NowPlayingSettingsController, SettingKey};
+    use super::NowPlayingSettingsController;
     use crate::core::preferences::{
         BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
         DisplayMode, NowPlayingPreferenceChange, NowPlayingPreferences, TextSize,
@@ -208,26 +146,51 @@ mod tests {
     }
 
     #[test]
-    fn background_motion_changes_have_independent_persistence_keys() {
-        assert_eq!(
-            SettingKey::from(NowPlayingPreferenceChange::BackgroundMotionEnabled(true)),
-            SettingKey::BackgroundMotionEnabled
-        );
-        assert_eq!(
-            SettingKey::from(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(110)),
-            SettingKey::BackgroundMotionZoom
-        );
-        assert_eq!(
-            SettingKey::from(NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(30)),
-            SettingKey::BackgroundMotionReversalDuration
-        );
-    }
+    fn sliders_share_one_save_and_reset_cancels_stale_snapshots() {
+        let _serial = crate::MAIN_CONTEXT_TEST_LOCK.lock().unwrap();
+        use crate::core::thread_messages::GUIMessage;
+        use std::time::Duration;
 
-    #[test]
-    fn text_size_has_an_independent_persistence_key() {
-        assert_eq!(
-            SettingKey::from(NowPlayingPreferenceChange::TextSize(TextSize::LARGE)),
-            SettingKey::TextSize
-        );
+        let context = glib::MainContext::default();
+        let _guard = context.acquire().unwrap();
+        let (sender, receiver) = async_channel::unbounded();
+        let controller =
+            NowPlayingSettingsController::new(NowPlayingPreferences::default(), Some(sender));
+        let receive = || match receiver.try_recv().unwrap() {
+            GUIMessage::NowPlayingPreferenceChanged { settings, persist } => (settings, persist),
+            _ => panic!("unexpected GUI message"),
+        };
+
+        controller.update_debounced(NowPlayingPreferenceChange::TextSize(TextSize::LARGE));
+        let (settings, persist) = receive();
+        assert_eq!(settings.shared.text_size, TextSize::LARGE);
+        assert!(!persist);
+        controller.update_debounced(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(119));
+        let (settings, persist) = receive();
+        assert_eq!(settings.shared.text_size, TextSize::LARGE);
+        assert_eq!(settings.shared.background_motion_zoom_percent, 119);
+        assert!(!persist);
+
+        context.block_on(glib::timeout_future(Duration::from_millis(190)));
+        let (saved, persist) = receive();
+        assert!(persist);
+        assert_eq!(saved, controller.settings());
+        assert!(receiver.try_recv().is_err());
+
+        controller.update_debounced(NowPlayingPreferenceChange::TextSize(TextSize::SMALL));
+        receive();
+        controller.reset();
+        let (settings, persist) = receive();
+        assert!(persist);
+        assert_eq!(settings, NowPlayingPreferences::default());
+        assert!(controller.pending_save.borrow().is_none());
+
+        controller.update_debounced(NowPlayingPreferenceChange::TextSize(TextSize::LARGE));
+        receive();
+        // The shutdown owner can save the current value before cancelling the timer.
+        assert_eq!(controller.settings().shared.text_size, TextSize::LARGE);
+        controller.cancel_all();
+        context.block_on(glib::timeout_future(Duration::from_millis(190)));
+        assert!(receiver.try_recv().is_err());
     }
 }

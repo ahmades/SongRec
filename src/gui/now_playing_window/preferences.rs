@@ -23,26 +23,62 @@ impl NowPlayingWindow {
 
     /// Applies one resolved settings snapshot without treating control notifications as user input.
     fn apply_settings(&self, settings: NowPlayingSettings) {
+        let previous = self.applied_settings.replace(Some(settings));
+        if previous == Some(settings) {
+            return;
+        }
+        // The controller's shared cell already holds the new values, so compare
+        // against the snapshot actually applied to these widgets instead.
+        macro_rules! changed {
+            ($($field:ident).+) => {
+                previous.is_none_or(|old| old.$($field).+ != settings.$($field).+)
+            };
+        }
         self.with_preference_updates_suspended(|| {
             self.state.settings.set(settings);
 
-            self.set_display_mode(settings.display_mode);
-            self.set_round_corners(settings.classic.round_corners);
-            self.set_show_track_info(!settings.shared.hide_track_info);
-            self.set_text_size(settings.shared.text_size);
-            self.set_background_motion(
-                settings.shared.background_motion_enabled,
-                settings.shared.background_motion_zoom_percent,
-                settings.shared.background_motion_reversal_duration_secs,
-            );
-            self.set_track_info_alignment(settings.classic.track_info_alignment);
-            self.set_album_cover_size(settings.classic.album_cover_size);
-            self.set_always_display_last_recognized_song(
-                settings.shared.always_display_last_recognized_song,
-            );
-            self.set_transition(settings.shared.transition);
-            self.set_transition_duration(settings.shared.transition_duration_ms);
-            self.set_background_style(settings.classic.background_style);
+            if changed!(display_mode) {
+                self.set_display_mode(settings.display_mode);
+            }
+            if changed!(classic.round_corners) {
+                self.set_round_corners(settings.classic.round_corners);
+            }
+            if changed!(shared.hide_track_info) {
+                self.set_show_track_info(!settings.shared.hide_track_info);
+            }
+            if changed!(shared.text_size) {
+                self.set_text_size(settings.shared.text_size);
+            }
+            if changed!(shared.background_motion_enabled)
+                || changed!(shared.background_motion_zoom_percent)
+                || changed!(shared.background_motion_reversal_duration_secs)
+            {
+                self.set_background_motion(
+                    settings.shared.background_motion_enabled,
+                    settings.shared.background_motion_zoom_percent,
+                    settings.shared.background_motion_reversal_duration_secs,
+                );
+            }
+            if changed!(classic.track_info_alignment) {
+                self.set_track_info_alignment(settings.classic.track_info_alignment);
+            }
+            if changed!(classic.album_cover_size) {
+                self.set_album_cover_size(settings.classic.album_cover_size);
+            }
+            if changed!(shared.always_display_last_recognized_song) {
+                self.set_always_display_last_recognized_song(
+                    settings.shared.always_display_last_recognized_song,
+                );
+            }
+            if changed!(shared.transition) {
+                self.set_transition(settings.shared.transition);
+            }
+            if changed!(shared.transition_duration_ms) {
+                self.set_transition_duration(settings.shared.transition_duration_ms);
+            }
+            if changed!(classic.background_style) {
+                self.set_background_style(settings.classic.background_style);
+            }
         });
     }
 

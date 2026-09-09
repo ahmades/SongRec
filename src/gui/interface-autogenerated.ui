@@ -589,13 +589,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                 <property name="draw-value">true</property>
                                 <property name="digits">0</property>
                                 <property name="adjustment">
-                                  <object class="GtkAdjustment">
-                                    <property name="lower">500</property>
-                                    <property name="upper">5000</property>
-                                    <property name="step-increment">100</property>
-                                    <property name="page-increment">500</property>
-                                    <property name="value">2000</property>
-                                  </object>
+                                  <object class="GtkAdjustment"></object>
                                 </property>
                               </object>
                             </child>
@@ -651,13 +645,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                                     <property name="hexpand">true</property>
                                     <property name="draw-value">false</property>
                                     <property name="adjustment">
-                                      <object class="GtkAdjustment">
-                                        <property name="lower">0</property>
-                                        <property name="upper">200</property>
-                                        <property name="step-increment">1</property>
-                                        <property name="page-increment">10</property>
-                                        <property name="value">150</property>
-                                      </object>
+                                      <object class="GtkAdjustment"></object>
                                     </property>
                                   </object>
                                 </child>
@@ -695,8 +683,8 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                             <property name="visible">false</property>
                             <child>
                               <object class="AdwSwitchRow" id="background_motion_enabled_setting">
-                                <property name="subtitle" translatable="yes">Gently zoom the blurred background in and out</property>
-                                <property name="title" translatable="yes">Bakground motion</property>
+                                <property name="subtitle" translatable="yes">Gently drift the blurred background while keeping the cover still</property>
+                                <property name="title" translatable="yes">Background motion</property>
                               </object>
                             </child>
                             <child>

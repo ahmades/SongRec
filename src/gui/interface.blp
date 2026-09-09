@@ -504,13 +504,7 @@ Adw.ApplicationWindow main_window {
                 hexpand: true;
                 draw-value: true;
                 digits: 0;
-                adjustment: Adjustment {
-                  lower: 500;
-                  upper: 5000;
-                  step-increment: 100;
-                  page-increment: 500;
-                  value: 2000;
-                };
+                adjustment: Adjustment {};
               }
             }
 
@@ -559,13 +553,7 @@ Adw.ApplicationWindow main_window {
                   width-request: 300;
                   hexpand: true;
                   draw-value: false;
-                  adjustment: Adjustment {
-                    lower: 0;
-                    upper: 200;
-                    step-increment: 1;
-                    page-increment: 10;
-                    value: 150;
-                  };
+                  adjustment: Adjustment {};
                 }
               }
 
@@ -597,8 +585,8 @@ Adw.ApplicationWindow main_window {
               visible: false;
 
               Adw.SwitchRow background_motion_enabled_setting {
-                subtitle: _("Gently zoom the blurred background in and out");
-                title: _("Bakground motion");
+                subtitle: _("Gently drift the blurred background while keeping the cover still");
+                title: _("Background motion");
               }
 
               Adw.ActionRow background_motion_zoom_setting {

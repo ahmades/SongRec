@@ -1,7 +1,9 @@
 //! Recognition-result presentation and transition handling.
 
 use super::background::{CachedGradient, redraw_background};
-use super::palette::{ArtworkVisuals, Background, prepare_artwork, visuals_from_artwork};
+use super::palette::{
+    ArtworkRequirement, ArtworkVisuals, Background, prepare_artwork, visuals_from_artwork,
+};
 use super::state::{PresentationAction, PresentationMode, PresentedTrack, TrackPresentationState};
 use super::ui::{
     AmbientArtworkLayout, CinemaArtworkLayout, TrackTransitionLayout, configure_immersive_info,
@@ -108,9 +110,9 @@ impl TrackPresentation {
         let artwork_background = if let Some(artwork) = track.artwork.as_ref() {
             self.artwork.set_paintable(Some(&artwork.texture));
             self.cinema_artwork
-                .set_artwork(Some(&artwork.texture), Some(&artwork.ambient_texture));
+                .set_artwork(Some(&artwork.texture), artwork.ambient_texture.as_ref());
             self.ambient_artwork
-                .set_artwork(Some(&artwork.texture), Some(&artwork.ambient_texture));
+                .set_artwork(Some(&artwork.texture), artwork.ambient_texture.as_ref());
             Some(artwork.background)
         } else {
             // Recognition metadata arrives before its separately downloaded
@@ -201,7 +203,7 @@ impl TrackPresentation {
                 &self.immersive_details_label,
             ],
             settings.display_mode,
-            self.cinema_artwork.framing(width, height),
+            self.cinema_artwork.layout(width, height),
             width,
             height,
         );
@@ -257,25 +259,26 @@ impl NowPlayingWindow {
         let presentation_for_completion = TrackPresentation::from_window(self);
         self.ui
             .content_transition
-            .connect_child_revealed_notify(move |revealer| {
-                if revealer.is_child_revealed() {
+            .connect_completed(move |is_revealed| {
+                let settings = settings_for_completion.get();
+                let action = if is_revealed {
                     log::debug!("Now Playing transition: fully revealed");
-                    return;
+                    track_state_for_completion.borrow_mut().transition_revealed(
+                        settings.shared.transition != TransitionEffect::None,
+                        ArtworkRequirement::for_mode(settings.display_mode),
+                    )
+                } else {
+                    log::debug!("Now Playing transition: hidden midpoint");
+                    track_state_for_completion.borrow_mut().transition_hidden()
+                };
+                if matches!(action, PresentationAction::BeginTransition) {
+                    return Some((
+                        settings.shared.transition,
+                        transition_leg_duration_ms(settings.shared.transition_duration_ms),
+                    ));
                 }
-                log::debug!("Now Playing transition: hidden midpoint");
-
-                let wait_for_artwork = settings_for_completion.get().display_mode.uses_artwork();
-                let action = track_state_for_completion
-                    .borrow_mut()
-                    .transition_hidden(wait_for_artwork);
-                if matches!(action, PresentationAction::HoldTransition) {
-                    return;
-                }
-
                 presentation_for_completion.apply_action(action);
-                // Even a stale/spurious hidden notification must not leave the
-                // reusable window exposing only its background.
-                revealer.set_reveal_child(true);
+                None
             });
 
         let track_state_for_hide = self.state.track_presentation.clone();
@@ -295,17 +298,21 @@ impl NowPlayingWindow {
     /// Refreshes the displayed song metadata and artwork from a recognition result.
     pub fn update(&self, message: &SongRecognizedMessage) {
         self.state.deferred_artwork.borrow_mut().take();
-        let prepared_artwork = message.cover_image.as_ref().and_then(|artwork| {
+        let prepared_artwork = message.cover_image().and_then(|artwork| {
             self.state
                 .track_presentation
                 .borrow()
                 .prepared_artwork_for(artwork)
         });
-        let visuals_pending = message.cover_image.is_some() && prepared_artwork.is_none();
+        let requirement = ArtworkRequirement::for_mode(self.state.settings.get().display_mode);
+        let visuals_pending = message.cover_image().is_some()
+            && prepared_artwork
+                .as_ref()
+                .is_none_or(|artwork| !artwork.is_ready(requirement));
         log::debug!(
             "Now Playing track {}: received, download pending={}, preparation needed={}",
             message.track_key,
-            message.artwork_pending,
+            message.artwork_pending(),
             visuals_pending
         );
         let track = Rc::new(PresentedTrack::from_message(
@@ -325,7 +332,7 @@ impl NowPlayingWindow {
         let action = self.state.track_presentation.borrow_mut().receive_track(
             track,
             can_animate,
-            settings.display_mode.uses_artwork(),
+            requirement,
         );
 
         match action {
@@ -345,8 +352,7 @@ impl NowPlayingWindow {
         if visuals_pending {
             self.prepare_artwork_visuals(
                 message
-                    .cover_image
-                    .as_ref()
+                    .cover_image()
                     .expect("artwork visual preparation requires artwork")
                     .clone(),
             );
@@ -362,7 +368,10 @@ impl NowPlayingWindow {
             .state
             .track_presentation
             .borrow_mut()
-            .reconcile_pending_transition(animations_enabled, settings.display_mode.uses_artwork());
+            .reconcile_pending_transition(
+                animations_enabled,
+                ArtworkRequirement::for_mode(settings.display_mode),
+            );
 
         match action {
             PresentationAction::BeginTransition => {
@@ -409,7 +418,10 @@ impl NowPlayingWindow {
             while let Some(job) = next_artwork {
                 let artwork = job.artwork;
                 // A newer recognition may supersede queued work before this future runs.
-                let Some(job_track_key) = track_state.borrow().track_key_for_artwork(&artwork)
+                let requirement = ArtworkRequirement::for_mode(settings.get().display_mode);
+                let Some(job_track_key) = track_state
+                    .borrow()
+                    .track_key_for_artwork(&artwork, requirement)
                 else {
                     next_artwork = preparation_jobs.borrow_mut().finish(&artwork);
                     continue;
@@ -428,7 +440,7 @@ impl NowPlayingWindow {
                 let visuals = match gio::spawn_blocking(move || {
                     let started = Instant::now();
                     let queue_time = started.duration_since(job.queued_at);
-                    let visuals = visuals_from_artwork(&artwork_for_worker);
+                    let visuals = visuals_from_artwork(&artwork_for_worker, requirement);
                     log::debug!(
                         "Now Playing track {job_track_key}, artwork {}x{}: queue {:?}, processing {:?}",
                         artwork_for_worker.width(),
@@ -449,17 +461,24 @@ impl NowPlayingWindow {
 
                 // Check again before allocating textures on GTK's thread. A completed
                 // source can serve a newer track on the same album, but never stale art.
-                let track_key = track_state.borrow().track_key_for_artwork(&artwork);
+                let requirement = ArtworkRequirement::for_mode(settings.get().display_mode);
+                let track_key = track_state
+                    .borrow()
+                    .track_key_for_artwork(&artwork, requirement);
                 if let Some(track_key) = track_key {
                     let texture_started = Instant::now();
-                    let prepared = prepare_artwork(&artwork, visuals);
+                    let previous = track_state.borrow().prepared_artwork_for(&artwork);
+                    let prepared = prepare_artwork(&artwork, visuals, previous.as_ref());
                     log::debug!(
                         "Now Playing track {track_key}: textures prepared in {:?}",
                         texture_started.elapsed()
                     );
-                    let action = track_state
-                        .borrow_mut()
-                        .apply_prepared_artwork(&track_key, &artwork, prepared);
+                    let action = track_state.borrow_mut().apply_prepared_artwork(
+                        &track_key,
+                        &artwork,
+                        prepared,
+                        requirement,
+                    );
                     match action {
                         PresentationAction::BeginTransition => {
                             begin_track_transition(&transition, settings.get());
@@ -474,19 +493,33 @@ impl NowPlayingWindow {
                     }
                 }
                 next_artwork = preparation_jobs.borrow_mut().finish(&artwork);
+                // A mode change can request the immersive layer while a fast Classic
+                // preparation is in flight. Upgrade it without losing the shared cover.
+                if next_artwork.is_none()
+                    && window.upgrade().is_some_and(|window| window.is_visible())
+                    && let Some(source) = track_state.borrow().artwork_to_prepare(requirement)
+                {
+                    next_artwork = preparation_jobs.borrow_mut().enqueue(source);
+                }
             }
         });
     }
 
     /// Resumes the latest deferred source when artwork becomes useful again.
     pub(super) fn resume_artwork_preparation(&self) {
-        let artwork = self.state.deferred_artwork.borrow_mut().take();
+        let requirement = ArtworkRequirement::for_mode(self.state.settings.get().display_mode);
+        let artwork = self.state.deferred_artwork.borrow_mut().take().or_else(|| {
+            self.state
+                .track_presentation
+                .borrow()
+                .artwork_to_prepare(requirement)
+        });
         if let Some(artwork) = artwork
             && self
                 .state
                 .track_presentation
                 .borrow()
-                .track_key_for_artwork(&artwork)
+                .track_key_for_artwork(&artwork, requirement)
                 .is_some()
         {
             self.prepare_artwork_visuals(artwork);
@@ -498,7 +531,7 @@ impl NowPlayingWindow {
         self.state.deferred_artwork.borrow_mut().take();
         let action = self.state.track_presentation.borrow_mut().show_listening();
         TrackPresentation::from_window(self).apply_action(action);
-        self.ui.content_transition.reveal();
+        self.ui.content_transition.reveal_immediately();
     }
 
     /// Handles an unmatched recognition according to the active keep-last preference.
@@ -520,7 +553,7 @@ impl NowPlayingWindow {
         let hold_transition = matches!(action, PresentationAction::HoldTransition);
         TrackPresentation::from_window(self).apply_action(action);
         if !hold_transition {
-            self.ui.content_transition.reveal();
+            self.ui.content_transition.reveal_immediately();
         }
     }
 }
@@ -638,8 +671,9 @@ mod tests {
                 release_year: None,
                 genre: None,
                 shazam_json: String::new(),
-                cover_image: Some(Arc::new(Artwork::decode(bytes.into_inner()).unwrap())),
-                artwork_pending: false,
+                artwork: crate::core::artwork::ArtworkStatus::Ready(Arc::new(
+                    Artwork::decode(bytes.into_inner()).unwrap(),
+                )),
             }
         }
         fn wait_until(predicate: impl Fn() -> bool) {
@@ -677,8 +711,7 @@ mod tests {
 
         let second = message("b", 80);
         let mut metadata_only = second.clone();
-        metadata_only.cover_image = None;
-        metadata_only.artwork_pending = true;
+        metadata_only.artwork = crate::core::artwork::ArtworkStatus::Pending;
         window.update(&metadata_only);
         glib::MainContext::default().block_on(glib::timeout_future(Duration::from_millis(600)));
         assert!(
@@ -689,6 +722,56 @@ mod tests {
         wait_until(|| displayed(&window, "b"));
         assert_eq!(window.ui.title_label.label(), "b");
         assert!(window.ui.artwork.paintable().is_some());
+
+        // A missing newer cover must not replace the ready target of either
+        // an active hide leg or a retained-scene crossfade/reveal leg.
+        for (mode, effect, first_key, next_key) in [
+            (
+                DisplayMode::Cinema,
+                TransitionEffect::SlideLeft,
+                "slide-ready",
+                "slide-late",
+            ),
+            (
+                DisplayMode::Ambient,
+                TransitionEffect::Crossfade,
+                "fade-ready",
+                "fade-late",
+            ),
+        ] {
+            settings.display_mode = mode;
+            settings.shared.transition = effect;
+            window.state.settings.set(settings);
+            window.set_display_mode(mode);
+            let first = message(first_key, 91);
+            window.update(&first);
+            wait_until(|| {
+                let state = window.state.track_presentation.borrow();
+                state.pending_track.as_ref().is_some_and(|track| {
+                    track.track_key == first_key
+                        && track
+                            .artwork
+                            .as_ref()
+                            .is_some_and(|artwork| artwork.ambient_texture.is_some())
+                }) || state
+                    .displayed_track
+                    .as_ref()
+                    .is_some_and(|track| track.track_key == first_key)
+                    && !window.ui.content_transition.is_child_revealed()
+            });
+            let next = message(next_key, 111);
+            let mut pending = next.clone();
+            pending.artwork = crate::core::artwork::ArtworkStatus::Pending;
+            window.update(&pending);
+            wait_until(|| displayed(&window, first_key));
+            context_wait(Duration::from_millis(100));
+            assert!(
+                displayed(&window, first_key),
+                "the ready scene remains visible while newer artwork is missing"
+            );
+            window.update(&next);
+            wait_until(|| displayed(&window, next_key));
+        }
 
         settings.display_mode = DisplayMode::LightsOff;
         window.state.settings.set(settings);
@@ -717,6 +800,10 @@ mod tests {
             popover.unparent();
         }
         window.ui.window.destroy();
+    }
+
+    fn context_wait(duration: std::time::Duration) {
+        glib::MainContext::default().block_on(glib::timeout_future(duration));
     }
 
     #[test]

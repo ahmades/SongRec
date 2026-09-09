@@ -19,6 +19,7 @@ mod style;
 mod text_size;
 mod track;
 mod transition;
+mod tuning;
 mod ui;
 
 use adw::prelude::*;
@@ -50,6 +51,7 @@ pub struct NowPlayingWindow {
     state: NowPlayingState,
     controller: NowPlayingSettingsController,
     text_css: style::TextCss,
+    applied_settings: std::cell::Cell<Option<NowPlayingSettings>>,
 }
 
 impl NowPlayingWindow {
@@ -65,6 +67,7 @@ impl NowPlayingWindow {
             state,
             controller,
             text_css,
+            applied_settings: std::cell::Cell::new(None),
         };
 
         now_playing.setup_rendering();

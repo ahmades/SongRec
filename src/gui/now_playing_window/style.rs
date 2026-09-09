@@ -3,19 +3,11 @@
 //! Keeping typography here lets widget construction and background rendering
 //! depend on the same visual vocabulary without depending on each other.
 
+use super::tuning::typography::*;
 use super::{NowPlayingWindow, TextSize};
 use adw::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
-
-const BASE_SCALE_WIDTH: f64 = 720.0;
-const BASE_SCALE_HEIGHT: f64 = 820.0;
-const MIN_FONT_SCALE: f64 = 0.60;
-const MAX_FONT_SCALE: f64 = 2.25;
-const TITLE_BASE_FONT_SIZE: f64 = 32.0;
-const ARTIST_BASE_FONT_SIZE: f64 = 24.0;
-const ALBUM_BASE_FONT_SIZE: f64 = 18.0;
-const DETAILS_BASE_FONT_SIZE: f64 = 18.0;
 
 pub(super) const TITLE_CSS_CLASS: &str = "now-playing-title";
 pub(super) const ARTIST_CSS_CLASS: &str = "now-playing-artist";

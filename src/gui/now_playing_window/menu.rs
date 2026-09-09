@@ -1,18 +1,13 @@
 //! Context-menu construction and preference-update signal bindings.
 
-use super::style::load_text_css;
-use super::track::TrackPresentation;
-use super::ui::apply_classic_track_info_alignment;
 use super::{
     AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
     BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
     BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS, BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
     BACKGROUND_MOTION_ZOOM_MAX_PERCENT, BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
     BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, DisplayMode, NowPlayingSettings,
-    NowPlayingWindow, TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS,
-    TRANSITION_DURATION_MIN_MS, TextSize, TrackInfoAlignment, TransitionEffect,
-    clamp_background_motion_zoom_percent, normalize_background_motion_reversal_duration_secs,
-    transition_duration_from_scale,
+    NowPlayingWindow, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TextSize,
+    TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
 use crate::core::preferences::NowPlayingPreferenceChange;
 use adw::prelude::*;
@@ -99,6 +94,12 @@ fn section_heading(title: &str) -> gtk::Label {
         .build()
 }
 
+fn label_control(label: &gtk::Label, control: &impl IsA<gtk::Widget>) {
+    control
+        .as_ref()
+        .update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
+}
+
 /// The context-menu controls whose state mirrors the active presentation settings.
 pub(super) struct NowPlayingControls {
     pub(super) display_mode_menu: gtk::DropDown,
@@ -161,7 +162,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     TextSize::install_slider_snap(&text_size);
     text_size.set_value(TextSize::default().scale_value());
     text_size.set_width_request(190);
-    let background_motion_enabled_label = gtk::Label::new(Some(&gettext("Bakground motion")));
+    let background_motion_enabled_label = gtk::Label::new(Some(&gettext("Background motion")));
     let background_motion_enabled = gtk::Switch::new();
     let background_motion_zoom_label = gtk::Label::new(Some(&gettext("Zoom level (%)")));
     let background_motion_zoom = gtk::Scale::with_range(
@@ -211,9 +212,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         TRANSITION_DURATION_MAX_MS as f64,
         TRANSITION_DURATION_STEP_MS,
     );
-    transition_duration.set_value(TRANSITION_DURATION_DEFAULT_MS as f64);
-    transition_duration.set_digits(0);
-    transition_duration.set_draw_value(true);
+    super::transition::configure_transition_duration_scale(&transition_duration);
     transition_duration.set_hexpand(true);
     transition_duration.set_width_request(190);
     let fullscreen_button_content = adw::ButtonContent::new();
@@ -430,6 +429,7 @@ impl NowPlayingWindow {
         let suppress_secondary_open = Rc::new(Cell::new(false));
         let suppress_secondary_open_for_closed = suppress_secondary_open.clone();
         popover.connect_closed(move |_| {
+            log::debug!("Now Playing menu: closed");
             suppress_secondary_open_for_closed.set(true);
             let suppress_secondary_open_for_idle = suppress_secondary_open_for_closed.clone();
             glib::idle_add_local_once(move || {
@@ -458,12 +458,14 @@ impl NowPlayingWindow {
                         popover.contains(f64::from(point.x()), f64::from(point.y()))
                     });
 
-            match context_menu_pointer_action(
+            let action = context_menu_pointer_action(
                 menu_visible,
                 clicked_inside,
                 gesture.current_button(),
                 suppress_secondary_open_for_pointer.get(),
-            ) {
+            );
+            log::debug!("Now Playing menu: button={}, visible={menu_visible}, inside={clicked_inside}, action={action:?}", gesture.current_button());
+            match action {
                 ContextMenuPointerAction::Open => {
                     let pointing_rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
                     popover.set_pointing_to(Some(&pointing_rect));
@@ -481,6 +483,31 @@ impl NowPlayingWindow {
             }
         });
         self.ui.window.add_controller(pointer);
+
+        let popover_for_keyboard = popover.downgrade();
+        let keyboard = gtk::EventControllerKey::new();
+        keyboard.connect_key_pressed(move |controller, key, _, modifiers| {
+            let opens_menu = key == gdk::Key::Menu
+                || (key == gdk::Key::F10 && modifiers.contains(gdk::ModifierType::SHIFT_MASK));
+            if !opens_menu {
+                return glib::Propagation::Proceed;
+            }
+            if let Some(popover) = popover_for_keyboard.upgrade() {
+                if popover.is_visible() {
+                    popover.popdown();
+                } else if let Some(window) = controller.widget() {
+                    popover.set_pointing_to(Some(&gdk::Rectangle::new(
+                        window.width() / 2,
+                        window.height() / 2,
+                        1,
+                        1,
+                    )));
+                    popover.popup();
+                }
+            }
+            glib::Propagation::Stop
+        });
+        self.ui.window.add_controller(keyboard);
 
         let window_for_fullscreen_button = self.ui.window.downgrade();
         let popover_for_fullscreen_button = popover.downgrade();
@@ -575,6 +602,7 @@ impl NowPlayingWindow {
         dropdown.set_selected(display_mode.index());
         dropdown.set_halign(gtk::Align::End);
         dropdown.set_valign(gtk::Align::Center);
+        label_control(&label, dropdown);
         menu_grid.attach(dropdown, 1, 0, 1, 1);
     }
 
@@ -610,6 +638,7 @@ impl NowPlayingWindow {
         switch.set_valign(gtk::Align::Center);
         switch.set_active(active);
         switch.set_sensitive(sensitive);
+        label_control(label, switch);
         menu_grid.attach(switch, 1, row, 1, 1);
     }
 
@@ -630,6 +659,7 @@ impl NowPlayingWindow {
         scale.set_halign(gtk::Align::End);
         scale.set_valign(gtk::Align::Center);
         scale.set_hexpand(false);
+        label_control(label, scale);
         menu_grid.attach(scale, 1, row, 1, 1);
     }
 
@@ -684,6 +714,7 @@ impl NowPlayingWindow {
         dropdown.set_halign(gtk::Align::End);
         dropdown.set_valign(gtk::Align::Center);
         dropdown.set_hexpand(false);
+        label_control(&label, dropdown);
         menu_grid.attach(dropdown, 1, row, 1, 1);
     }
 
@@ -706,6 +737,7 @@ impl NowPlayingWindow {
         scale.set_halign(gtk::Align::End);
         scale.set_valign(gtk::Align::Center);
         scale.set_hexpand(false);
+        label_control(&label, scale);
         menu_grid.attach(scale, 1, row, 1, 1);
     }
 
@@ -729,6 +761,7 @@ impl NowPlayingWindow {
             .album_cover_size
             .set_valign(gtk::Align::Center);
         self.controls.album_cover_size.set_hexpand(false);
+        label_control(&label, &self.controls.album_cover_size);
         menu_grid.attach(&self.controls.album_cover_size, 1, row, 1, 1);
     }
 
@@ -773,6 +806,7 @@ impl NowPlayingWindow {
             }
             TrackInfoAlignment::Right => self.controls.track_info_alignment_right.set_active(true),
         }
+        label_control(&label, &buttons);
         menu_grid.attach(&buttons, 1, row, 1, 1);
     }
 
@@ -802,373 +836,121 @@ impl NowPlayingWindow {
             BackgroundStyle::Gradient => self.controls.background_style_gradient.set_active(true),
             BackgroundStyle::Solid => self.controls.background_style_solid.set_active(true),
         }
+        label_control(&label, &buttons);
         menu_grid.attach(&buttons, 1, row, 1, 1);
     }
 
-    /// Connects preference controls to GUI preference update messages.
+    /// Controls only emit model changes; renderer updates have one application path.
     pub(super) fn connect_control_handlers(&self) {
-        let applying_settings_for_display_mode = self.state.applying_settings.clone();
-        let controller_for_display_mode = self.controller.clone();
-        let classic_settings_for_display_mode = self.controls.classic_settings.clone();
-        let hide_track_info_label_for_display_mode = self.controls.hide_track_info_label.clone();
-        let hide_track_info_for_display_mode = self.controls.hide_track_info.clone();
-        let text_size_label_for_display_mode = self.controls.text_size_label.clone();
-        let text_size_for_display_mode = self.controls.text_size.clone();
-        let background_motion_settings_for_display_mode =
-            self.controls.background_motion_settings.clone();
-        let background_motion_enabled_for_display_mode =
-            self.controls.background_motion_enabled.clone();
-        let background_motion_zoom_label_for_display_mode =
-            self.controls.background_motion_zoom_label.clone();
-        let background_motion_zoom_for_display_mode = self.controls.background_motion_zoom.clone();
-        let background_motion_reversal_label_for_display_mode = self
-            .controls
-            .background_motion_reversal_duration_label
-            .clone();
-        let background_motion_reversal_for_display_mode =
-            self.controls.background_motion_reversal_duration.clone();
-        let presentation_for_display_mode = TrackPresentation::from_window(self);
+        let bind_switch = |switch: &gtk::Switch, change: fn(bool) -> NowPlayingPreferenceChange| {
+            let applying = self.state.applying_settings.clone();
+            let controller = self.controller.clone();
+            switch.connect_active_notify(move |switch| {
+                if !applying.get() {
+                    controller.update(change(switch.is_active()));
+                }
+            });
+        };
+        bind_switch(
+            &self.controls.round_corners,
+            NowPlayingPreferenceChange::RoundCorners,
+        );
+        bind_switch(
+            &self.controls.hide_track_info,
+            NowPlayingPreferenceChange::HideTrackInfo,
+        );
+        bind_switch(
+            &self.controls.background_motion_enabled,
+            NowPlayingPreferenceChange::BackgroundMotionEnabled,
+        );
+        bind_switch(
+            &self.controls.always_display_last_recognized_song,
+            NowPlayingPreferenceChange::AlwaysDisplayLastRecognizedSong,
+        );
+
+        let applying = self.state.applying_settings.clone();
+        let controller = self.controller.clone();
         self.controls
             .display_mode_menu
             .connect_selected_notify(move |dropdown| {
-                if applying_settings_for_display_mode.get() {
-                    return;
-                }
-
-                let display_mode = DisplayMode::from_index(dropdown.selected());
-                controller_for_display_mode
-                    .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
-                classic_settings_for_display_mode
-                    .set_visible(display_mode.shows_classic_settings());
-                hide_track_info_label_for_display_mode
-                    .set_visible(display_mode.supports_hiding_track_info());
-                hide_track_info_for_display_mode
-                    .set_visible(display_mode.supports_hiding_track_info());
-                let show_text_size =
-                    display_mode.shows_track_info(hide_track_info_for_display_mode.is_active());
-                text_size_label_for_display_mode.set_visible(show_text_size);
-                text_size_for_display_mode.set_visible(show_text_size);
-                let supports_background_motion = display_mode.supports_background_motion();
-                background_motion_settings_for_display_mode.set_visible(supports_background_motion);
-                let show_motion_details = supports_background_motion
-                    && background_motion_enabled_for_display_mode.is_active();
-                background_motion_zoom_label_for_display_mode.set_visible(show_motion_details);
-                background_motion_zoom_for_display_mode.set_visible(show_motion_details);
-                background_motion_reversal_label_for_display_mode.set_visible(show_motion_details);
-                background_motion_reversal_for_display_mode.set_visible(show_motion_details);
-                presentation_for_display_mode.refresh_mode();
-            });
-
-        let applying_settings_for_round_corners = self.state.applying_settings.clone();
-        let controller_for_round_corners = self.controller.clone();
-        let artwork_overlay_for_round_corners = self.ui.artwork_overlay.clone();
-        self.controls
-            .round_corners
-            .connect_active_notify(move |switch| {
-                if applying_settings_for_round_corners.get() {
-                    return;
-                }
-
-                let active = switch.is_active();
-                controller_for_round_corners
-                    .update(NowPlayingPreferenceChange::RoundCorners(active));
-                if active {
-                    artwork_overlay_for_round_corners.add_css_class("now-playing-artwork-rounded");
-                } else {
-                    artwork_overlay_for_round_corners
-                        .remove_css_class("now-playing-artwork-rounded");
+                if !applying.get() {
+                    controller.update(NowPlayingPreferenceChange::DisplayMode(
+                        DisplayMode::from_index(dropdown.selected()),
+                    ));
                 }
             });
-
-        let applying_settings_for_hide = self.state.applying_settings.clone();
-        let controller_for_hide = self.controller.clone();
-        let classic_info_layout_for_hide = self.ui.classic_info_layout.clone();
-        let alignment_left_for_hide = self.controls.track_info_alignment_left.clone();
-        let alignment_center_for_hide = self.controls.track_info_alignment_center.clone();
-        let alignment_right_for_hide = self.controls.track_info_alignment_right.clone();
-        let text_size_label_for_hide = self.controls.text_size_label.clone();
-        let text_size_for_hide = self.controls.text_size.clone();
-        let presentation_for_hide = TrackPresentation::from_window(self);
-        self.controls
-            .hide_track_info
-            .connect_active_notify(move |button| {
-                if applying_settings_for_hide.get() {
-                    return;
-                }
-
-                let hide_track_info = button.is_active();
-                controller_for_hide
-                    .update(NowPlayingPreferenceChange::HideTrackInfo(hide_track_info));
-                classic_info_layout_for_hide.set_visible(!hide_track_info);
-                alignment_left_for_hide.set_sensitive(!hide_track_info);
-                alignment_center_for_hide.set_sensitive(!hide_track_info);
-                alignment_right_for_hide.set_sensitive(!hide_track_info);
-                text_size_label_for_hide.set_visible(!hide_track_info);
-                text_size_for_hide.set_visible(!hide_track_info);
-                presentation_for_hide.refresh_mode();
-            });
-
-        let applying_settings_for_text_size = self.state.applying_settings.clone();
-        let controller_for_text_size = self.controller.clone();
-        let text_css_for_text_size = self.text_css.clone();
-        let viewport_for_text_size = self.ui.background_area.clone();
-        self.controls.text_size.connect_value_changed(move |scale| {
-            if applying_settings_for_text_size.get() {
-                return;
-            }
-
-            let text_size = TextSize::from_scale_value(scale.value());
-            load_text_css(&text_css_for_text_size, &viewport_for_text_size, text_size);
-            controller_for_text_size
-                .update_debounced(NowPlayingPreferenceChange::TextSize(text_size));
-        });
-
-        let applying_settings_for_background_motion = self.state.applying_settings.clone();
-        let controller_for_background_motion = self.controller.clone();
-        let background_motion_zoom_label = self.controls.background_motion_zoom_label.clone();
-        let background_motion_zoom = self.controls.background_motion_zoom.clone();
-        let background_motion_reversal_label = self
-            .controls
-            .background_motion_reversal_duration_label
-            .clone();
-        let background_motion_reversal = self.controls.background_motion_reversal_duration.clone();
-        let presentation_for_background_motion = TrackPresentation::from_window(self);
-        self.controls
-            .background_motion_enabled
-            .connect_active_notify(move |switch| {
-                if applying_settings_for_background_motion.get() {
-                    return;
-                }
-
-                let enabled = switch.is_active();
-                controller_for_background_motion
-                    .update(NowPlayingPreferenceChange::BackgroundMotionEnabled(enabled));
-                background_motion_zoom_label.set_visible(enabled);
-                background_motion_zoom.set_visible(enabled);
-                background_motion_reversal_label.set_visible(enabled);
-                background_motion_reversal.set_visible(enabled);
-                presentation_for_background_motion.refresh_mode();
-            });
-
-        let applying_settings_for_background_motion_zoom = self.state.applying_settings.clone();
-        let controller_for_background_motion_zoom = self.controller.clone();
-        let presentation_for_background_motion_zoom = TrackPresentation::from_window(self);
-        self.controls
-            .background_motion_zoom
-            .connect_value_changed(move |scale| {
-                if applying_settings_for_background_motion_zoom.get() {
-                    return;
-                }
-
-                let zoom_percent =
-                    clamp_background_motion_zoom_percent(scale.value().round().max(0.0) as u16);
-                controller_for_background_motion_zoom.update_debounced(
-                    NowPlayingPreferenceChange::BackgroundMotionZoomPercent(zoom_percent),
-                );
-                presentation_for_background_motion_zoom.refresh_mode();
-            });
-
-        let applying_settings_for_background_motion_duration = self.state.applying_settings.clone();
-        let controller_for_background_motion_duration = self.controller.clone();
-        let presentation_for_background_motion_duration = TrackPresentation::from_window(self);
-        self.controls
-            .background_motion_reversal_duration
-            .connect_value_changed(move |scale| {
-                if applying_settings_for_background_motion_duration.get() {
-                    return;
-                }
-
-                let duration_secs = normalize_background_motion_reversal_duration_secs(
-                    scale.value().round().max(0.0) as u64,
-                );
-                controller_for_background_motion_duration.update_debounced(
-                    NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(duration_secs),
-                );
-                presentation_for_background_motion_duration.refresh_mode();
-            });
-
-        let applying_settings_for_alignment_left = self.state.applying_settings.clone();
-        let controller_for_alignment_left = self.controller.clone();
-        let info_box_for_alignment_left = self.ui.info_box.clone();
-        let title_for_alignment_left = self.ui.title_label.clone();
-        let artist_for_alignment_left = self.ui.artist_label.clone();
-        let album_for_alignment_left = self.ui.album_label.clone();
-        let details_for_alignment_left = self.ui.details_label.clone();
-        self.controls
-            .track_info_alignment_left
-            .connect_toggled(move |button| {
-                if applying_settings_for_alignment_left.get() || !button.is_active() {
-                    return;
-                }
-
-                controller_for_alignment_left.update(
-                    NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Left),
-                );
-                apply_classic_track_info_alignment(
-                    &info_box_for_alignment_left,
-                    [
-                        &title_for_alignment_left,
-                        &artist_for_alignment_left,
-                        &album_for_alignment_left,
-                        &details_for_alignment_left,
-                    ],
-                    TrackInfoAlignment::Left,
-                );
-            });
-
-        let applying_settings_for_alignment_center = self.state.applying_settings.clone();
-        let controller_for_alignment_center = self.controller.clone();
-        let info_box_for_alignment_center = self.ui.info_box.clone();
-        let title_for_alignment_center = self.ui.title_label.clone();
-        let artist_for_alignment_center = self.ui.artist_label.clone();
-        let album_for_alignment_center = self.ui.album_label.clone();
-        let details_for_alignment_center = self.ui.details_label.clone();
-        self.controls
-            .track_info_alignment_center
-            .connect_toggled(move |button| {
-                if applying_settings_for_alignment_center.get() || !button.is_active() {
-                    return;
-                }
-
-                controller_for_alignment_center.update(
-                    NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Center),
-                );
-                apply_classic_track_info_alignment(
-                    &info_box_for_alignment_center,
-                    [
-                        &title_for_alignment_center,
-                        &artist_for_alignment_center,
-                        &album_for_alignment_center,
-                        &details_for_alignment_center,
-                    ],
-                    TrackInfoAlignment::Center,
-                );
-            });
-
-        let applying_settings_for_alignment_right = self.state.applying_settings.clone();
-        let controller_for_alignment_right = self.controller.clone();
-        let info_box_for_alignment_right = self.ui.info_box.clone();
-        let title_for_alignment_right = self.ui.title_label.clone();
-        let artist_for_alignment_right = self.ui.artist_label.clone();
-        let album_for_alignment_right = self.ui.album_label.clone();
-        let details_for_alignment_right = self.ui.details_label.clone();
-        self.controls
-            .track_info_alignment_right
-            .connect_toggled(move |button| {
-                if applying_settings_for_alignment_right.get() || !button.is_active() {
-                    return;
-                }
-
-                controller_for_alignment_right.update(
-                    NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Right),
-                );
-                apply_classic_track_info_alignment(
-                    &info_box_for_alignment_right,
-                    [
-                        &title_for_alignment_right,
-                        &artist_for_alignment_right,
-                        &album_for_alignment_right,
-                        &details_for_alignment_right,
-                    ],
-                    TrackInfoAlignment::Right,
-                );
-            });
-
-        let applying_settings_for_album_cover_size = self.state.applying_settings.clone();
-        let album_cover_layout = self.ui.album_cover_layout.clone();
-        let controller_for_album_cover_size = self.controller.clone();
-        self.controls
-            .album_cover_size
-            .connect_value_changed(move |scale| {
-                if applying_settings_for_album_cover_size.get() {
-                    return;
-                }
-
-                let size = AlbumCoverSize::from_scale_value(scale.value());
-                album_cover_layout.set_size(size);
-                controller_for_album_cover_size
-                    .update_debounced(NowPlayingPreferenceChange::AlbumCoverSize(size));
-            });
-
-        let applying_settings_for_always_display_last = self.state.applying_settings.clone();
-        let controller_for_always_display_last = self.controller.clone();
-        self.controls
-            .always_display_last_recognized_song
-            .connect_active_notify(move |button| {
-                if applying_settings_for_always_display_last.get() {
-                    return;
-                }
-
-                let always_display_last_recognized_song = button.is_active();
-                controller_for_always_display_last.update(
-                    NowPlayingPreferenceChange::AlwaysDisplayLastRecognizedSong(
-                        always_display_last_recognized_song,
-                    ),
-                );
-            });
-
-        let applying_settings_for_transition = self.state.applying_settings.clone();
-        let controller_for_transition = self.controller.clone();
-        let transition_duration_control = self.controls.transition_duration.clone();
+        let applying = self.state.applying_settings.clone();
+        let controller = self.controller.clone();
         self.controls
             .transition_menu
             .connect_selected_notify(move |dropdown| {
-                if applying_settings_for_transition.get() {
-                    return;
+                if !applying.get() {
+                    controller.update(NowPlayingPreferenceChange::Transition(
+                        TransitionEffect::from_index(dropdown.selected()),
+                    ));
                 }
-
-                let effect = TransitionEffect::from_index(dropdown.selected());
-                controller_for_transition.update(NowPlayingPreferenceChange::Transition(effect));
-                transition_duration_control
-                    .set_sensitive(!matches!(effect, TransitionEffect::None));
             });
 
-        let applying_settings_for_duration = self.state.applying_settings.clone();
-        let controller_for_transition_duration = self.controller.clone();
-        self.controls
-            .transition_duration
-            .connect_value_changed(move |scale| {
-                if applying_settings_for_duration.get() {
-                    return;
+        for (button, change) in [
+            (
+                &self.controls.track_info_alignment_left,
+                NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Left),
+            ),
+            (
+                &self.controls.track_info_alignment_center,
+                NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Center),
+            ),
+            (
+                &self.controls.track_info_alignment_right,
+                NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Right),
+            ),
+            (
+                &self.controls.background_style_gradient,
+                NowPlayingPreferenceChange::BackgroundStyle(BackgroundStyle::Gradient),
+            ),
+            (
+                &self.controls.background_style_solid,
+                NowPlayingPreferenceChange::BackgroundStyle(BackgroundStyle::Solid),
+            ),
+        ] {
+            let applying = self.state.applying_settings.clone();
+            let controller = self.controller.clone();
+            button.connect_toggled(move |button| {
+                if !applying.get() && button.is_active() {
+                    controller.update(change);
                 }
-
-                let duration_ms = transition_duration_from_scale(scale.value());
-                controller_for_transition_duration.update_debounced(
-                    NowPlayingPreferenceChange::TransitionDurationMs(duration_ms),
-                );
             });
+        }
 
-        let applying_settings_for_gradient = self.state.applying_settings.clone();
-        let controller_for_gradient = self.controller.clone();
-        let background_area_for_gradient = self.ui.background_area.clone();
-        self.controls
-            .background_style_gradient
-            .connect_toggled(move |button| {
-                if applying_settings_for_gradient.get() || !button.is_active() {
-                    return;
+        let bind_scale = |scale: &gtk::Scale, change: fn(f64) -> NowPlayingPreferenceChange| {
+            let applying = self.state.applying_settings.clone();
+            let controller = self.controller.clone();
+            scale.connect_value_changed(move |scale| {
+                if !applying.get() {
+                    controller.update_debounced(change(scale.value()));
                 }
-
-                controller_for_gradient.update(NowPlayingPreferenceChange::BackgroundStyle(
-                    BackgroundStyle::Gradient,
-                ));
-                background_area_for_gradient.queue_draw();
             });
-
-        let applying_settings_for_solid = self.state.applying_settings.clone();
-        let controller_for_solid = self.controller.clone();
-        let background_area_for_solid = self.ui.background_area.clone();
-        self.controls
-            .background_style_solid
-            .connect_toggled(move |button| {
-                if applying_settings_for_solid.get() || !button.is_active() {
-                    return;
-                }
-
-                controller_for_solid.update(NowPlayingPreferenceChange::BackgroundStyle(
-                    BackgroundStyle::Solid,
-                ));
-                background_area_for_solid.queue_draw();
-            });
+        };
+        bind_scale(&self.controls.text_size, |value| {
+            NowPlayingPreferenceChange::TextSize(TextSize::from_scale_value(value))
+        });
+        bind_scale(&self.controls.album_cover_size, |value| {
+            NowPlayingPreferenceChange::AlbumCoverSize(AlbumCoverSize::from_scale_value(value))
+        });
+        bind_scale(&self.controls.background_motion_zoom, |value| {
+            NowPlayingPreferenceChange::BackgroundMotionZoomPercent(value.round().max(0.0) as u16)
+        });
+        bind_scale(
+            &self.controls.background_motion_reversal_duration,
+            |value| {
+                NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(
+                    value.round().max(0.0) as u64,
+                )
+            },
+        );
+        bind_scale(&self.controls.transition_duration, |value| {
+            NowPlayingPreferenceChange::TransitionDurationMs(transition_duration_from_scale(value))
+        });
     }
 }
 
@@ -1206,5 +988,26 @@ mod tests {
             context_menu_pointer_action(false, false, gdk::BUTTON_SECONDARY, true),
             ContextMenuPointerAction::Consume
         );
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn settings_controls_are_labelled_and_slider_gestures_do_not_retain_widgets() {
+        use adw::prelude::*;
+
+        gtk::init().unwrap();
+        let controls = super::build_controls();
+        let label = gtk::Label::new(Some("Text size"));
+        super::label_control(&label, &controls.text_size);
+        assert!(gtk::test_accessible_has_relation(
+            &controls.text_size,
+            gtk::AccessibleRelation::LabelledBy,
+        ));
+
+        let text_size = controls.text_size.downgrade();
+        let album_cover_size = controls.album_cover_size.downgrade();
+        drop(controls);
+        assert!(text_size.upgrade().is_none());
+        assert!(album_cover_size.upgrade().is_none());
     }
 }

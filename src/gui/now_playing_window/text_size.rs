@@ -38,11 +38,13 @@ impl TextSize {
 
     /// Snaps a drag near one of the named positions once it ends.
     pub(crate) fn install_slider_snap(scale: &gtk::Scale) {
-        let scale = scale.clone();
-        let scale_for_drag_end = scale.clone();
+        let scale_for_drag_end = scale.downgrade();
         let drag = gtk::GestureDrag::new();
         drag.set_propagation_phase(gtk::PropagationPhase::Capture);
         drag.connect_drag_end(move |_, _, _| {
+            let Some(scale_for_drag_end) = scale_for_drag_end.upgrade() else {
+                return;
+            };
             let snapped_value = Self::snapped_scale_value(scale_for_drag_end.value());
             if scale_for_drag_end.value() != snapped_value {
                 scale_for_drag_end.set_value(snapped_value);

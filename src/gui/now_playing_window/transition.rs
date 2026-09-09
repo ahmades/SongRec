@@ -1,7 +1,24 @@
 //! GTK presentation and slider conversion for track-transition preferences.
 
 use crate::core::preferences::{TransitionEffect, clamp_transition_duration_ms};
+use adw::prelude::*;
 use gettextrs::gettext;
+
+pub(super) fn configure_transition_duration_scale(scale: &gtk::Scale) {
+    use crate::core::preferences::{
+        TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
+    };
+    scale.adjustment().configure(
+        TRANSITION_DURATION_DEFAULT_MS as f64,
+        TRANSITION_DURATION_MIN_MS as f64,
+        TRANSITION_DURATION_MAX_MS as f64,
+        100.0,
+        500.0,
+        0.0,
+    );
+    scale.set_digits(0);
+    scale.set_draw_value(true);
+}
 
 /// Placement used while a size-changing `GtkRevealer` transition is running.
 ///

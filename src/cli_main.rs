@@ -8,6 +8,7 @@ use gettextrs::gettext;
 #[cfg(all(target_os = "linux", feature = "mpris"))]
 use mpris_server::PlaybackStatus;
 
+use crate::core::artwork_service::ArtworkPolicy;
 use crate::core::http_task::http_task;
 use crate::core::microphone_thread::microphone_thread;
 use crate::core::processing_thread::processing_thread;
@@ -68,8 +69,6 @@ pub fn cli_main(parameters: CLIParameters) -> Result<(), Box<dyn Error>> {
         processing_thread(processing_rx, http_tx, gui_tx_3);
     });
 
-    glib::spawn_future_local(http_task(http_rx, gui_tx, microphone_tx_3));
-
     let main_loop = glib::MainLoop::new(None, false);
     let loop_inner = main_loop.clone();
 
@@ -89,6 +88,16 @@ pub fn cli_main(parameters: CLIParameters) -> Result<(), Box<dyn Error>> {
                 None
             }
         };
+        #[cfg(all(target_os = "linux", feature = "mpris"))]
+        let artwork_needed = mpris_obj.is_some();
+        #[cfg(not(all(target_os = "linux", feature = "mpris")))]
+        let artwork_needed = false;
+        let artwork_policy = if artwork_needed {
+            ArtworkPolicy::Thumbnail
+        } else {
+            ArtworkPolicy::None
+        };
+        glib::spawn_future_local(http_task(http_rx, gui_tx, microphone_tx_3, artwork_policy));
         #[cfg(all(target_os = "linux", feature = "mpris"))]
         let mut last_cover_path = None;
 

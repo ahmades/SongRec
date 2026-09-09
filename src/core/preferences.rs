@@ -918,9 +918,18 @@ impl PreferencesInterface {
         self.write_after_update();
     }
 
-    pub fn update_now_playing(&mut self, change: NowPlayingPreferenceChange) {
+    #[cfg(test)]
+    fn update_now_playing(&mut self, change: NowPlayingPreferenceChange) {
         self.preferences.now_playing.apply_change(change);
         self.write_after_update();
+    }
+
+    /// Updates memory immediately; slider debouncing only postpones the disk write.
+    pub fn set_now_playing(&mut self, settings: NowPlayingPreferences, persist: bool) {
+        self.preferences.now_playing = settings;
+        if persist {
+            self.write_after_update();
+        }
     }
 
     fn write_after_update(&self) {
@@ -950,6 +959,24 @@ mod tests {
         TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
         TextSize, TrackInfoAlignment, TransitionEffect,
     };
+
+    #[test]
+    fn pending_snapshot_is_in_memory_before_disk_save_and_can_be_flushed_on_exit() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("preferences.toml");
+        let mut interface = PreferencesInterface {
+            preferences_file_path: Some(path.clone()),
+            preferences: Preferences::default(),
+        };
+        let mut snapshot = NowPlayingPreferences::default();
+        snapshot.shared.text_size = TextSize::LARGE;
+        interface.set_now_playing(snapshot, false);
+        assert_eq!(interface.preferences.now_playing, snapshot);
+        assert!(!path.exists());
+        interface.set_now_playing(snapshot, true);
+        let saved: Preferences = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(saved.now_playing, snapshot);
+    }
 
     #[test]
     fn now_playing_defaults_have_one_typed_source() {

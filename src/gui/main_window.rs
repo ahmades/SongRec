@@ -235,6 +235,19 @@ impl App {
             gio::ApplicationFlags::HANDLES_OPEN,
         );
 
+        // The application can exit before a slider's debounce timer or GUI
+        // message is dispatched. Persist the controller's latest snapshot on
+        // every shutdown path (window close, keyboard action, or MPRIS quit).
+        let settings_for_shutdown = self.now_playing_controller.clone();
+        let preferences_for_shutdown = self.preferences_interface.clone();
+        application.connect_shutdown(move |_| {
+            settings_for_shutdown.cancel_all();
+            preferences_for_shutdown
+                .lock()
+                .unwrap()
+                .set_now_playing(settings_for_shutdown.settings(), true);
+        });
+
         // => https://gtk-rs.org/gtk-rs-core/git/docs/gio/struct.Application.html
         // => https://gtk-rs.org/gtk-rs-core/git/docs/gio/prelude/trait.ApplicationExtManual.html#method.run
         // => https://gtk-rs.org/gtk-rs-core/git/docs/gio/struct.ApplicationFlags.html#associatedconstant.HANDLES_COMMAND_LINE
@@ -785,7 +798,12 @@ impl App {
         let http_rx = self.http_rx.clone();
         let gui_tx = self.gui_tx.clone();
         let microphone_tx = self.microphone_tx.clone();
-        glib::spawn_future_local(http_task(http_rx, gui_tx, microphone_tx));
+        glib::spawn_future_local(http_task(
+            http_rx,
+            gui_tx,
+            microphone_tx,
+            crate::core::artwork_service::ArtworkPolicy::Display,
+        ));
 
         let gui_rx = self.gui_rx.clone();
         let preferences_interface_ptr = self.preferences_interface.clone();
@@ -860,6 +878,36 @@ impl App {
         let ctx_buffered_log = self.ctx_buffered_log.clone();
         let application = application.clone();
         glib::spawn_future_local(async move {
+            let notification_application = application.downgrade();
+            let notification_preferences = preferences_interface_ptr.clone();
+            let mut recognition_notifications =
+                crate::gui::recognition_notification::RecognitionNotifications::new(move |track| {
+                    if notification_preferences
+                        .lock()
+                        .unwrap()
+                        .preferences
+                        .enable_notifications
+                        != Some(true)
+                    {
+                        return;
+                    }
+                    let Some(application) = notification_application.upgrade() else {
+                        return;
+                    };
+                    let notification = gio::Notification::new(&gettext("Song recognized"));
+                    notification.set_body(Some(&format!(
+                        "{} - {}",
+                        track.artist_name, track.song_name
+                    )));
+                    if let Some(artwork) = track.cover_image() {
+                        // The notification daemon accepts the original image;
+                        // avoid PNG-encoding a full-resolution GTK texture here.
+                        notification.set_icon(&gio::BytesIcon::new(&glib::Bytes::from_owned(
+                            artwork.encoded().to_vec(),
+                        )));
+                    }
+                    application.send_notification(Some("recognized-song"), &notification);
+                });
             #[cfg(all(target_os = "linux", feature = "mpris"))]
             let mut mpris_obj = {
                 let player = if _enable_mpris_cli && _old_preferences.enable_mpris_v2 != Some(false)
@@ -915,7 +963,7 @@ impl App {
                                 "artist_name": msg.artist_name,
                                 "album_name": msg.album_name,
                                 "song_name": msg.song_name,
-                                "cover_image": msg.cover_image.as_ref().map(|artwork| {
+                                "cover_image": msg.cover_image().map(|artwork| {
                                     let encoded = artwork.encoded();
                                     format!("{:02x?}...", &encoded[..encoded.len().min(16)])
                                 }),
@@ -979,13 +1027,11 @@ impl App {
                                 }
                             }
                         }
-                        NowPlayingPreferenceChanged { change, persist } => {
-                            if persist {
-                                preferences_interface_ptr
-                                    .lock()
-                                    .unwrap()
-                                    .update_now_playing(change);
-                            }
+                        NowPlayingPreferenceChanged { settings, persist } => {
+                            preferences_interface_ptr
+                                .lock()
+                                .unwrap()
+                                .set_now_playing(settings, persist);
 
                             let settings = now_playing_controller.settings();
                             now_playing_preferences_view.apply(settings);
@@ -1101,17 +1147,14 @@ impl App {
                             if results_label.text().as_str() != song_name {
                                 results_label.set_label(&song_name);
 
-                                let notification =
-                                    gio::Notification::new(&gettext("Song recognized"));
-                                notification.set_body(Some(&song_name));
+                                recognition_notifications.recognized(message.clone());
 
-                                if let Some(ref cover_image) = message.cover_image {
+                                if let Some(cover_image) = message.cover_image() {
                                     let texture = artwork_texture(cover_image);
                                     results_image.set_visible(true);
                                     results_image.set_paintable(Some(&texture));
 
                                     results_image.set_tooltip_text(message.album_name.as_deref());
-                                    notification.set_icon(&texture);
                                 } else {
                                     results_image.set_visible(false);
                                 }
@@ -1126,17 +1169,6 @@ impl App {
                                     && let Some(ref player) = mpris_obj
                                 {
                                     update_song(player, &message, &mut last_cover_path).await;
-                                }
-
-                                if preferences_interface_ptr
-                                    .lock()
-                                    .unwrap()
-                                    .preferences
-                                    .enable_notifications
-                                    == Some(true)
-                                {
-                                    application
-                                        .send_notification(Some("recognized-song"), &notification);
                                 }
 
                                 let new_entry = SongHistoryRecord {
@@ -1188,7 +1220,8 @@ impl App {
                             }
 
                             if let Some(track) = latest_track {
-                                if let Some(ref artwork) = track.cover_image {
+                                recognition_notifications.artwork_resolved(&track);
+                                if let Some(artwork) = track.cover_image() {
                                     let texture = artwork_texture(artwork);
                                     results_image.set_visible(true);
                                     results_image.set_paintable(Some(&texture));
@@ -1219,6 +1252,10 @@ impl App {
                                     settings.shared.always_display_last_recognized_song,
                                 )
                             };
+
+                            if let Some(track) = recognition_state.borrow().last_recognized() {
+                                recognition_notifications.artwork_resolved(&track);
+                            }
 
                             if let Some(track) = visible_track
                                 && let Some(ref now_playing_window) = *now_playing_window.borrow()

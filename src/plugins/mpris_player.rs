@@ -63,7 +63,7 @@ pub async fn update_song(
         let _ = fs::remove_file(path);
     }
 
-    if let Some(ref buf) = message.cover_image {
+    if let Some(buf) = message.cover_image() {
         let encoded = buf.encoded();
         let (mime_ext, mime_type) = if encoded.len() >= 4
             && encoded[0] == 0x89

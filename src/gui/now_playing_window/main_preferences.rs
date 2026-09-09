@@ -44,6 +44,7 @@ struct PreferencesWidgets {
 pub(crate) struct NowPlayingPreferencesView {
     widgets: PreferencesWidgets,
     applying: Rc<Cell<bool>>,
+    applied_settings: Cell<Option<NowPlayingSettings>>,
 }
 
 impl NowPlayingPreferencesView {
@@ -88,6 +89,7 @@ impl NowPlayingPreferencesView {
         AlbumCoverSize::install_slider_snap(&widgets.album_cover_size);
         TextSize::configure_scale(&widgets.text_size);
         TextSize::install_slider_snap(&widgets.text_size);
+        super::transition::configure_transition_duration_scale(&widgets.transition_duration);
         configure_integer_scale(
             &widgets.background_motion_zoom,
             f64::from(BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT),
@@ -102,6 +104,23 @@ impl NowPlayingPreferencesView {
             BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS as f64,
             BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS as f64,
         );
+
+        for (scale, row_name) in [
+            (&widgets.text_size, "text_size_setting"),
+            (&widgets.album_cover_size, "album_cover_size_setting"),
+            (
+                &widgets.background_motion_zoom,
+                "background_motion_zoom_setting",
+            ),
+            (
+                &widgets.background_motion_reversal_duration,
+                "background_motion_reversal_duration_setting",
+            ),
+            (&widgets.transition_duration, "transition_duration_setting"),
+        ] {
+            let row: adw::ActionRow = builder.object(row_name).unwrap();
+            scale.update_property(&[gtk::accessible::Property::Label(row.title().as_str())]);
+        }
 
         let display_mode_labels = DisplayMode::ALL
             .into_iter()
@@ -130,6 +149,7 @@ impl NowPlayingPreferencesView {
         let view = Self {
             widgets,
             applying: Rc::new(Cell::new(false)),
+            applied_settings: Cell::new(None),
         };
         view.apply(controller.settings());
         view.connect_handlers(controller);
@@ -138,6 +158,9 @@ impl NowPlayingPreferencesView {
 
     /// Applies a complete settings snapshot without treating widget changes as user input.
     pub(crate) fn apply(&self, settings: NowPlayingSettings) {
+        if self.applied_settings.replace(Some(settings)) == Some(settings) {
+            return;
+        }
         let was_applying = self.applying.replace(true);
 
         self.widgets
@@ -239,241 +262,113 @@ impl NowPlayingPreferencesView {
             controller_for_reset.reset();
         });
 
+        let bind_switch =
+            |switch: &adw::SwitchRow, change: fn(bool) -> NowPlayingPreferenceChange| {
+                let applying = self.applying.clone();
+                let controller = controller.clone();
+                switch.connect_active_notify(move |switch| {
+                    if !applying.get() {
+                        controller.update(change(switch.is_active()));
+                    }
+                });
+            };
+        bind_switch(
+            &self.widgets.round_corners,
+            NowPlayingPreferenceChange::RoundCorners,
+        );
+        bind_switch(
+            &self.widgets.hide_track_info,
+            NowPlayingPreferenceChange::HideTrackInfo,
+        );
+        bind_switch(
+            &self.widgets.background_motion_enabled,
+            NowPlayingPreferenceChange::BackgroundMotionEnabled,
+        );
+        bind_switch(
+            &self.widgets.always_display_last_recognized_song,
+            NowPlayingPreferenceChange::AlwaysDisplayLastRecognizedSong,
+        );
+
         let applying = self.applying.clone();
-        let controller_for_display_mode = controller.clone();
-        let classic_settings = self.widgets.classic_settings.clone();
-        let hide_track_info = self.widgets.hide_track_info.clone();
-        let text_size_row = self.widgets.text_size_row.clone();
-        let background_motion_settings = self.widgets.background_motion_settings.clone();
-        let background_motion_enabled = self.widgets.background_motion_enabled.clone();
-        let background_motion_zoom_row = self.widgets.background_motion_zoom_row.clone();
-        let background_motion_reversal_duration_row =
-            self.widgets.background_motion_reversal_duration_row.clone();
+        let controller_for_mode = controller.clone();
         self.widgets
             .display_mode
             .connect_selected_notify(move |combo| {
-                if applying.get() {
-                    return;
-                }
-
-                let display_mode = DisplayMode::from_index(combo.selected());
-                controller_for_display_mode
-                    .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
-                classic_settings.set_visible(display_mode.shows_classic_settings());
-                hide_track_info.set_visible(display_mode.supports_hiding_track_info());
-                text_size_row
-                    .set_visible(display_mode.shows_track_info(hide_track_info.is_active()));
-                let supports_background_motion = display_mode.supports_background_motion();
-                background_motion_settings.set_visible(supports_background_motion);
-                let show_motion_controls =
-                    supports_background_motion && background_motion_enabled.is_active();
-                background_motion_zoom_row.set_visible(show_motion_controls);
-                background_motion_reversal_duration_row.set_visible(show_motion_controls);
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_round_corners = controller.clone();
-        self.widgets
-            .round_corners
-            .connect_active_notify(move |switch| {
                 if !applying.get() {
-                    controller_for_round_corners
-                        .update(NowPlayingPreferenceChange::RoundCorners(switch.is_active()));
-                }
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_hide_track_info = controller.clone();
-        let track_info_alignment = self.widgets.track_info_alignment.clone();
-        let text_size_row = self.widgets.text_size_row.clone();
-        self.widgets
-            .hide_track_info
-            .connect_active_notify(move |switch| {
-                if applying.get() {
-                    return;
-                }
-
-                controller_for_hide_track_info.update(NowPlayingPreferenceChange::HideTrackInfo(
-                    switch.is_active(),
-                ));
-                track_info_alignment.set_sensitive(!switch.is_active());
-                text_size_row.set_visible(!switch.is_active());
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_text_size = controller.clone();
-        self.widgets.text_size.connect_value_changed(move |scale| {
-            if !applying.get() {
-                controller_for_text_size.update_debounced(NowPlayingPreferenceChange::TextSize(
-                    TextSize::from_scale_value(scale.value()),
-                ));
-            }
-        });
-
-        let applying = self.applying.clone();
-        let controller_for_background_motion_enabled = controller.clone();
-        let background_motion_zoom_row = self.widgets.background_motion_zoom_row.clone();
-        let background_motion_reversal_duration_row =
-            self.widgets.background_motion_reversal_duration_row.clone();
-        self.widgets
-            .background_motion_enabled
-            .connect_active_notify(move |switch| {
-                if applying.get() {
-                    return;
-                }
-
-                let enabled = switch.is_active();
-                controller_for_background_motion_enabled
-                    .update(NowPlayingPreferenceChange::BackgroundMotionEnabled(enabled));
-                background_motion_zoom_row.set_visible(enabled);
-                background_motion_reversal_duration_row.set_visible(enabled);
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_background_motion_zoom = controller.clone();
-        self.widgets
-            .background_motion_zoom
-            .connect_value_changed(move |scale| {
-                if !applying.get() {
-                    controller_for_background_motion_zoom.update_debounced(
-                        NowPlayingPreferenceChange::BackgroundMotionZoomPercent(
-                            scale.value().round().max(0.0) as u16,
-                        ),
-                    );
-                }
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_background_motion_reversal_duration = controller.clone();
-        self.widgets
-            .background_motion_reversal_duration
-            .connect_value_changed(move |scale| {
-                if !applying.get() {
-                    controller_for_background_motion_reversal_duration.update_debounced(
-                        NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(
-                            scale.value().round().max(0.0) as u64,
-                        ),
-                    );
-                }
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_alignment_left = controller.clone();
-        self.widgets
-            .track_info_alignment_left
-            .connect_toggled(move |button| {
-                if !applying.get() && button.is_active() {
-                    controller_for_alignment_left.update(
-                        NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Left),
-                    );
-                }
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_alignment_center = controller.clone();
-        self.widgets
-            .track_info_alignment_center
-            .connect_toggled(move |button| {
-                if !applying.get() && button.is_active() {
-                    controller_for_alignment_center.update(
-                        NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Center),
-                    );
-                }
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_alignment_right = controller.clone();
-        self.widgets
-            .track_info_alignment_right
-            .connect_toggled(move |button| {
-                if !applying.get() && button.is_active() {
-                    controller_for_alignment_right.update(
-                        NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Right),
-                    );
-                }
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_album_cover_size = controller.clone();
-        self.widgets
-            .album_cover_size
-            .connect_value_changed(move |scale| {
-                if !applying.get() {
-                    controller_for_album_cover_size.update_debounced(
-                        NowPlayingPreferenceChange::AlbumCoverSize(
-                            AlbumCoverSize::from_scale_value(scale.value()),
-                        ),
-                    );
-                }
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_gradient = controller.clone();
-        self.widgets
-            .background_style_gradient
-            .connect_toggled(move |button| {
-                if !applying.get() && button.is_active() {
-                    controller_for_gradient.update(NowPlayingPreferenceChange::BackgroundStyle(
-                        BackgroundStyle::Gradient,
+                    controller_for_mode.update(NowPlayingPreferenceChange::DisplayMode(
+                        DisplayMode::from_index(combo.selected()),
                     ));
                 }
             });
-
-        let applying = self.applying.clone();
-        let controller_for_solid = controller.clone();
-        self.widgets
-            .background_style_solid
-            .connect_toggled(move |button| {
-                if !applying.get() && button.is_active() {
-                    controller_for_solid.update(NowPlayingPreferenceChange::BackgroundStyle(
-                        BackgroundStyle::Solid,
-                    ));
-                }
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_always_display = controller.clone();
-        self.widgets
-            .always_display_last_recognized_song
-            .connect_active_notify(move |switch| {
-                if !applying.get() {
-                    controller_for_always_display.update(
-                        NowPlayingPreferenceChange::AlwaysDisplayLastRecognizedSong(
-                            switch.is_active(),
-                        ),
-                    );
-                }
-            });
-
         let applying = self.applying.clone();
         let controller_for_transition = controller.clone();
-        let transition_duration = self.widgets.transition_duration.clone();
         self.widgets
             .transition
             .connect_selected_notify(move |combo| {
-                if applying.get() {
-                    return;
-                }
-
-                let transition = TransitionEffect::from_index(combo.selected());
-                controller_for_transition
-                    .update(NowPlayingPreferenceChange::Transition(transition));
-                transition_duration.set_sensitive(!matches!(transition, TransitionEffect::None));
-            });
-
-        let applying = self.applying.clone();
-        let controller_for_transition_duration = controller.clone();
-        self.widgets
-            .transition_duration
-            .connect_value_changed(move |scale| {
                 if !applying.get() {
-                    controller_for_transition_duration.update_debounced(
-                        NowPlayingPreferenceChange::TransitionDurationMs(
-                            transition_duration_from_scale(scale.value()),
-                        ),
-                    );
+                    controller_for_transition.update(NowPlayingPreferenceChange::Transition(
+                        TransitionEffect::from_index(combo.selected()),
+                    ));
                 }
             });
+
+        for (button, change) in [
+            (
+                &self.widgets.track_info_alignment_left,
+                NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Left),
+            ),
+            (
+                &self.widgets.track_info_alignment_center,
+                NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Center),
+            ),
+            (
+                &self.widgets.track_info_alignment_right,
+                NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Right),
+            ),
+            (
+                &self.widgets.background_style_gradient,
+                NowPlayingPreferenceChange::BackgroundStyle(BackgroundStyle::Gradient),
+            ),
+            (
+                &self.widgets.background_style_solid,
+                NowPlayingPreferenceChange::BackgroundStyle(BackgroundStyle::Solid),
+            ),
+        ] {
+            let applying = self.applying.clone();
+            let controller = controller.clone();
+            button.connect_toggled(move |button| {
+                if !applying.get() && button.is_active() {
+                    controller.update(change);
+                }
+            });
+        }
+
+        let bind_scale = |scale: &gtk::Scale, change: fn(f64) -> NowPlayingPreferenceChange| {
+            let applying = self.applying.clone();
+            let controller = controller.clone();
+            scale.connect_value_changed(move |scale| {
+                if !applying.get() {
+                    controller.update_debounced(change(scale.value()));
+                }
+            });
+        };
+        bind_scale(&self.widgets.text_size, |value| {
+            NowPlayingPreferenceChange::TextSize(TextSize::from_scale_value(value))
+        });
+        bind_scale(&self.widgets.album_cover_size, |value| {
+            NowPlayingPreferenceChange::AlbumCoverSize(AlbumCoverSize::from_scale_value(value))
+        });
+        bind_scale(&self.widgets.background_motion_zoom, |value| {
+            NowPlayingPreferenceChange::BackgroundMotionZoomPercent(value.round().max(0.0) as u16)
+        });
+        bind_scale(&self.widgets.background_motion_reversal_duration, |value| {
+            NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(
+                value.round().max(0.0) as u64
+            )
+        });
+        bind_scale(&self.widgets.transition_duration, |value| {
+            NowPlayingPreferenceChange::TransitionDurationMs(transition_duration_from_scale(value))
+        });
     }
 }
 
