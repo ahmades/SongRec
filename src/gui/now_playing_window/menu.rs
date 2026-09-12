@@ -1,5 +1,6 @@
 //! Context-menu construction and preference-update signal bindings.
 
+use super::ui::toggle_fullscreen;
 use super::{
     AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
     BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
@@ -545,11 +546,7 @@ impl NowPlayingWindow {
             if let Some(popover) = popover_for_fullscreen_button.upgrade() {
                 popover.popdown();
             }
-            if window.is_fullscreen() {
-                window.unfullscreen();
-            } else {
-                window.fullscreen();
-            }
+            toggle_fullscreen(&window);
         });
 
         let fullscreen_cursor_hide = DebouncedAction::default();

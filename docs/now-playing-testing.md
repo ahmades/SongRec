@@ -48,6 +48,10 @@ supported native backends (Wayland and X11), windowed and fullscreen:
    with the keyboard, and close with Escape.
 7. Verify each setting changed in either interface is reflected in the other;
    adjust a slider and immediately quit, then confirm its value after restart.
+8. In each display mode, double-click the canvas with the primary mouse button
+   to enter fullscreen, then again to exit. The menu's fullscreen button must
+   stay in sync. Single/secondary clicks and double-clicks inside the settings
+   menu must not toggle fullscreen; F11 must still work.
 
 Run with `-v` to include the menu pointer/close diagnostics. Keep backend details
 and the exact dropdown open/close sequence with any failure report.
@@ -58,6 +62,8 @@ and the exact dropdown open/close sequence with any failure report.
 and keyboard events through a private Mutter compositor. It covers both mouse
 buttons, both dropdowns, selecting an item and toggling the dropdown closed,
 non-fullscreen/fullscreen, and Menu/Shift+F10, Tab, slider keys, and Escape.
+It also checks canvas double-click fullscreen entry/exit in all four display
+modes, menu-action labels, excluded clicks, and F11 after using the gesture.
 It does not operate the user's desktop or save their preferences.
 
 Build with `cargo test --release --no-run`, then set `SONGREC_TEST_BINARY` to the

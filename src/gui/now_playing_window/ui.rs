@@ -638,6 +638,15 @@ pub(super) struct NowPlayingWidgets {
     pub(super) content_transition: TrackTransitionLayout,
 }
 
+/// Shared by the keyboard shortcut, canvas gesture, and context-menu action.
+pub(super) fn toggle_fullscreen(window: &gtk::Window) {
+    if window.is_fullscreen() {
+        window.unfullscreen();
+    } else {
+        window.fullscreen();
+    }
+}
+
 /// Builds the window, artwork presentation, metadata widgets, and static CSS providers.
 pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
     let window = gtk::Window::builder()
@@ -814,6 +823,23 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
         TrackTransitionLayout::new(content_revealer, content_reservation, &overlay);
     window.set_child(Some(&overlay));
 
+    // Target only the canvas subtree: the titlebar and context-menu popovers
+    // keep their own click behavior. GTK supplies the desktop's double-click
+    // timing and distance thresholds; single and secondary clicks do nothing.
+    let double_click = gtk::GestureClick::new();
+    double_click.set_button(gdk::BUTTON_PRIMARY);
+    double_click.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let window_for_double_click = window.downgrade();
+    double_click.connect_pressed(move |gesture, presses, _, _| {
+        if presses == 2
+            && let Some(window) = window_for_double_click.upgrade()
+        {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            toggle_fullscreen(&window);
+        }
+    });
+    overlay.add_controller(double_click);
+
     let background_css = gtk::CssProvider::new();
     if let Some(display) = gdk::Display::default() {
         gtk::style_context_add_provider_for_display(
@@ -838,11 +864,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
         if key == gtk::gdk::Key::F11
             && let Some(window) = window_for_key.upgrade()
         {
-            if window.is_fullscreen() {
-                window.unfullscreen();
-            } else {
-                window.fullscreen();
-            }
+            toggle_fullscreen(&window);
             glib::Propagation::Stop
         } else {
             glib::Propagation::Proceed

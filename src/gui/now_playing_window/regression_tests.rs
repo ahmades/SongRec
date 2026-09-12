@@ -136,6 +136,11 @@ impl TestInput {
         self.send("NotifyPointerMotionRelative", Some(&(x, y).to_variant()))
             .await;
         settle().await;
+        self.click_at_pointer(button).await;
+        settle().await;
+    }
+
+    async fn click_at_pointer(&self, button: u32) {
         let evdev_button: i32 = if button == 1 { 272 } else { 273 };
         self.send(
             "NotifyPointerButton",
@@ -147,6 +152,20 @@ impl TestInput {
             Some(&(evdev_button, false).to_variant()),
         )
         .await;
+    }
+
+    async fn double_click(
+        &self,
+        window_id: Option<&str>,
+        window: &gtk::Window,
+        x: i32,
+        y: i32,
+        button: u32,
+    ) {
+        self.click(window_id, window, x, y, button).await;
+        // Do not move the pointer between presses: doing so resets GTK's
+        // multi-click sequence, even when both clicks end at the same point.
+        self.click_at_pointer(button).await;
         settle().await;
     }
 }
@@ -348,6 +367,9 @@ fn real_pointer_dismisses_menu_after_using_nested_dropdowns() {
         .chain(std::io::stderr())
         .apply();
     adw::init().unwrap();
+    gtk::Settings::default()
+        .unwrap()
+        .set_gtk_double_click_time(400);
     let backend = gdk::Display::default().unwrap().type_().name();
     assert!(matches!(backend, "GdkX11Display" | "GdkWaylandDisplay"));
     let x11 = backend == "GdkX11Display";
@@ -468,6 +490,49 @@ fn real_pointer_dismisses_menu_after_using_nested_dropdowns() {
             input.key(1).await;
             wait_until("Escape dismissed menu", || !menu.is_visible()).await;
         }
+        window.0.ui.window.unfullscreen();
+        wait_until("windowed for double-click checks", || !window.0.ui.window.is_fullscreen()).await;
+        for mode in [super::DisplayMode::Classic, super::DisplayMode::Cinema, super::DisplayMode::Ambient, super::DisplayMode::LightsOff] {
+            window.0.controller.update(crate::core::preferences::NowPlayingPreferenceChange::DisplayMode(mode));
+            window.0.refresh_from_controller();
+            for fullscreen in [true, false] {
+                glib::timeout_future(Duration::from_millis(500)).await;
+                eprintln!("canvas double-click: mode={mode:?}, target fullscreen={fullscreen}");
+                input.double_click(id, &window.0.ui.window, 30, window.0.ui.window.height() - 30, 1).await;
+                wait_until("double-click toggled fullscreen", || window.0.ui.window.is_fullscreen() == fullscreen).await;
+                assert_eq!(window.0.controls.fullscreen_button_content.label(), gettextrs::gettext(if fullscreen { "Exit full screen" } else { "Enter full screen" }));
+            }
+        }
+        glib::timeout_future(Duration::from_millis(500)).await;
+        input.click(id, &window.0.ui.window, 30, window.0.ui.window.height() - 30, 1).await;
+        assert!(!window.0.ui.window.is_fullscreen(), "single click must not toggle fullscreen");
+        // A secondary double-click opens/dismisses the menu, never fullscreen.
+        input.double_click(id, &window.0.ui.window, 30, window.0.ui.window.height() - 30, 3).await;
+        assert!(!window.0.ui.window.is_fullscreen());
+        if menu.is_visible() {
+            input.key(1).await;
+        }
+        // Menu controls live outside the canvas gesture's propagation path.
+        input.click(id, &window.0.ui.window, window.0.ui.window.width() / 2, window.0.ui.window.height() / 2, 3).await;
+        wait_until("menu reopened for double-click check", || menu.is_visible()).await;
+        let (x, y) = widget_center(&window.0.controls.text_size_label, &window.0.ui.window);
+        input.double_click(id, &window.0.ui.window, x, y, 1).await;
+        assert!(menu.is_visible());
+        assert!(!window.0.ui.window.is_fullscreen(), "menu double-click must not toggle fullscreen");
+        // Explicit teardown avoids testing backend-dependent popup keyboard
+        // focus a second time; Escape was exercised above. F11 belongs to the
+        // toplevel window and should be checked with no native popup active.
+        menu.popdown();
+        wait_until("menu dismissed before F11", || !menu.is_visible()).await;
+        if let Some(id) = id {
+            xdotool(&["windowactivate", id]).await;
+        }
+        settle().await;
+        // F11 still uses the same action, including after canvas gestures.
+        input.key(87).await;
+        wait_until("F11 entered fullscreen", || window.0.ui.window.is_fullscreen()).await;
+        input.key(87).await;
+        wait_until("F11 exited fullscreen", || !window.0.ui.window.is_fullscreen()).await;
         input.send("Stop", None).await;
     });
 }
