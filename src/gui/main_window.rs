@@ -238,15 +238,8 @@ impl App {
         // The application can exit before a slider's debounce timer or GUI
         // message is dispatched. Persist the controller's latest snapshot on
         // every shutdown path (window close, keyboard action, or MPRIS quit).
-        let settings_for_shutdown = self.now_playing_controller.clone();
-        let preferences_for_shutdown = self.preferences_interface.clone();
-        application.connect_shutdown(move |_| {
-            settings_for_shutdown.cancel_all();
-            preferences_for_shutdown
-                .lock()
-                .unwrap()
-                .set_now_playing(settings_for_shutdown.settings(), true);
-        });
+        self.now_playing_controller
+            .connect_shutdown(&application, self.preferences_interface.clone());
 
         // => https://gtk-rs.org/gtk-rs-core/git/docs/gio/struct.Application.html
         // => https://gtk-rs.org/gtk-rs-core/git/docs/gio/prelude/trait.ApplicationExtManual.html#method.run
@@ -878,35 +871,22 @@ impl App {
         let ctx_buffered_log = self.ctx_buffered_log.clone();
         let application = application.clone();
         glib::spawn_future_local(async move {
-            let notification_application = application.downgrade();
             let notification_preferences = preferences_interface_ptr.clone();
+            let notification_sender =
+                crate::gui::recognition_notification::DesktopNotificationSender::new(
+                    &application,
+                    move || {
+                        notification_preferences
+                            .lock()
+                            .unwrap()
+                            .preferences
+                            .enable_notifications
+                            == Some(true)
+                    },
+                );
             let mut recognition_notifications =
                 crate::gui::recognition_notification::RecognitionNotifications::new(move |track| {
-                    if notification_preferences
-                        .lock()
-                        .unwrap()
-                        .preferences
-                        .enable_notifications
-                        != Some(true)
-                    {
-                        return;
-                    }
-                    let Some(application) = notification_application.upgrade() else {
-                        return;
-                    };
-                    let notification = gio::Notification::new(&gettext("Song recognized"));
-                    notification.set_body(Some(&format!(
-                        "{} - {}",
-                        track.artist_name, track.song_name
-                    )));
-                    if let Some(artwork) = track.cover_image() {
-                        // The notification daemon accepts the original image;
-                        // avoid PNG-encoding a full-resolution GTK texture here.
-                        notification.set_icon(&gio::BytesIcon::new(&glib::Bytes::from_owned(
-                            artwork.encoded().to_vec(),
-                        )));
-                    }
-                    application.send_notification(Some("recognized-song"), &notification);
+                    notification_sender.send(track);
                 });
             #[cfg(all(target_os = "linux", feature = "mpris"))]
             let mut mpris_obj = {

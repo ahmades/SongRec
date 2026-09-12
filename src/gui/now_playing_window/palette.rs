@@ -250,23 +250,36 @@ fn apply_ambient_tone(image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>) {
         let offset = lightness - target_chroma / 2.0;
         // Scaling RGB around its minimum preserves hue without the per-pixel
         // RGB -> HSL -> RGB conversion and its hue divisions/remainders.
-        let [red, green, blue] = channels.map(|channel| {
-            (((channel - minimum) * chroma_scale + offset).clamp(0.0, 1.0) * 255.0).round() as u8
-        });
+        let [red, green, blue] = channels
+            .map(|channel| unit_channel_to_byte((channel - minimum) * chroma_scale + offset));
 
-        let normalized_x = ((x as f32 + 0.5) / width) * 2.0 - 1.0;
-        let normalized_y = ((y as f32 + 0.5) / height) * 2.0 - 1.0;
-        let edge_distance =
-            ((normalized_x * normalized_x + normalized_y * normalized_y) / 2.0).clamp(0.0, 1.0);
-        let vignette = 1.0 - AMBIENT_VIGNETTE_STRENGTH * edge_distance.sqrt();
-
-        pixel.0 = [
-            (f32::from(red) * vignette).round() as u8,
-            (f32::from(green) * vignette).round() as u8,
-            (f32::from(blue) * vignette).round() as u8,
-            255,
-        ];
+        pixel.0 = if AMBIENT_VIGNETTE_STRENGTH == 0.0 {
+            // A disabled vignette must not calculate radial coordinates and
+            // round three already-rounded channels for every background pixel.
+            [red, green, blue, 255]
+        } else {
+            let normalized_x = ((x as f32 + 0.5) / width) * 2.0 - 1.0;
+            let normalized_y = ((y as f32 + 0.5) / height) * 2.0 - 1.0;
+            let edge_distance =
+                ((normalized_x * normalized_x + normalized_y * normalized_y) / 2.0).clamp(0.0, 1.0);
+            let vignette = 1.0 - AMBIENT_VIGNETTE_STRENGTH * edge_distance.sqrt();
+            [
+                (f32::from(red) * vignette).round() as u8,
+                (f32::from(green) * vignette).round() as u8,
+                (f32::from(blue) * vignette).round() as u8,
+                255,
+            ]
+        };
     }
+}
+
+/// Round a finite unit channel without a per-channel libm round call. Subtracting
+/// the integer part preserves the exact half-way test (adding 0.5 first can
+/// incorrectly round values immediately below a half-way boundary).
+fn unit_channel_to_byte(channel: f32) -> u8 {
+    let scaled = channel.clamp(0.0, 1.0) * 255.0;
+    let integral = scaled as u8;
+    integral + u8::from(scaled - f32::from(integral) >= 0.5)
 }
 
 fn generate_background<Container>(image: &ImageBuffer<Rgba<u8>, Container>) -> Background
@@ -472,6 +485,98 @@ fn contrast_ratio(first: Rgb, second: Rgb) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "release-only timing probe; run with --nocapture, not as a timing assertion"]
+    fn artwork_pipeline_stage_timings() {
+        use std::hint::black_box;
+        use std::time::Instant;
+        assert!(!cfg!(debug_assertions), "measure the release build");
+        // Break down the most expensive preparation stage separately, without
+        // changing the production path or including fixture construction.
+        let source = ImageBuffer::from_fn(1600, 1600, |x, y| {
+            Rgba([(x % 256) as u8, (y % 256) as u8, ((x + y) % 256) as u8, 255])
+        });
+        for _ in 0..3 {
+            let start = Instant::now();
+            let thumbnail = image::imageops::thumbnail(
+                &source,
+                AMBIENT_MAXIMUM_DIMENSION,
+                AMBIENT_MAXIMUM_DIMENSION,
+            );
+            let resized = start.elapsed();
+            let start = Instant::now();
+            let mut blurred = DynamicImage::ImageRgba8(thumbnail)
+                .blur(AMBIENT_BLUR_SIGMA)
+                .into_rgba8();
+            let blur = start.elapsed();
+            let start = Instant::now();
+            apply_ambient_tone(&mut blurred);
+            eprintln!(
+                "ambient breakdown: resize={resized:?}, blur={blur:?}, tone={:?}",
+                start.elapsed()
+            );
+            black_box(blurred);
+        }
+        for size in [400, 1600] {
+            let image = image::RgbImage::from_fn(size, size, |x, y| {
+                image::Rgb([
+                    ((x * 173 / size + y * 71 / size) % 256) as u8,
+                    ((x * 53 / size + y * 199 / size) % 256) as u8,
+                    ((x * 109 / size + y * 47 / size) % 256) as u8,
+                ])
+            });
+            for format in [image::ImageFormat::Jpeg, image::ImageFormat::Png] {
+                let mut encoded = std::io::Cursor::new(Vec::new());
+                image.write_to(&mut encoded, format).unwrap();
+                let encoded = encoded.into_inner();
+                let mut samples = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+                let mut payload_bytes = 0;
+                for iteration in 0..9 {
+                    let start = Instant::now();
+                    let artwork = std::sync::Arc::new(
+                        crate::core::artwork::Artwork::decode(encoded.clone()).unwrap(),
+                    );
+                    let decoded = start.elapsed();
+                    let start = Instant::now();
+                    let classic =
+                        super::visuals_from_artwork(&artwork, super::ArtworkRequirement::Cover);
+                    let classic_time = start.elapsed();
+                    let start = Instant::now();
+                    // This is also the pre-refactor eager Classic workload, with
+                    // exactly the same image treatment and tuning values.
+                    let immersive =
+                        super::visuals_from_artwork(&artwork, super::ArtworkRequirement::Immersive);
+                    let immersive_time = start.elapsed();
+                    let start = Instant::now();
+                    let cover = super::prepare_artwork(&artwork, classic, None);
+                    let prepared = super::prepare_artwork(&artwork, immersive, Some(&cover));
+                    let texture_time = start.elapsed();
+                    payload_bytes = prepared.storage_bytes();
+                    black_box(prepared);
+                    if iteration > 0 {
+                        for (samples, elapsed) in samples.iter_mut().zip([
+                            decoded,
+                            classic_time,
+                            immersive_time,
+                            texture_time,
+                        ]) {
+                            samples.push(elapsed.as_secs_f64() * 1000.0);
+                        }
+                    }
+                }
+                let median = |values: &mut Vec<f64>| {
+                    values.sort_by(f64::total_cmp);
+                    (values[3] + values[4]) / 2.0
+                };
+                let timings = samples.each_mut().map(median);
+                eprintln!(
+                    "{size}x{size} {format:?}: decode+identity={:.3}ms, Classic={:.3}ms, eager/immersive={:.3}ms, texture-create+upgrade={:.3}ms, retained-payload={} bytes",
+                    timings[0], timings[1], timings[2], timings[3], payload_bytes
+                );
+            }
+        }
+    }
+
     use super::{
         AMBIENT_BLUR_SIGMA, AMBIENT_LIGHTNESS_MULTIPLIER, AMBIENT_MAX_LIGHTNESS,
         AMBIENT_MAX_SATURATION, AMBIENT_MAXIMUM_DIMENSION, ArtworkVisuals, Background,
@@ -485,6 +590,26 @@ mod tests {
 
     fn channel_range(channels: [u8; 3]) -> u8 {
         channels.iter().max().unwrap() - channels.iter().min().unwrap()
+    }
+
+    #[test]
+    fn channel_rounding_preserves_halfway_boundaries() {
+        let check = |channel: f32| {
+            assert_eq!(
+                super::unit_channel_to_byte(channel),
+                (channel.clamp(0.0, 1.0) * 255.0).round() as u8,
+                "rounding changed for {channel}"
+            );
+        };
+        for byte in 0..255 {
+            let midpoint = (byte as f32 + 0.5) / 255.0;
+            for bits in midpoint.to_bits() - 2..=midpoint.to_bits() + 2 {
+                check(f32::from_bits(bits));
+            }
+        }
+        for value in -100..=100_100 {
+            check(value as f32 / 100_000.0);
+        }
     }
 
     fn center_rgb(image: &super::AmbientImage) -> [u8; 3] {

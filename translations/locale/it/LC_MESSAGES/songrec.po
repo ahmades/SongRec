@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-09 10:35+0200\n"
+"POT-Creation-Date: 2026-09-09 22:30+0200\n"
 "PO-Revision-Date: 2023-09-08 16:03+0200\n"
 "Last-Translator: Gianluca Boiano <morf3089@gmail.com>\n"
 "Language-Team: Albano Battistella  <albano_battistella@hotmail.com>\n"
@@ -49,7 +49,7 @@ msgstr "Avviso: rete irraggiungibile"
 msgid "Error:"
 msgstr "Errore:"
 
-#: src/cli_main.rs:199 src/gui/main_window.rs:1079
+#: src/cli_main.rs:199 src/gui/main_window.rs:1059
 msgid "No match for this song"
 msgstr "Nessuna corrispondenza per questo brano"
 
@@ -190,7 +190,7 @@ msgstr ""
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:818 src/gui/main_window.rs:355
+#: src/core/preferences.rs:818 src/gui/main_window.rs:348
 #: src/gui/interface.blp:129 src/gui/interface.blp:763
 #: src/gui/interface.blp:813
 msgid "Search on YouTube"
@@ -223,41 +223,41 @@ msgstr ""
 "Frequenza di campionamento non valida passata durante la codifica del "
 "pacchetto Shazam"
 
-#: src/gui/main_window.rs:313
+#: src/gui/main_window.rs:306
 msgid "Application error"
 msgstr ""
 
-#: src/gui/main_window.rs:334
+#: src/gui/main_window.rs:327
 msgid "Network error"
 msgstr ""
 
-#: src/gui/main_window.rs:410
+#: src/gui/main_window.rs:403
 msgid "Unable to enable notification icon"
 msgstr ""
 
-#: src/gui/main_window.rs:897
-msgid "Song recognized"
-msgstr "Brano riconosciuto"
-
-#: src/gui/main_window.rs:934 src/gui/main_window.rs:1018
+#: src/gui/main_window.rs:914 src/gui/main_window.rs:998
 msgid "Unable to enable MPRIS support"
 msgstr "Impossibile abilitare il supporto MPRIS"
 
-#: src/gui/main_window.rs:1063 src/gui/main_window.rs:1083
+#: src/gui/main_window.rs:1043 src/gui/main_window.rs:1063
 msgid "_Ok"
 msgstr ""
 
-#: src/gui/main_window.rs:1334
+#: src/gui/main_window.rs:1314
 msgid "Are you sure you want to wipe history?"
 msgstr "Sei sicuro di voler cancellare la cronologia?"
 
-#: src/gui/main_window.rs:1340
+#: src/gui/main_window.rs:1320
 msgid "_Yes"
 msgstr "_Sì"
 
-#: src/gui/main_window.rs:1341
+#: src/gui/main_window.rs:1321
 msgid "_Cancel"
 msgstr "A_nnulla"
+
+#: src/gui/recognition_notification.rs:52
+msgid "Song recognized"
+msgstr "Brano riconosciuto"
 
 #: src/gui/song_history_interface.rs:95
 msgid "Error when reading the song history on the disk:"
@@ -358,35 +358,35 @@ msgstr ""
 msgid "Cinema and Ambient settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:562
+#: src/gui/now_playing_window/menu.rs:588
 msgid "Exit full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:565
+#: src/gui/now_playing_window/menu.rs:591
 msgid "Enter full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:597 src/gui/interface.blp:464
+#: src/gui/now_playing_window/menu.rs:623 src/gui/interface.blp:464
 msgid "Display mode"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:708 src/gui/interface.blp:493
+#: src/gui/now_playing_window/menu.rs:734 src/gui/interface.blp:493
 msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:730 src/gui/interface.blp:498
+#: src/gui/now_playing_window/menu.rs:756 src/gui/interface.blp:498
 msgid "Transition duration (ms)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:752 src/gui/interface.blp:548
+#: src/gui/now_playing_window/menu.rs:778 src/gui/interface.blp:548
 msgid "Album cover size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:775 src/gui/interface.blp:521
+#: src/gui/now_playing_window/menu.rs:801 src/gui/interface.blp:521
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:820 src/gui/interface.blp:562
+#: src/gui/now_playing_window/menu.rs:846 src/gui/interface.blp:562
 msgid "Background style"
 msgstr ""
 

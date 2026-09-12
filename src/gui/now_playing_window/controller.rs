@@ -3,6 +3,7 @@
 use super::NowPlayingSettings;
 use crate::core::preferences::NowPlayingPreferenceChange;
 use crate::core::thread_messages::GUIMessage;
+use gio::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
@@ -75,6 +76,25 @@ impl NowPlayingSettingsController {
         if let Some(source_id) = self.pending_save.borrow_mut().take() {
             source_id.remove();
         }
+    }
+
+    /// Install the shutdown path once on the owning application. The snapshot
+    /// may be newer than any preference message the main loop has dispatched.
+    pub(crate) fn connect_shutdown(
+        &self,
+        application: &impl IsA<gio::Application>,
+        preferences: std::sync::Arc<
+            std::sync::Mutex<crate::core::preferences::PreferencesInterface>,
+        >,
+    ) {
+        let controller = self.clone();
+        application.connect_shutdown(move |_| {
+            controller.cancel_all();
+            preferences
+                .lock()
+                .unwrap()
+                .set_now_playing(controller.settings(), true);
+        });
     }
 
     fn apply(&self, change: NowPlayingPreferenceChange) {

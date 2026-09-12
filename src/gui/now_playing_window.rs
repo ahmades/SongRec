@@ -14,6 +14,8 @@ mod menu;
 mod motion;
 mod palette;
 mod preferences;
+#[cfg(test)]
+mod regression_tests;
 mod state;
 mod style;
 mod text_size;

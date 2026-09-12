@@ -422,10 +422,10 @@ impl NowPlayingWindow {
             .build();
         popover.set_child(Some(&menu_scroll));
         popover.set_parent(&self.ui.window);
-        // Keep GTK's modal grab for Escape and focus handling. Resolve pointer
-        // clicks in capture phase so autohide cannot race a secondary click and
-        // reinterpret the same sequence as a request to reopen the menu.
-        popover.set_autohide(true);
+        // The dropdowns own native modal popups. Nesting those inside another
+        // modal grab can strand canvas events after a dropdown is toggled closed.
+        // Keep the outer menu nonmodal and own outside-click/Escape dismissal.
+        popover.set_autohide(false);
         let suppress_secondary_open = Rc::new(Cell::new(false));
         let suppress_secondary_open_for_closed = suppress_secondary_open.clone();
         popover.connect_closed(move |_| {
@@ -439,21 +439,39 @@ impl NowPlayingWindow {
 
         let popover_for_pointer = popover.downgrade();
         let suppress_secondary_open_for_pointer = suppress_secondary_open;
-        let pointer = gtk::GestureClick::new();
-        pointer.set_button(0);
+        // Handle each press independently; interrupted dropdown gestures must
+        // not disable later outside-click dismissal on the parent window.
+        let pointer = gtk::EventControllerLegacy::new();
         pointer.set_propagation_phase(gtk::PropagationPhase::Capture);
-        pointer.connect_pressed(move |gesture, _, x, y| {
-            let Some(popover) = popover_for_pointer.upgrade() else {
-                return;
+        pointer.connect_event(move |controller, event| {
+            if event.event_type() != gdk::EventType::ButtonPress {
+                return glib::Propagation::Proceed;
+            }
+            let Some(button) = event.downcast_ref::<gdk::ButtonEvent>() else {
+                return glib::Propagation::Proceed;
             };
+            let Some(popover) = popover_for_pointer.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
+            let Some(window) = controller.widget() else {
+                return glib::Propagation::Proceed;
+            };
+            let Some(native) = window.native() else {
+                return glib::Propagation::Proceed;
+            };
+            // Events on a descendant popup belong to its controls, not the canvas.
+            if event.surface() != native.surface() {
+                return glib::Propagation::Proceed;
+            }
+            let Some((surface_x, surface_y)) = event.position() else {
+                return glib::Propagation::Proceed;
+            };
+            let (offset_x, offset_y) = native.surface_transform();
+            let (x, y) = (surface_x + offset_x, surface_y + offset_y);
             let menu_visible = popover.is_visible();
             let clicked_inside = menu_visible
-                && gesture
-                    .widget()
-                    .and_then(|window| {
-                        window
-                            .compute_point(&popover, &gtk::graphene::Point::new(x as f32, y as f32))
-                    })
+                && window
+                    .compute_point(&popover, &gtk::graphene::Point::new(x as f32, y as f32))
                     .is_some_and(|point| {
                         popover.contains(f64::from(point.x()), f64::from(point.y()))
                     });
@@ -461,25 +479,23 @@ impl NowPlayingWindow {
             let action = context_menu_pointer_action(
                 menu_visible,
                 clicked_inside,
-                gesture.current_button(),
+                button.button(),
                 suppress_secondary_open_for_pointer.get(),
             );
-            log::debug!("Now Playing menu: button={}, visible={menu_visible}, inside={clicked_inside}, action={action:?}", gesture.current_button());
+            log::debug!("Now Playing menu: button={}, visible={menu_visible}, inside={clicked_inside}, action={action:?}", button.button());
             match action {
                 ContextMenuPointerAction::Open => {
                     let pointing_rect = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
                     popover.set_pointing_to(Some(&pointing_rect));
                     popover.popup();
-                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                    glib::Propagation::Stop
                 }
                 ContextMenuPointerAction::Dismiss => {
                     popover.popdown();
-                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                    glib::Propagation::Stop
                 }
-                ContextMenuPointerAction::Consume => {
-                    gesture.set_state(gtk::EventSequenceState::Claimed);
-                }
-                ContextMenuPointerAction::Ignore => {}
+                ContextMenuPointerAction::Consume => glib::Propagation::Stop,
+                ContextMenuPointerAction::Ignore => glib::Propagation::Proceed,
             }
         });
         self.ui.window.add_controller(pointer);
@@ -487,6 +503,13 @@ impl NowPlayingWindow {
         let popover_for_keyboard = popover.downgrade();
         let keyboard = gtk::EventControllerKey::new();
         keyboard.connect_key_pressed(move |controller, key, _, modifiers| {
+            if key == gdk::Key::Escape
+                && let Some(popover) = popover_for_keyboard.upgrade()
+                && popover.is_visible()
+            {
+                popover.popdown();
+                return glib::Propagation::Stop;
+            }
             let opens_menu = key == gdk::Key::Menu
                 || (key == gdk::Key::F10 && modifiers.contains(gdk::ModifierType::SHIFT_MASK));
             if !opens_menu {
@@ -503,6 +526,9 @@ impl NowPlayingWindow {
                         1,
                     )));
                     popover.popup();
+                    // Nonmodal popovers do not acquire keyboard focus on their
+                    // own. Start navigation at the first settings control.
+                    popover.child_focus(gtk::DirectionType::TabForward);
                 }
             }
             glib::Propagation::Stop
