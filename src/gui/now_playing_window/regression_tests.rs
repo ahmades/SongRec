@@ -208,7 +208,7 @@ fn find_label(widget: &impl IsA<gtk::Widget>, text: &str) -> Option<gtk::Label> 
     None
 }
 
-struct TestWindow(NowPlayingWindow);
+pub(super) struct TestWindow(pub(super) NowPlayingWindow);
 
 impl Drop for TestWindow {
     fn drop(&mut self) {

@@ -226,7 +226,8 @@ impl ArtworkService {
                 ORIGINAL_CANDIDATE_RESERVE,
                 |url| {
                     let session = session.clone();
-                    async move { download_and_decode(&session, &url).await }
+                    let track_key = track_key.clone();
+                    async move { download_and_decode(&session, &url, &track_key).await }
                 },
             )
             .await;
@@ -244,7 +245,11 @@ impl ArtworkService {
     }
 }
 
-async fn download_and_decode(session: &soup::Session, url: &str) -> Option<Arc<Artwork>> {
+async fn download_and_decode(
+    session: &soup::Session,
+    url: &str,
+    track_key: &str,
+) -> Option<Arc<Artwork>> {
     let started = Instant::now();
     let bytes = match obtain_raw_cover_image(session, url).await {
         Ok(bytes) => bytes,
@@ -257,7 +262,7 @@ async fn download_and_decode(session: &soup::Session, url: &str) -> Option<Arc<A
         }
     };
     log::debug!(
-        "Artwork: downloaded {} bytes in {:?}",
+        "Artwork for track {track_key}: downloaded {} bytes in {:?}",
         bytes.len(),
         started.elapsed()
     );
@@ -268,7 +273,7 @@ async fn download_and_decode(session: &soup::Session, url: &str) -> Option<Arc<A
         .ok()
         .flatten();
     log::debug!(
-        "Artwork: decoded in {:?}, success={}",
+        "Artwork for track {track_key}: decoded in {:?}, success={}",
         started.elapsed(),
         image.is_some()
     );

@@ -132,10 +132,13 @@ impl TrackPresentation {
         self.apply_background();
         self.sync_artwork_visibility();
         log::debug!(
-            "Now Playing track {}: scene applied in {:?}, artwork ready={}",
+            "Now Playing track {}: scene applied in {:?}, artwork ready={}, response age {:?} ms",
             track.track_key,
             started.elapsed(),
-            track.artwork.is_some()
+            track.artwork.is_some(),
+            track
+                .response_received_at
+                .map(|received| (glib::monotonic_time() - received) as f64 / 1000.0)
         );
     }
 
@@ -310,10 +313,13 @@ impl NowPlayingWindow {
                 .as_ref()
                 .is_none_or(|artwork| !artwork.is_ready(requirement));
         log::debug!(
-            "Now Playing track {}: received, download pending={}, preparation needed={}",
+            "Now Playing track {}: received, download pending={}, preparation needed={}, response age {:?} ms",
             message.track_key,
             message.artwork_pending(),
-            visuals_pending
+            visuals_pending,
+            message
+                .response_received_at
+                .map(|received| (glib::monotonic_time() - received) as f64 / 1000.0)
         );
         let track = Rc::new(PresentedTrack::from_message(
             message,
@@ -664,6 +670,7 @@ mod tests {
             let mut bytes = Cursor::new(Vec::new());
             image.write_to(&mut bytes, ImageFormat::Png).unwrap();
             SongRecognizedMessage {
+                response_received_at: None,
                 track_key: key.to_string(),
                 song_name: key.to_string(),
                 artist_name: "Artist".to_string(),

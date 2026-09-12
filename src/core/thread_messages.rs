@@ -22,6 +22,10 @@ where
 
 #[derive(Debug, Clone)]
 pub struct SongRecognizedMessage {
+    /// Parsed response arrival, in GLib monotonic microseconds. Not persisted;
+    /// preserved across artwork delivery for opt-in end-to-end GUI timings.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub response_received_at: Option<i64>,
     pub artist_name: String,
     pub album_name: Option<String>,
     pub song_name: String,
@@ -239,6 +243,7 @@ mod tests {
 
     fn track(key: &str) -> Arc<SongRecognizedMessage> {
         Arc::new(SongRecognizedMessage {
+            response_received_at: None,
             artist_name: "Artist".to_string(),
             album_name: None,
             song_name: format!("Song {key}"),

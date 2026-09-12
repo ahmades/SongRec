@@ -29,6 +29,7 @@ pub(super) enum PresentationMode {
 /// full Shazam response while a transition is pending.
 #[derive(Clone)]
 pub(super) struct PresentedTrack {
+    pub(super) response_received_at: Option<i64>,
     pub(super) track_key: String,
     pub(super) song_name: String,
     pub(super) artist_name: String,
@@ -46,6 +47,7 @@ impl PresentedTrack {
         visuals_pending: bool,
     ) -> Self {
         Self {
+            response_received_at: message.response_received_at,
             track_key: message.track_key.clone(),
             song_name: message.song_name.clone(),
             artist_name: message.artist_name.clone(),
@@ -59,6 +61,7 @@ impl PresentedTrack {
 
     fn with_artwork(&self, artwork: PreparedArtwork) -> Self {
         Self {
+            response_received_at: self.response_received_at,
             track_key: self.track_key.clone(),
             song_name: self.song_name.clone(),
             artist_name: self.artist_name.clone(),
@@ -621,6 +624,7 @@ mod tests {
 
     fn track(key: &str) -> Rc<PresentedTrack> {
         Rc::new(PresentedTrack {
+            response_received_at: None,
             track_key: key.to_string(),
             song_name: format!("Song {key}"),
             artist_name: "Artist".to_string(),

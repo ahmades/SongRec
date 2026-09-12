@@ -13,12 +13,15 @@ mod main_preferences;
 mod menu;
 mod motion;
 mod palette;
+#[cfg(test)]
+mod performance_tests;
 mod preferences;
 #[cfg(test)]
 mod regression_tests;
 mod state;
 mod style;
 mod text_size;
+mod timing;
 mod track;
 mod transition;
 mod tuning;
@@ -54,6 +57,7 @@ pub struct NowPlayingWindow {
     controller: NowPlayingSettingsController,
     text_css: style::TextCss,
     applied_settings: std::cell::Cell<Option<NowPlayingSettings>>,
+    artwork_timing: Option<timing::ArtworkTimingProbe>,
 }
 
 impl NowPlayingWindow {
@@ -63,13 +67,14 @@ impl NowPlayingWindow {
         let controls = menu::build_controls();
         let state = NowPlayingState::new(controller.settings_cell());
 
-        let now_playing = Self {
+        let mut now_playing = Self {
             ui,
             controls,
             state,
             controller,
             text_css,
             applied_settings: std::cell::Cell::new(None),
+            artwork_timing: None,
         };
 
         now_playing.setup_rendering();
@@ -77,6 +82,13 @@ impl NowPlayingWindow {
         now_playing.apply_initial_preferences(settings);
         now_playing.setup_context_menu(settings);
         now_playing.connect_control_handlers();
+
+        if std::env::var("SONGREC_ARTWORK_TIMING").as_deref() == Ok("1") {
+            now_playing.artwork_timing =
+                Some(timing::ArtworkTimingProbe::attach(&now_playing, |sample| {
+                    sample.log()
+                }));
+        }
 
         now_playing
     }

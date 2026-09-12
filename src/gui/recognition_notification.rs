@@ -256,6 +256,7 @@ mod tests {
 
     fn track(key: &str, pending: bool) -> Arc<SongRecognizedMessage> {
         Arc::new(SongRecognizedMessage {
+            response_received_at: None,
             track_key: key.into(),
             song_name: key.into(),
             artist_name: "Artist".into(),

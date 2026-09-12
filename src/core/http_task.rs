@@ -8,9 +8,9 @@ use crate::core::fingerprinting::communication::{RateLimitError, recognize_song_
 use crate::core::fingerprinting::signature_format::DecodedSignature;
 use crate::core::thread_messages::*;
 
-struct ParsedRecognition {
-    message: SongRecognizedMessage,
-    images: Value,
+pub(crate) struct ParsedRecognition {
+    pub(crate) message: SongRecognizedMessage,
+    pub(crate) images: Value,
 }
 
 async fn try_recognize_song(
@@ -18,6 +18,13 @@ async fn try_recognize_song(
     signature: DecodedSignature,
 ) -> Result<Option<ParsedRecognition>, Box<dyn Error>> {
     let json_object = recognize_song_from_signature(recognition_session, &signature).await?;
+    Ok(parse_recognition(json_object))
+}
+
+/// The post-response entry point, also used to replay artwork latency without
+/// making recognition requests. Keep the timestamp before metadata extraction.
+pub(crate) fn parse_recognition(json_object: Value) -> Option<ParsedRecognition> {
+    let response_received_at = Some(glib::monotonic_time());
 
     let mut album_name: Option<String> = None;
     let mut release_year: Option<String> = None;
@@ -52,17 +59,18 @@ async fn try_recognize_song(
     let required_track_field =
         |field: &str| json_object["track"][field].as_str().map(str::to_owned);
     let Some(artist_name) = required_track_field("subtitle") else {
-        return Ok(None);
+        return None;
     };
     let Some(song_name) = required_track_field("title") else {
-        return Ok(None);
+        return None;
     };
     let Some(track_key) = required_track_field("key") else {
-        return Ok(None);
+        return None;
     };
 
-    Ok(Some(ParsedRecognition {
+    Some(ParsedRecognition {
         message: SongRecognizedMessage {
+            response_received_at,
             artist_name,
             album_name,
             song_name,
@@ -76,7 +84,7 @@ async fn try_recognize_song(
             shazam_json: serde_json::to_string(&json_object).unwrap(),
         },
         images: json_object["track"]["images"].clone(),
-    }))
+    })
 }
 
 pub async fn http_task(
@@ -136,6 +144,53 @@ pub async fn http_task(
                     .try_send(MicrophoneMessage::ProcessingDone)
                     .unwrap();
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_recognition;
+    use serde_json::json;
+
+    #[test]
+    fn post_response_parser_preserves_metadata_and_arrival_time() {
+        let response = json!({"track": {
+            "key": "123", "title": "Song", "subtitle": "Artist",
+            "images": {"coverarthq": "cover.jpg"}, "genres": {"primary": "Rock"},
+            "sections": [{"type": "SONG", "metadata": [
+                {"title": "Album", "text": "Album"}, {"title": "Released", "text": "1977"}
+            ]}]
+        }});
+        let before = glib::monotonic_time();
+        let parsed = parse_recognition(response.clone()).unwrap();
+        let received = parsed.message.response_received_at.unwrap();
+        assert!((before..=glib::monotonic_time()).contains(&received));
+        assert_eq!(parsed.message.album_name.as_deref(), Some("Album"));
+        assert_eq!(parsed.message.release_year.as_deref(), Some("1977"));
+        assert_eq!(parsed.message.genre.as_deref(), Some("Rock"));
+        assert_eq!(parsed.images, response["track"]["images"]);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&parsed.message.shazam_json).unwrap(),
+            response
+        );
+        assert_eq!(
+            parsed
+                .message
+                .with_artwork_unavailable()
+                .response_received_at,
+            Some(received)
+        );
+    }
+
+    #[test]
+    fn post_response_parser_rejects_missing_required_track_fields() {
+        assert!(parse_recognition(json!({})).is_none());
+        for field in ["key", "title", "subtitle"] {
+            let mut response =
+                json!({"track": {"key": "123", "title": "Song", "subtitle": "Artist"}});
+            response["track"].as_object_mut().unwrap().remove(field);
+            assert!(parse_recognition(response).is_none());
         }
     }
 }
