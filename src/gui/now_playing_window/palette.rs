@@ -1,6 +1,6 @@
 //! Derives Now Playing colors and combines them with GTK artwork textures.
 
-use super::tuning::{BackdropProfile, ambient::*};
+use super::tuning::{BackdropProfile, ambient::*, missing_artwork as missing_artwork_tuning};
 use crate::core::artwork::{Artwork, ArtworkId};
 use crate::core::preferences::BackdropIntensity;
 use gdk::prelude::TextureExt;
@@ -101,6 +101,14 @@ impl Background {
         Self {
             top: (38, 38, 38),
             bottom: (0, 0, 0),
+        }
+    }
+
+    /// A deliberate neutral canvas for recognized tracks without artwork.
+    pub(super) const fn missing_artwork() -> Self {
+        Self {
+            top: missing_artwork_tuning::BACKGROUND_TOP,
+            bottom: missing_artwork_tuning::BACKGROUND_BOTTOM,
         }
     }
 }

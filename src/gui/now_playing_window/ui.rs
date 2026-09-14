@@ -9,6 +9,7 @@ use super::style::{
 use super::track::transition_leg_duration_ms;
 use super::transition::RevealerLayout;
 use super::tuning::layout::*;
+use super::tuning::missing_artwork::*;
 use super::{
     AlbumCoverSize, DisplayMode, TRANSITION_DURATION_DEFAULT_MS, TrackInfoAlignment,
     TransitionEffect,
@@ -20,6 +21,7 @@ use std::rc::Rc;
 
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
 const IMMERSIVE_INFO_CSS_CLASS: &str = "now-playing-immersive-info";
+const MISSING_ARTWORK_CARD_CSS_CLASS: &str = "now-playing-missing-artwork-card";
 
 /// How Cinema mode frames artwork for the current source and viewport aspect ratios.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -618,6 +620,7 @@ pub(super) struct NowPlayingWidgets {
     pub(super) classic_content: gtk::Box,
     pub(super) artwork: gtk::Picture,
     pub(super) artwork_overlay: gtk::Overlay,
+    pub(super) classic_missing_artwork: gtk::Image,
     pub(super) album_cover_layout: AlbumCoverLayout,
     pub(super) cinema_artwork: CinemaArtworkLayout,
     pub(super) ambient_artwork: AmbientArtworkLayout,
@@ -700,6 +703,20 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
     cover_overlay.set_child(Some(&cover_picture));
     cover_overlay.set_overflow(gtk::Overflow::Hidden);
     cover_overlay.add_css_class("now-playing-artwork-rounded");
+    let classic_missing_artwork = gtk::Image::builder()
+        .icon_name("audio-x-generic-symbolic")
+        .pixel_size(CARD_ICON_SIZE_PX)
+        .hexpand(true)
+        .vexpand(true)
+        .halign(gtk::Align::Fill)
+        .valign(gtk::Align::Fill)
+        .accessible_role(gtk::AccessibleRole::None)
+        .css_classes([MISSING_ARTWORK_CARD_CSS_CLASS])
+        .visible(false)
+        .build();
+    classic_missing_artwork.set_can_target(false);
+    cover_overlay.add_overlay(&classic_missing_artwork);
+    cover_overlay.set_measure_overlay(&classic_missing_artwork, false);
     let album_cover_layout = AlbumCoverLayout::new(&cover_overlay);
     cover_frame.set_child(Some(&album_cover_layout.container));
 
@@ -848,11 +865,22 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
     }
+    let (card_top_red, card_top_green, card_top_blue) = BACKGROUND_TOP;
+    let (card_middle_red, card_middle_green, card_middle_blue) = CARD_MIDDLE;
+    let (card_bottom_red, card_bottom_green, card_bottom_blue) = BACKGROUND_BOTTOM;
     background_css.load_from_string(&format!(
         ".{BACKGROUND_CSS_CLASS} {{ background-color: transparent; color: #ffffff; }}
          .{TITLE_CSS_CLASS}, .{ARTIST_CSS_CLASS} {{ color: #ffffff; }}
          .{ALBUM_CSS_CLASS}, .{DETAILS_CSS_CLASS} {{ color: rgba(255, 255, 255, {SECONDARY_METADATA_OPACITY}); }}
          .{IMMERSIVE_INFO_CSS_CLASS} {{ text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95); }}
+         .{MISSING_ARTWORK_CARD_CSS_CLASS} {{
+             color: rgba(255, 255, 255, {CARD_ICON_ALPHA});
+             background-image: linear-gradient(145deg,
+                 rgb({card_top_red}, {card_top_green}, {card_top_blue}) 0%,
+                 rgb({card_middle_red}, {card_middle_green}, {card_middle_blue}) 52%,
+                 rgb({card_bottom_red}, {card_bottom_green}, {card_bottom_blue}) 100%);
+             border: 1px solid rgba(255, 255, 255, {CARD_BORDER_ALPHA});
+         }}
          .now-playing-artwork-rounded {{ border-radius: {ARTWORK_CORNER_RADIUS_PX}px; }}"
     ));
 
@@ -878,6 +906,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
             classic_content: root,
             artwork: cover_picture,
             artwork_overlay: cover_overlay,
+            classic_missing_artwork,
             album_cover_layout,
             cinema_artwork,
             ambient_artwork,

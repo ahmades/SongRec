@@ -103,6 +103,20 @@ pub(super) mod background {
     pub const AMBIENT_BOTTOM_SCRIM_ALPHA: f64 = 0.08;
 }
 
+/// Neutral presentation used when a recognized track has no usable artwork.
+///
+/// These colors are deliberately separate from the generic rendering fallback:
+/// the latter also covers initialization and failed palette extraction, while
+/// this palette is part of the user-visible missing-artwork design.
+pub(super) mod missing_artwork {
+    pub const BACKGROUND_TOP: (u8, u8, u8) = (48, 50, 58);
+    pub const BACKGROUND_BOTTOM: (u8, u8, u8) = (10, 11, 14);
+    pub const CARD_MIDDLE: (u8, u8, u8) = (35, 38, 45);
+    pub const CARD_BORDER_ALPHA: f64 = 0.10;
+    pub const CARD_ICON_ALPHA: f64 = 0.42;
+    pub const CARD_ICON_SIZE_PX: i32 = 88;
+}
+
 pub(super) mod typography {
     pub const BASE_SCALE_WIDTH: f64 = 720.0;
     pub const BASE_SCALE_HEIGHT: f64 = 820.0;

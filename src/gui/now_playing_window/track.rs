@@ -49,6 +49,7 @@ fn begin_track_transition(transition: &TrackTransitionLayout, settings: NowPlayi
 pub(super) struct TrackPresentation {
     classic_content: gtk::Box,
     artwork: gtk::Picture,
+    classic_missing_artwork: gtk::Image,
     cinema_artwork: CinemaArtworkLayout,
     ambient_artwork: AmbientArtworkLayout,
     scrim_area: gtk::DrawingArea,
@@ -262,6 +263,7 @@ impl TrackPresentation {
         Self {
             classic_content: window.ui.classic_content.clone(),
             artwork: window.ui.artwork.clone(),
+            classic_missing_artwork: window.ui.classic_missing_artwork.clone(),
             cinema_artwork: window.ui.cinema_artwork.clone(),
             ambient_artwork: window.ui.ambient_artwork.clone(),
             scrim_area: window.ui.scrim_area.clone(),
@@ -422,6 +424,10 @@ impl TrackPresentation {
         let use_artist_background = requirement.needs_artist_background();
         let current_immersive_artwork_available = current_cover_available
             || (use_artist_background && current_artist_background_available);
+        let artwork_pending = state
+            .displayed_track
+            .as_ref()
+            .is_some_and(|track| track.awaits_artwork(requirement));
         let retained_immersive_artwork_available = current_immersive_artwork_available
             || state.displayed_track.as_ref().is_some_and(|track| {
                 (track.artwork_pending
@@ -435,6 +441,7 @@ impl TrackPresentation {
             settings.display_mode,
             current_cover_available,
             retained_immersive_artwork_available,
+            artwork_pending,
             settings.shared.hide_track_info,
         );
         drop(state);
@@ -457,6 +464,8 @@ impl TrackPresentation {
 
         self.classic_content.set_visible(visibility.classic_content);
         self.artwork.set_visible(visibility.classic_artwork);
+        self.classic_missing_artwork
+            .set_visible(visibility.classic_missing_artwork);
         self.cinema_artwork
             .container
             .set_visible(visibility.cinema_artwork);
@@ -945,7 +954,8 @@ fn optional_metadata(value: &Option<String>) -> &str {
 /// Recognition metadata is delivered before its separately fetched artwork.
 /// Retaining the current palette only during that gap makes the eventual update
 /// go directly from the old song's background to the new song's background,
-/// while a definitive fetch failure still restores the neutral fallback.
+/// while a definitive fetch failure selects the intentional missing-artwork
+/// canvas rather than a generic renderer fallback.
 fn background_after_track_update(
     current: Background,
     artwork_background: Option<Background>,
@@ -954,7 +964,7 @@ fn background_after_track_update(
     match artwork_background {
         Some(background) => background,
         None if artwork_pending => current,
-        None => Background::fallback(),
+        None => Background::missing_artwork(),
     }
 }
 
@@ -963,8 +973,10 @@ fn background_after_track_update(
 struct PresentationVisibility {
     classic_content: bool,
     classic_artwork: bool,
+    classic_missing_artwork: bool,
     cinema_artwork: bool,
     ambient_artwork: bool,
+    missing_artwork_title_card: bool,
     immersive_scrim: bool,
     immersive_info: bool,
     listening: bool,
@@ -976,14 +988,17 @@ fn presentation_visibility(
     display_mode: DisplayMode,
     current_artwork_available: bool,
     retained_artwork_available: bool,
+    artwork_pending: bool,
     hide_track_info: bool,
 ) -> PresentationVisibility {
     if matches!(presentation_mode, PresentationMode::Listening) {
         return PresentationVisibility {
             classic_content: false,
             classic_artwork: false,
+            classic_missing_artwork: false,
             cinema_artwork: false,
             ambient_artwork: false,
+            missing_artwork_title_card: false,
             immersive_scrim: false,
             immersive_info: false,
             listening: true,
@@ -991,17 +1006,28 @@ fn presentation_visibility(
     }
 
     let show_track_info = display_mode.shows_track_info(hide_track_info);
+    let classic_missing_artwork = matches!(display_mode, DisplayMode::Classic)
+        && !current_artwork_available
+        && !artwork_pending;
+    let missing_artwork_title_card =
+        matches!(display_mode, DisplayMode::Cinema | DisplayMode::Ambient)
+            && !retained_artwork_available
+            && !artwork_pending;
 
     PresentationVisibility {
         classic_content: matches!(display_mode, DisplayMode::Classic),
         // A retained cover is useful as an immersive backdrop while the next
         // cover is prepared, but beside the new metadata in Classic it reads as
         // belonging to the new song. Keep that Classic slot empty until its
-        // matching PreparedArtwork is ready.
+        // matching PreparedArtwork is ready. If it becomes definitively
+        // unavailable, the neutral Classic card occupies the same stable slot.
         classic_artwork: matches!(display_mode, DisplayMode::Classic) && current_artwork_available,
+        classic_missing_artwork,
         cinema_artwork: matches!(display_mode, DisplayMode::Cinema) && retained_artwork_available,
         ambient_artwork: matches!(display_mode, DisplayMode::Ambient) && retained_artwork_available,
-        immersive_scrim: show_track_info
+        missing_artwork_title_card,
+        immersive_scrim: !missing_artwork_title_card
+            && show_track_info
             && matches!(display_mode, DisplayMode::Cinema | DisplayMode::Ambient),
         immersive_info: show_track_info && !matches!(display_mode, DisplayMode::Classic),
         listening: false,
@@ -1282,13 +1308,16 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
             ),
             PresentationVisibility {
                 classic_content: false,
                 classic_artwork: false,
+                classic_missing_artwork: false,
                 cinema_artwork: false,
                 ambient_artwork: false,
-                immersive_scrim: true,
+                missing_artwork_title_card: true,
+                immersive_scrim: false,
                 immersive_info: true,
                 listening: false,
             }
@@ -1303,6 +1332,7 @@ mod tests {
                 display_mode,
                 true,
                 true,
+                false,
                 // Listening hides all metadata regardless of this preference.
                 true,
             );
@@ -1322,6 +1352,7 @@ mod tests {
             true,
             true,
             false,
+            false,
         );
         assert!(classic.classic_content);
         assert!(classic.classic_artwork);
@@ -1333,6 +1364,7 @@ mod tests {
             true,
             true,
             false,
+            false,
         );
         assert!(cinema.cinema_artwork);
         assert!(cinema.immersive_info);
@@ -1343,6 +1375,7 @@ mod tests {
             true,
             true,
             false,
+            false,
         );
         assert!(ambient.ambient_artwork);
         assert!(ambient.immersive_info);
@@ -1352,6 +1385,7 @@ mod tests {
             DisplayMode::LightsOff,
             true,
             true,
+            false,
             false,
         );
         assert!(!lights_off.classic_artwork);
@@ -1367,27 +1401,123 @@ mod tests {
             DisplayMode::Classic,
             false,
             true,
+            true,
             false,
         );
         assert!(!classic.classic_artwork);
+        assert!(!classic.classic_missing_artwork);
 
         let cinema = presentation_visibility(
             PresentationMode::TrackWithoutArtwork,
             DisplayMode::Cinema,
             false,
             true,
+            true,
             false,
         );
         assert!(cinema.cinema_artwork);
+        assert!(!cinema.missing_artwork_title_card);
 
         let ambient = presentation_visibility(
             PresentationMode::TrackWithoutArtwork,
             DisplayMode::Ambient,
             false,
             true,
+            true,
             false,
         );
         assert!(ambient.ambient_artwork);
+        assert!(!ambient.missing_artwork_title_card);
+    }
+
+    #[test]
+    fn pending_artwork_does_not_prematurely_show_a_missing_artwork_card() {
+        for display_mode in [
+            DisplayMode::Classic,
+            DisplayMode::Cinema,
+            DisplayMode::Ambient,
+        ] {
+            let visibility = presentation_visibility(
+                PresentationMode::TrackWithoutArtwork,
+                display_mode,
+                false,
+                false,
+                true,
+                false,
+            );
+            assert!(!visibility.classic_missing_artwork);
+            assert!(!visibility.missing_artwork_title_card);
+        }
+    }
+
+    #[test]
+    fn definitive_missing_artwork_selects_the_mode_appropriate_title_card() {
+        let classic = presentation_visibility(
+            PresentationMode::TrackWithoutArtwork,
+            DisplayMode::Classic,
+            false,
+            false,
+            false,
+            false,
+        );
+        assert!(classic.classic_missing_artwork);
+        assert!(!classic.missing_artwork_title_card);
+
+        for display_mode in [DisplayMode::Cinema, DisplayMode::Ambient] {
+            let immersive = presentation_visibility(
+                PresentationMode::TrackWithoutArtwork,
+                display_mode,
+                false,
+                false,
+                false,
+                false,
+            );
+            assert!(!immersive.classic_missing_artwork);
+            assert!(immersive.missing_artwork_title_card);
+            assert!(!immersive.immersive_scrim);
+        }
+
+        let lights_off = presentation_visibility(
+            PresentationMode::TrackWithoutArtwork,
+            DisplayMode::LightsOff,
+            false,
+            false,
+            false,
+            false,
+        );
+        assert!(!lights_off.classic_missing_artwork);
+        assert!(!lights_off.missing_artwork_title_card);
+    }
+
+    #[test]
+    fn artist_only_artwork_still_uses_the_classic_missing_cover_card() {
+        let visibility = presentation_visibility(
+            PresentationMode::TrackWithArtwork,
+            DisplayMode::Classic,
+            false,
+            true,
+            false,
+            false,
+        );
+
+        assert!(visibility.classic_missing_artwork);
+        assert!(!visibility.missing_artwork_title_card);
+    }
+
+    #[test]
+    fn listening_never_displays_a_missing_artwork_card() {
+        for display_mode in DisplayMode::ALL {
+            let visibility = presentation_visibility(
+                PresentationMode::Listening,
+                display_mode,
+                false,
+                false,
+                false,
+                false,
+            );
+            assert!(!visibility.classic_missing_artwork);
+            assert!(!visibility.missing_artwork_title_card);
+        }
     }
 
     #[test]
@@ -1398,6 +1528,7 @@ mod tests {
                 display_mode,
                 true,
                 true,
+                false,
                 true,
             );
             assert!(!visibility.immersive_info);
@@ -1412,6 +1543,7 @@ mod tests {
             DisplayMode::LightsOff,
             true,
             true,
+            false,
             true,
         );
         assert!(visibility.immersive_info);
@@ -1448,7 +1580,7 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_artwork_uses_the_fallback_background() {
+    fn unavailable_artwork_uses_the_missing_artwork_background() {
         let previous = Background {
             top: (10, 20, 30),
             bottom: (1, 2, 3),
@@ -1456,7 +1588,7 @@ mod tests {
 
         assert_eq!(
             background_after_track_update(previous, None, false),
-            Background::fallback()
+            Background::missing_artwork()
         );
     }
 }
