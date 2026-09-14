@@ -3,9 +3,10 @@
 use super::track::TrackPresentation;
 use super::ui::apply_classic_track_info_alignment;
 use super::{
-    AlbumCoverSize, DisplayMode, ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow,
-    TextSize, TrackInfoAlignment, TransitionEffect, clamp_background_motion_zoom_percent,
-    clamp_transition_duration_ms, normalize_background_motion_reversal_duration_secs,
+    AlbumCoverSize, BackdropIntensity, DisplayMode, ImmersiveBackgroundSource, NowPlayingSettings,
+    NowPlayingWindow, TextSize, TrackInfoAlignment, TransitionEffect,
+    clamp_background_motion_zoom_percent, clamp_transition_duration_ms,
+    normalize_background_motion_reversal_duration_secs,
 };
 use adw::prelude::*;
 
@@ -51,6 +52,9 @@ impl NowPlayingWindow {
             }
             if changed!(shared.immersive_background_source) {
                 self.set_immersive_background_source(settings.shared.immersive_background_source);
+            }
+            if changed!(shared.backdrop_intensity) {
+                self.set_backdrop_intensity(settings.shared.backdrop_intensity);
             }
             if changed!(shared.background_motion_enabled)
                 || changed!(shared.background_motion_zoom_percent)
@@ -140,6 +144,29 @@ impl NowPlayingWindow {
         });
         self.refresh_track_for_visual_change();
         self.reconcile_pending_transition();
+        self.resume_artwork_preparation();
+        self.ensure_artist_background();
+    }
+
+    /// Applies the shared Cinema/Ambient backdrop treatment.
+    pub(super) fn set_backdrop_intensity(&self, intensity: BackdropIntensity) {
+        self.with_preference_updates_suspended(|| {
+            self.sync_backdrop_intensity_controls(intensity);
+        });
+
+        // Keep an active hide/reveal leg immutable. Otherwise the cheap scrim
+        // update can apply immediately while the previous exact-profile image
+        // remains visible until worker preparation completes.
+        let redraw_deferred = self
+            .state
+            .track_presentation
+            .borrow_mut()
+            .defer_scene_refresh_if_animating();
+        if !redraw_deferred {
+            self.apply_background();
+        }
+        self.reconcile_pending_transition();
+        self.resume_artwork_preparation();
         self.ensure_artist_background();
     }
 

@@ -1,6 +1,7 @@
 //! Opt-in response-to-final-frame measurement, not part of rendering decisions.
 
 use super::palette::ArtworkRequirement;
+use super::state::ArtistBackgroundState;
 use super::{DisplayMode, NowPlayingWindow, TransitionEffect};
 use adw::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -126,13 +127,33 @@ impl ArtworkTimingProbe {
                         return;
                     };
                     let settings = settings.get();
-                    let requirement = ArtworkRequirement::for_mode(settings.display_mode);
-                    let Some(artwork) = track.artwork.as_ref().filter(|artwork| {
-                        requirement != ArtworkRequirement::None
-                            && !track.artwork_pending
-                            && artwork.is_ready(requirement)
-                    }) else {
+                    let requirement = ArtworkRequirement::for_settings(settings);
+                    if requirement == ArtworkRequirement::NONE || track.awaits_artwork(requirement)
+                    {
                         return;
+                    }
+                    let source = if requirement.needs_artist_background() {
+                        match &track.artist_background {
+                            ArtistBackgroundState::Ready(background, source)
+                                if background.is_ready(requirement) =>
+                            {
+                                source
+                            }
+                            // Artist artwork is optional. Once its request is
+                            // definitively unavailable (or the payload did not
+                            // provide a URL), rendering falls back to the album
+                            // backdrop prepared for this exact intensity.
+                            _ => match track.artwork.as_ref() {
+                                Some(artwork) if artwork.is_ready(requirement) => artwork.source(),
+                                _ => return,
+                            },
+                        }
+                    } else {
+                        let artwork = match track.artwork.as_ref() {
+                            Some(artwork) if artwork.is_ready(requirement) => artwork,
+                            _ => return,
+                        };
+                        artwork.source()
                     };
                     if !observation.claim(response_received_at) {
                         return;
@@ -142,8 +163,8 @@ impl ArtworkTimingProbe {
                         response_received_at,
                         after_paint_at: glib::monotonic_time(),
                         presented_at: None,
-                        width: artwork.source().width(),
-                        height: artwork.source().height(),
+                        width: source.width(),
+                        height: source.height(),
                         mode: settings.display_mode,
                         transition: settings.shared.transition,
                         transition_duration_ms: settings.shared.transition_duration_ms,

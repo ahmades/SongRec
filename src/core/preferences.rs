@@ -531,6 +531,57 @@ impl<'de> Deserialize<'de> for ImmersiveBackgroundSource {
     }
 }
 
+/// Controls how strongly Cinema and Ambient backgrounds are rendered.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum BackdropIntensity {
+    Soft,
+    #[default]
+    Balanced,
+    Bold,
+}
+
+impl BackdropIntensity {
+    /// All backdrop intensities used by serialization round-trip tests.
+    #[cfg(test)]
+    pub const ALL: [Self; 3] = [Self::Soft, Self::Balanced, Self::Bold];
+
+    /// Returns the persisted string representation of this backdrop intensity.
+    pub fn as_preference_value(self) -> &'static str {
+        match self {
+            Self::Soft => "soft",
+            Self::Balanced => "balanced",
+            Self::Bold => "bold",
+        }
+    }
+
+    /// Parses a persisted backdrop intensity, defaulting to balanced.
+    pub fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("soft") => Self::Soft,
+            Some("bold") => Self::Bold,
+            _ => Self::Balanced,
+        }
+    }
+}
+
+impl Serialize for BackdropIntensity {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_preference_value())
+    }
+}
+
+impl<'de> Deserialize<'de> for BackdropIntensity {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(|value| Self::from_preference(Some(&value)))
+    }
+}
+
 /// Controls the visual treatment of the Now Playing background.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum BackgroundStyle {
@@ -608,6 +659,8 @@ pub struct SharedNowPlayingPreferences {
     pub text_size: TextSize,
     #[serde(rename = "now_playing_immersive_background_source")]
     pub immersive_background_source: ImmersiveBackgroundSource,
+    #[serde(rename = "now_playing_immersive_backdrop_intensity")]
+    pub backdrop_intensity: BackdropIntensity,
     #[serde(rename = "now_playing_background_motion_enabled")]
     pub background_motion_enabled: bool,
     #[serde(rename = "now_playing_background_motion_zoom_percent")]
@@ -627,6 +680,7 @@ impl Default for SharedNowPlayingPreferences {
             hide_track_info: false,
             text_size: TextSize::default(),
             immersive_background_source: ImmersiveBackgroundSource::default(),
+            backdrop_intensity: BackdropIntensity::default(),
             background_motion_enabled: false,
             background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
             background_motion_reversal_duration_secs:
@@ -674,6 +728,8 @@ struct NowPlayingPreferencesWire {
     text_size: Option<TextSize>,
     #[serde(rename = "now_playing_immersive_background_source")]
     immersive_background_source: Option<ImmersiveBackgroundSource>,
+    #[serde(rename = "now_playing_immersive_backdrop_intensity")]
+    backdrop_intensity: Option<BackdropIntensity>,
     #[serde(rename = "now_playing_background_motion_enabled")]
     background_motion_enabled: Option<bool>,
     #[serde(rename = "now_playing_background_motion_zoom_percent")]
@@ -730,6 +786,9 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
                 immersive_background_source: wire
                     .immersive_background_source
                     .unwrap_or(defaults.shared.immersive_background_source),
+                backdrop_intensity: wire
+                    .backdrop_intensity
+                    .unwrap_or(defaults.shared.backdrop_intensity),
                 background_motion_enabled: wire
                     .background_motion_enabled
                     .unwrap_or(defaults.shared.background_motion_enabled),
@@ -779,6 +838,9 @@ impl NowPlayingPreferences {
             NowPlayingPreferenceChange::ImmersiveBackgroundSource(value) => {
                 self.shared.immersive_background_source = value;
             }
+            NowPlayingPreferenceChange::BackdropIntensity(value) => {
+                self.shared.backdrop_intensity = value;
+            }
             NowPlayingPreferenceChange::BackgroundMotionEnabled(value) => {
                 self.shared.background_motion_enabled = value;
             }
@@ -818,6 +880,7 @@ pub enum NowPlayingPreferenceChange {
     HideTrackInfo(bool),
     TextSize(TextSize),
     ImmersiveBackgroundSource(ImmersiveBackgroundSource),
+    BackdropIntensity(BackdropIntensity),
     BackgroundMotionEnabled(bool),
     BackgroundMotionZoomPercent(u16),
     BackgroundMotionReversalDurationSecs(u64),
@@ -1009,11 +1072,12 @@ mod tests {
         AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
         BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
         BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
-        BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BackgroundStyle, ClassicNowPlayingPreferences,
-        DisplayMode, ImmersiveBackgroundSource, NowPlayingPreferenceChange, NowPlayingPreferences,
-        Preferences, PreferencesInterface, PreferencesPatch, SharedNowPlayingPreferences,
-        TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
-        TextSize, TrackInfoAlignment, TransitionEffect,
+        BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BackdropIntensity, BackgroundStyle,
+        ClassicNowPlayingPreferences, DisplayMode, ImmersiveBackgroundSource,
+        NowPlayingPreferenceChange, NowPlayingPreferences, Preferences, PreferencesInterface,
+        PreferencesPatch, SharedNowPlayingPreferences, TRANSITION_DURATION_DEFAULT_MS,
+        TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TextSize, TrackInfoAlignment,
+        TransitionEffect,
     };
 
     #[test]
@@ -1055,6 +1119,10 @@ mod tests {
             defaults.shared.immersive_background_source,
             ImmersiveBackgroundSource::AlbumCover
         );
+        assert_eq!(
+            defaults.shared.backdrop_intensity,
+            BackdropIntensity::Balanced
+        );
         assert!(!defaults.shared.background_motion_enabled);
         assert_eq!(
             defaults.shared.background_motion_zoom_percent,
@@ -1089,6 +1157,10 @@ mod tests {
         assert_eq!(
             table["now_playing_immersive_background_source"].as_str(),
             Some("album-cover")
+        );
+        assert_eq!(
+            table["now_playing_immersive_backdrop_intensity"].as_str(),
+            Some("balanced")
         );
         assert_eq!(
             table["now_playing_background_motion_enabled"].as_bool(),
@@ -1153,6 +1225,7 @@ lights_off_enabled = false
                     hide_track_info: true,
                     text_size: TextSize::MEDIUM,
                     immersive_background_source: ImmersiveBackgroundSource::AlbumCover,
+                    backdrop_intensity: BackdropIntensity::Balanced,
                     background_motion_enabled: false,
                     background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
                     background_motion_reversal_duration_secs:
@@ -1184,6 +1257,35 @@ lights_off_enabled = false
         let serialized = toml::to_string(&custom).unwrap();
         let deserialized: Preferences = toml::from_str(&serialized).unwrap();
         assert_eq!(deserialized.now_playing, custom.now_playing);
+    }
+
+    #[test]
+    fn backdrop_intensity_is_backward_compatible_and_round_trips() {
+        let missing: Preferences = toml::from_str("hide_now_playing_info = false").unwrap();
+        assert_eq!(
+            missing.now_playing.shared.backdrop_intensity,
+            BackdropIntensity::Balanced
+        );
+
+        let unknown: Preferences =
+            toml::from_str("now_playing_immersive_backdrop_intensity = \"unknown\"").unwrap();
+        assert_eq!(
+            unknown.now_playing.shared.backdrop_intensity,
+            BackdropIntensity::Balanced
+        );
+
+        for intensity in BackdropIntensity::ALL {
+            let mut preferences = Preferences::default();
+            preferences.now_playing.shared.backdrop_intensity = intensity;
+
+            let serialized = toml::to_string(&preferences).unwrap();
+            let deserialized: Preferences = toml::from_str(&serialized).unwrap();
+
+            assert_eq!(
+                deserialized.now_playing.shared.backdrop_intensity,
+                intensity
+            );
+        }
     }
 
     #[test]
@@ -1294,6 +1396,7 @@ now_playing_background_motion_reversal_duration_secs = 23
                         hide_track_info: true,
                         text_size: TextSize::from_scale_value(113.0),
                         immersive_background_source: ImmersiveBackgroundSource::Artist,
+                        backdrop_intensity: BackdropIntensity::Bold,
                         background_motion_enabled: true,
                         background_motion_zoom_percent: 117,
                         background_motion_reversal_duration_secs: 45,
@@ -1388,6 +1491,9 @@ now_playing_background_motion_reversal_duration_secs = 23
         interface.update_now_playing(NowPlayingPreferenceChange::ImmersiveBackgroundSource(
             ImmersiveBackgroundSource::Artist,
         ));
+        interface.update_now_playing(NowPlayingPreferenceChange::BackdropIntensity(
+            BackdropIntensity::Bold,
+        ));
         interface.update_now_playing(NowPlayingPreferenceChange::RoundCorners(false));
         interface.update_now_playing(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Ambient,
@@ -1410,6 +1516,10 @@ now_playing_background_motion_reversal_duration_secs = 23
                 .shared
                 .immersive_background_source,
             ImmersiveBackgroundSource::Artist
+        );
+        assert_eq!(
+            interface.preferences.now_playing.shared.backdrop_intensity,
+            BackdropIntensity::Bold
         );
         assert!(!interface.preferences.now_playing.classic.round_corners);
 
@@ -1531,6 +1641,17 @@ now_playing_background_motion_reversal_duration_secs = 23
         assert_eq!(
             ImmersiveBackgroundSource::from_preference(Some("unknown")),
             ImmersiveBackgroundSource::AlbumCover
+        );
+
+        for intensity in BackdropIntensity::ALL {
+            assert_eq!(
+                BackdropIntensity::from_preference(Some(intensity.as_preference_value())),
+                intensity
+            );
+        }
+        assert_eq!(
+            BackdropIntensity::from_preference(Some("unknown")),
+            BackdropIntensity::Balanced
         );
 
         for size in [

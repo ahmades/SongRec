@@ -2,9 +2,11 @@
 
 use super::palette::Background;
 use super::style::load_text_css;
+use super::tuning::BackdropProfile;
 use super::tuning::background::*;
 use super::ui::{CinemaFraming, configure_classic_content, configure_immersive_info};
 use super::{BackgroundStyle, DisplayMode, NowPlayingWindow};
+use crate::core::preferences::BackdropIntensity;
 use adw::prelude::*;
 use cairo::{Context, Format, ImageSurface, LinearGradient};
 use std::cell::RefCell;
@@ -38,16 +40,19 @@ impl NowPlayingWindow {
             });
 
         let settings_for_scrim = self.state.settings.clone();
+        let applied_intensity_for_scrim = self.state.applied_backdrop_intensity.clone();
         let cinema_for_scrim = self.ui.cinema_artwork.clone();
         self.ui
             .scrim_area
             .set_draw_func(move |_, context, width, height| {
+                let settings = settings_for_scrim.get();
                 draw_immersive_scrim(
                     context,
                     width,
                     height,
-                    settings_for_scrim.get().display_mode,
+                    settings.display_mode,
                     cinema_for_scrim.framing(width, height),
+                    applied_intensity_for_scrim.get(),
                 );
             });
 
@@ -104,6 +109,9 @@ impl NowPlayingWindow {
     /// Applies the mode-aware background underneath artwork layers.
     pub(super) fn apply_background(&self) {
         let settings = self.state.settings.get();
+        self.state
+            .applied_backdrop_intensity
+            .set(settings.shared.backdrop_intensity);
         redraw_background(
             &self.ui.background_area,
             &self.state.gradient_surface,
@@ -236,28 +244,43 @@ fn draw_immersive_scrim(
     height: i32,
     display_mode: DisplayMode,
     framing: CinemaFraming,
+    backdrop_intensity: BackdropIntensity,
 ) {
     if width <= 0 || height <= 0 {
         return;
     }
 
+    let profile = BackdropProfile::for_intensity(backdrop_intensity);
+
     match display_mode {
         DisplayMode::Classic | DisplayMode::LightsOff => return,
         DisplayMode::Ambient => {
-            context.set_source_rgba(0.0, 0.0, 0.0, AMBIENT_BASE_SCRIM_ALPHA);
+            context.set_source_rgba(0.0, 0.0, 0.0, profile.scrim_alpha(AMBIENT_BASE_SCRIM_ALPHA));
             let _ = context.paint();
 
             let gradient = LinearGradient::new(0.0, 0.0, 0.0, f64::from(height));
-            gradient.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, AMBIENT_TOP_SCRIM_ALPHA);
+            gradient.add_color_stop_rgba(
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                profile.scrim_alpha(AMBIENT_TOP_SCRIM_ALPHA),
+            );
             gradient.add_color_stop_rgba(0.5, 0.0, 0.0, 0.0, 0.0);
-            gradient.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, AMBIENT_BOTTOM_SCRIM_ALPHA);
+            gradient.add_color_stop_rgba(
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                profile.scrim_alpha(AMBIENT_BOTTOM_SCRIM_ALPHA),
+            );
             if context.set_source(gradient).is_ok() {
                 let _ = context.paint();
             }
         }
         DisplayMode::Cinema => {
             use super::tuning::cinema::*;
-            context.set_source_rgba(0.0, 0.0, 0.0, BASE_SCRIM_ALPHA);
+            context.set_source_rgba(0.0, 0.0, 0.0, profile.scrim_alpha(BASE_SCRIM_ALPHA));
             let _ = context.paint();
 
             let (gradient, stops) = if height > width {
@@ -282,7 +305,7 @@ fn draw_immersive_scrim(
                 )
             };
             for (position, alpha) in stops {
-                gradient.add_color_stop_rgba(position, 0.0, 0.0, 0.0, alpha);
+                gradient.add_color_stop_rgba(position, 0.0, 0.0, 0.0, profile.scrim_alpha(alpha));
             }
             if context.set_source(gradient).is_ok() {
                 let _ = context.paint();
@@ -441,6 +464,7 @@ mod tests {
         AMBIENT_BASE_SCRIM_ALPHA, argb32_pixel_bytes, draw_immersive_scrim, effective_background,
         srgb_to_linear,
     };
+    use crate::core::preferences::BackdropIntensity;
     use crate::gui::now_playing_window::palette::Background;
     use crate::gui::now_playing_window::tuning::layout::AMBIENT_FOREGROUND_OPACITY;
     use crate::gui::now_playing_window::{BackgroundStyle, DisplayMode};
@@ -502,18 +526,24 @@ mod tests {
 
     #[test]
     fn ambient_uniform_scrim_keeps_white_text_readable_over_white_artwork() {
-        let toned_white = 0.50;
-        let original_white = 1.0;
-        let artwork = toned_white * (1.0 - AMBIENT_FOREGROUND_OPACITY)
-            + original_white * AMBIENT_FOREGROUND_OPACITY;
-        let composited = artwork * (1.0 - AMBIENT_BASE_SCRIM_ALPHA);
-        let luminance = srgb_to_linear(composited);
-        let contrast = 1.05 / (luminance + 0.05);
+        for intensity in [
+            BackdropIntensity::Soft,
+            BackdropIntensity::Balanced,
+            BackdropIntensity::Bold,
+        ] {
+            let profile = super::BackdropProfile::for_intensity(intensity);
+            let original_white = 1.0;
+            let artwork = profile.max_lightness * (1.0 - AMBIENT_FOREGROUND_OPACITY as f32)
+                + original_white * AMBIENT_FOREGROUND_OPACITY as f32;
+            let composited = artwork as f64 * (1.0 - profile.scrim_alpha(AMBIENT_BASE_SCRIM_ALPHA));
+            let luminance = srgb_to_linear(composited);
+            let contrast = 1.05 / (luminance + 0.05);
 
-        assert!(
-            contrast >= 3.0,
-            "Ambient primary metadata contrast was {contrast:.2}:1"
-        );
+            assert!(
+                contrast >= 3.0,
+                "{intensity:?} Ambient primary metadata contrast was {contrast:.2}:1"
+            );
+        }
     }
 
     #[test]
@@ -528,6 +558,7 @@ mod tests {
                 height,
                 DisplayMode::Ambient,
                 super::CinemaFraming::Cover,
+                BackdropIntensity::Balanced,
             );
             drop(context);
             surface.flush();
@@ -558,7 +589,14 @@ mod tests {
                 let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
                     .expect("test surface");
                 let context = cairo::Context::new(&surface).expect("test context");
-                draw_immersive_scrim(&context, width, height, DisplayMode::Cinema, framing);
+                draw_immersive_scrim(
+                    &context,
+                    width,
+                    height,
+                    DisplayMode::Cinema,
+                    framing,
+                    BackdropIntensity::Balanced,
+                );
                 drop(context);
                 surface.flush();
 
@@ -575,5 +613,39 @@ mod tests {
         let landscape_left = render_alpha(320, 180, super::CinemaFraming::Wide, 0, 90);
         let landscape_right = render_alpha(320, 180, super::CinemaFraming::Wide, 319, 90);
         assert!(landscape_left > landscape_right);
+    }
+
+    #[test]
+    fn backdrop_intensity_scales_scrims_without_changing_their_shape() {
+        let render_alpha = |display_mode, framing, intensity| {
+            let width = 180;
+            let height = 320;
+            let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height)
+                .expect("test surface");
+            let context = cairo::Context::new(&surface).expect("test context");
+            draw_immersive_scrim(&context, width, height, display_mode, framing, intensity);
+            drop(context);
+            surface.flush();
+
+            let stride = surface.stride() as usize;
+            let data = surface.data().expect("test surface data");
+            let offset = (height as usize / 2) * stride + (width as usize / 2) * 4;
+            (u32::from_ne_bytes(data[offset..offset + 4].try_into().unwrap()) >> 24) as u8
+        };
+
+        for (mode, framing) in [
+            (DisplayMode::Ambient, super::CinemaFraming::Cover),
+            (DisplayMode::Cinema, super::CinemaFraming::Cover),
+        ] {
+            let soft = render_alpha(mode, framing, BackdropIntensity::Soft);
+            let balanced = render_alpha(mode, framing, BackdropIntensity::Balanced);
+            let bold = render_alpha(mode, framing, BackdropIntensity::Bold);
+
+            assert!(soft > balanced, "{mode:?} Soft scrim was not stronger");
+            assert!(
+                balanced > bold,
+                "{mode:?} Balanced scrim was not stronger than Bold"
+            );
+        }
     }
 }

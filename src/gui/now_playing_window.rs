@@ -35,8 +35,8 @@ use state::NowPlayingState;
 use ui::NowPlayingWidgets;
 
 pub use crate::core::preferences::{
-    AlbumCoverSize, BackgroundStyle, DisplayMode, ImmersiveBackgroundSource, TextSize,
-    TrackInfoAlignment, TransitionEffect,
+    AlbumCoverSize, BackdropIntensity, BackgroundStyle, DisplayMode, ImmersiveBackgroundSource,
+    TextSize, TrackInfoAlignment, TransitionEffect,
 };
 pub(crate) use crate::core::preferences::{
     BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS,

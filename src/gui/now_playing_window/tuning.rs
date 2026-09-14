@@ -1,15 +1,75 @@
 //! GUI rendering knobs, grouped by responsibility for a single tuning location.
 //!
-//! User-facing defaults/ranges remain in core preferences. Motion settings and
-//! motion-path parameters are intentionally unchanged. Pixel, opacity and
-//! typography values here preserve the existing appearance.
+//! User-facing defaults/ranges remain in core preferences. Motion settings,
+//! motion-path parameters, layout, and typography are intentionally independent
+//! from the backdrop-intensity profiles below.
+
+use crate::core::preferences::BackdropIntensity;
+
+/// Rendering parameters shared by the generated Cinema and Ambient backdrops.
+///
+/// Keeping the values together makes each user-facing intensity a coherent
+/// visual treatment instead of a collection of independently tuned constants.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct BackdropProfile {
+    pub blur_sigma: f32,
+    pub lightness_multiplier: f32,
+    pub max_lightness: f32,
+    pub max_saturation: f32,
+    pub scrim_alpha_scale: f64,
+}
+
+impl BackdropProfile {
+    pub const SOFT: Self = Self {
+        blur_sigma: 7.0,
+        lightness_multiplier: 0.70,
+        max_lightness: 0.42,
+        max_saturation: 0.42,
+        scrim_alpha_scale: 1.20,
+    };
+
+    /// The pre-intensity backdrop treatment, preserved exactly.
+    pub const BALANCED: Self = Self {
+        blur_sigma: 4.0,
+        lightness_multiplier: 0.80,
+        max_lightness: 0.50,
+        max_saturation: 0.60,
+        scrim_alpha_scale: 1.0,
+    };
+
+    pub const BOLD: Self = Self {
+        blur_sigma: 2.5,
+        lightness_multiplier: 0.92,
+        max_lightness: 0.50,
+        max_saturation: 0.78,
+        scrim_alpha_scale: 0.95,
+    };
+
+    pub const fn for_intensity(intensity: BackdropIntensity) -> Self {
+        match intensity {
+            BackdropIntensity::Soft => Self::SOFT,
+            BackdropIntensity::Balanced => Self::BALANCED,
+            BackdropIntensity::Bold => Self::BOLD,
+        }
+    }
+
+    /// Scales a base scrim alpha while keeping the Cairo input valid.
+    pub fn scrim_alpha(self, alpha: f64) -> f64 {
+        (alpha * self.scrim_alpha_scale).clamp(0.0, 1.0)
+    }
+}
 
 pub(super) mod ambient {
     pub const AMBIENT_MAXIMUM_DIMENSION: u32 = 1024;
-    pub const AMBIENT_BLUR_SIGMA: f32 = 4.0;
-    pub const AMBIENT_MAX_SATURATION: f32 = 0.60;
-    pub const AMBIENT_LIGHTNESS_MULTIPLIER: f32 = 0.80;
-    pub const AMBIENT_MAX_LIGHTNESS: f32 = 0.50;
+    #[cfg(test)]
+    pub const AMBIENT_BLUR_SIGMA: f32 = super::BackdropProfile::BALANCED.blur_sigma;
+    #[cfg(test)]
+    pub const AMBIENT_MAX_SATURATION: f32 = super::BackdropProfile::BALANCED.max_saturation;
+    #[cfg(test)]
+    pub const AMBIENT_LIGHTNESS_MULTIPLIER: f32 =
+        super::BackdropProfile::BALANCED.lightness_multiplier;
+    #[cfg(test)]
+    pub const AMBIENT_MAX_LIGHTNESS: f32 = super::BackdropProfile::BALANCED.max_lightness;
     pub const AMBIENT_VIGNETTE_STRENGTH: f32 = 0.0;
     pub const NEUTRAL_COLORFULNESS_START: f32 = 0.10;
     pub const FULL_COLORFULNESS_START: f32 = 0.28;

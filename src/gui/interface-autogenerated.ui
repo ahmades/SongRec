@@ -706,6 +706,36 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                               </object>
                             </child>
                             <child>
+                              <object class="AdwActionRow" id="backdrop_intensity_setting">
+                                <property name="subtitle" translatable="yes">Control how blurred, dark, and colorful the background appears</property>
+                                <property name="title" translatable="yes">Backdrop intensity</property>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">0</property>
+                                    <property name="css-classes">linked</property>
+                                    <child>
+                                      <object class="GtkToggleButton" id="backdrop_intensity_soft">
+                                        <property name="label" translatable="yes">Soft</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkToggleButton" id="backdrop_intensity_balanced">
+                                        <property name="active">true</property>
+                                        <property name="group">backdrop_intensity_soft</property>
+                                        <property name="label" translatable="yes">Balanced</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkToggleButton" id="backdrop_intensity_bold">
+                                        <property name="group">backdrop_intensity_soft</property>
+                                        <property name="label" translatable="yes">Bold</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
                               <object class="AdwSwitchRow" id="background_motion_enabled_setting">
                                 <property name="subtitle" translatable="yes">Gently drift the blurred background while keeping the cover still</property>
                                 <property name="title" translatable="yes">Background motion</property>

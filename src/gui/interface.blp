@@ -606,6 +606,33 @@ Adw.ApplicationWindow main_window {
                 }
               }
 
+              Adw.ActionRow backdrop_intensity_setting {
+                subtitle: _("Control how blurred, dark, and colorful the background appears");
+                title: _("Backdrop intensity");
+
+                Box {
+                  spacing: 0;
+                  css-classes: [
+                    "linked",
+                  ];
+
+                  ToggleButton backdrop_intensity_soft {
+                    label: _("Soft");
+                  }
+
+                  ToggleButton backdrop_intensity_balanced {
+                    active: true;
+                    group: backdrop_intensity_soft;
+                    label: _("Balanced");
+                  }
+
+                  ToggleButton backdrop_intensity_bold {
+                    group: backdrop_intensity_soft;
+                    label: _("Bold");
+                  }
+                }
+              }
+
               Adw.SwitchRow background_motion_enabled_setting {
                 subtitle: _("Gently drift the blurred background while keeping the cover still");
                 title: _("Background motion");

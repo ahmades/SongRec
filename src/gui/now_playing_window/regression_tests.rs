@@ -246,7 +246,7 @@ impl Drop for TestWindow {
 #[test]
 #[ignore = "requires a GTK display and private D-Bus session"]
 fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
-    use crate::core::preferences::{Preferences, PreferencesInterface};
+    use crate::core::preferences::{BackdropIntensity, Preferences, PreferencesInterface};
     use crate::core::thread_messages::GUIMessage;
     use std::cell::Cell;
     use std::rc::Rc;
@@ -304,6 +304,8 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
     let album_background: gtk::ToggleButton = builder
         .object("immersive_background_source_album_cover")
         .unwrap();
+    let backdrop_soft: gtk::ToggleButton = builder.object("backdrop_intensity_soft").unwrap();
+    let backdrop_bold: gtk::ToggleButton = builder.object("backdrop_intensity_bold").unwrap();
     let text_row: adw::ActionRow = builder.object("text_size_setting").unwrap();
     let expected = Rc::new(Cell::new(controller.settings()));
     let saved_expected = expected.clone();
@@ -356,6 +358,20 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
                 .controls
                 .immersive_background_source_album_cover
                 .is_active()
+        );
+        window.0.controls.backdrop_intensity_bold.set_active(true);
+        dispatch();
+        assert!(backdrop_bold.is_active());
+        assert_eq!(
+            controller.settings().shared.backdrop_intensity,
+            BackdropIntensity::Bold
+        );
+        backdrop_soft.set_active(true);
+        dispatch();
+        assert!(window.0.controls.backdrop_intensity_soft.is_active());
+        assert_eq!(
+            controller.settings().shared.backdrop_intensity,
+            BackdropIntensity::Soft
         );
         mode.set_selected(super::DisplayMode::Classic.index());
         dispatch();

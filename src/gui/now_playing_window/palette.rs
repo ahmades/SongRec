@@ -1,7 +1,8 @@
 //! Derives Now Playing colors and combines them with GTK artwork textures.
 
-use super::tuning::ambient::*;
+use super::tuning::{BackdropProfile, ambient::*};
 use crate::core::artwork::{Artwork, ArtworkId};
+use crate::core::preferences::BackdropIntensity;
 use gdk::prelude::TextureExt;
 use image::{DynamicImage, ImageBuffer, Rgba};
 use std::collections::HashMap;
@@ -10,39 +11,78 @@ use std::sync::Arc;
 
 /// The visuals needed before a mode can present an artwork-bearing track.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ArtworkRequirement {
+enum ArtworkRequirementKind {
     None,
     Cover,
     Immersive,
     ImmersiveArtist,
 }
 
+/// The exact artwork artifact required by the active presentation.
+///
+/// Immersive intensity is part of the requirement because blur and tone are
+/// baked into the generated pixels; a texture prepared for another preset is
+/// not interchangeable even when it came from the same source image.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct ArtworkRequirement {
+    kind: ArtworkRequirementKind,
+    backdrop_intensity: Option<BackdropIntensity>,
+}
+
 impl ArtworkRequirement {
+    pub(super) const NONE: Self = Self {
+        kind: ArtworkRequirementKind::None,
+        backdrop_intensity: None,
+    };
+    pub(super) const COVER: Self = Self {
+        kind: ArtworkRequirementKind::Cover,
+        backdrop_intensity: None,
+    };
+    pub(super) const IMMERSIVE: Self = Self::immersive(BackdropIntensity::Balanced);
+    #[cfg(test)]
+    pub(super) const IMMERSIVE_ARTIST: Self = Self::immersive_artist(BackdropIntensity::Balanced);
+
+    pub(super) const fn immersive(backdrop_intensity: BackdropIntensity) -> Self {
+        Self {
+            kind: ArtworkRequirementKind::Immersive,
+            backdrop_intensity: Some(backdrop_intensity),
+        }
+    }
+
+    pub(super) const fn immersive_artist(backdrop_intensity: BackdropIntensity) -> Self {
+        Self {
+            kind: ArtworkRequirementKind::ImmersiveArtist,
+            backdrop_intensity: Some(backdrop_intensity),
+        }
+    }
+
     pub(super) fn for_settings(settings: super::NowPlayingSettings) -> Self {
         use crate::core::preferences::ImmersiveBackgroundSource;
 
         if settings.display_mode.uses_immersive_artwork()
             && settings.shared.immersive_background_source == ImmersiveBackgroundSource::Artist
         {
-            return Self::ImmersiveArtist;
+            return Self::immersive_artist(settings.shared.backdrop_intensity);
         }
-        Self::for_mode(settings.display_mode)
-    }
-
-    pub(super) fn for_mode(mode: super::DisplayMode) -> Self {
-        match mode {
-            super::DisplayMode::LightsOff => Self::None,
-            super::DisplayMode::Classic => Self::Cover,
-            super::DisplayMode::Cinema | super::DisplayMode::Ambient => Self::Immersive,
+        match settings.display_mode {
+            super::DisplayMode::LightsOff => Self::NONE,
+            super::DisplayMode::Classic => Self::COVER,
+            super::DisplayMode::Cinema | super::DisplayMode::Ambient => {
+                Self::immersive(settings.shared.backdrop_intensity)
+            }
         }
     }
 
     pub(super) const fn needs_ambient_texture(self) -> bool {
-        matches!(self, Self::Immersive | Self::ImmersiveArtist)
+        self.backdrop_intensity.is_some()
     }
 
     pub(super) const fn needs_artist_background(self) -> bool {
-        matches!(self, Self::ImmersiveArtist)
+        matches!(self.kind, ArtworkRequirementKind::ImmersiveArtist)
+    }
+
+    pub(super) const fn backdrop_intensity(self) -> Option<BackdropIntensity> {
+        self.backdrop_intensity
     }
 }
 
@@ -71,6 +111,7 @@ pub(super) struct PreparedArtwork {
     pub(super) texture: gdk::MemoryTexture,
     pub(super) ambient_texture: Option<gdk::MemoryTexture>,
     pub(super) background: Background,
+    ambient_intensity: Option<BackdropIntensity>,
     source: Arc<Artwork>,
 }
 
@@ -84,16 +125,27 @@ pub(super) struct PreparedArtwork {
 pub(super) struct PreparedImmersiveBackground {
     pub(super) texture: gdk::MemoryTexture,
     pub(super) background: Background,
+    backdrop_intensity: BackdropIntensity,
     source_id: ArtworkId,
 }
 
 impl PreparedImmersiveBackground {
-    pub(super) const fn source_id(&self) -> ArtworkId {
-        self.source_id
-    }
-
     pub(super) fn matches(&self, artwork: &Arc<Artwork>) -> bool {
         self.source_id == artwork.content_id()
+    }
+
+    pub(super) fn is_ready(&self, requirement: ArtworkRequirement) -> bool {
+        requirement.needs_artist_background()
+            && requirement.backdrop_intensity() == Some(self.backdrop_intensity)
+    }
+
+    #[cfg(test)]
+    pub(super) const fn backdrop_intensity(&self) -> BackdropIntensity {
+        self.backdrop_intensity
+    }
+
+    pub(super) fn same_cache_variant(&self, other: &Self) -> bool {
+        self.source_id == other.source_id && self.backdrop_intensity == other.backdrop_intensity
     }
 
     pub(super) fn storage_bytes(&self) -> usize {
@@ -114,7 +166,27 @@ impl PreparedArtwork {
     }
 
     pub(super) fn is_ready(&self, requirement: ArtworkRequirement) -> bool {
-        !requirement.needs_ambient_texture() || self.ambient_texture.is_some()
+        !requirement.needs_ambient_texture()
+            || (self.ambient_texture.is_some()
+                && self.ambient_intensity == requirement.backdrop_intensity())
+    }
+
+    pub(super) fn ambient_texture_for(
+        &self,
+        requirement: ArtworkRequirement,
+    ) -> Option<&gdk::MemoryTexture> {
+        self.is_ready(requirement)
+            .then_some(())
+            .and(self.ambient_texture.as_ref())
+    }
+
+    #[cfg(test)]
+    pub(super) const fn ambient_intensity(&self) -> Option<BackdropIntensity> {
+        self.ambient_intensity
+    }
+
+    pub(super) fn same_cache_variant(&self, other: &Self) -> bool {
+        self.matches(other.source()) && self.ambient_intensity == other.ambient_intensity
     }
 
     /// RGBA payload retained by the two textures, for the presentation cache budget.
@@ -135,20 +207,27 @@ impl PreparedArtwork {
 pub(super) struct ArtworkVisuals {
     background: Background,
     ambient: Option<AmbientImage>,
+    backdrop_intensity: Option<BackdropIntensity>,
 }
 
 impl ArtworkVisuals {
     /// Supplies a deterministic neutral result if background preparation panics.
-    pub(super) fn fallback() -> Self {
+    pub(super) fn fallback_for(requirement: ArtworkRequirement) -> Self {
         let background = Background::fallback();
         Self {
             background,
-            ambient: Some(AmbientImage {
+            ambient: requirement.needs_ambient_texture().then(|| AmbientImage {
                 width: 1,
                 height: 1,
                 rgba: vec![background.top.0, background.top.1, background.top.2, 255],
             }),
+            backdrop_intensity: requirement.backdrop_intensity(),
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn fallback() -> Self {
+        Self::fallback_for(ArtworkRequirement::IMMERSIVE)
     }
 }
 
@@ -177,9 +256,18 @@ pub(super) fn visuals_from_artwork(
 
     ArtworkVisuals {
         background,
-        ambient: requirement
-            .needs_ambient_texture()
-            .then(|| generate_ambient_image(&image, background)),
+        ambient: requirement.needs_ambient_texture().then(|| {
+            generate_ambient_image(
+                &image,
+                background,
+                BackdropProfile::for_intensity(
+                    requirement
+                        .backdrop_intensity()
+                        .expect("immersive artwork has a backdrop intensity"),
+                ),
+            )
+        }),
+        backdrop_intensity: requirement.backdrop_intensity(),
     }
 }
 
@@ -192,17 +280,27 @@ pub(super) fn prepare_artwork(
     let ArtworkVisuals {
         background,
         ambient,
+        backdrop_intensity,
     } = visuals;
-    let ambient_texture = ambient.map(memory_texture_from_ambient);
     let previous = previous.filter(|previous| previous.matches(artwork));
+    let (ambient_texture, ambient_intensity) = match ambient {
+        Some(ambient) => (
+            Some(memory_texture_from_ambient(ambient)),
+            backdrop_intensity,
+        ),
+        None => (
+            previous.and_then(|previous| previous.ambient_texture.clone()),
+            previous.and_then(|previous| previous.ambient_intensity),
+        ),
+    };
 
     PreparedArtwork {
         texture: previous.map_or_else(
             || crate::gui::artwork::texture(artwork),
             |previous| previous.texture.clone(),
         ),
-        ambient_texture: ambient_texture
-            .or_else(|| previous.and_then(|previous| previous.ambient_texture.clone())),
+        ambient_texture,
+        ambient_intensity,
         background,
         source: artwork.clone(),
     }
@@ -217,9 +315,10 @@ pub(super) fn prepare_immersive_background(
     let ArtworkVisuals {
         background,
         ambient,
+        backdrop_intensity,
     } = visuals;
     let ambient = ambient.unwrap_or_else(|| {
-        ArtworkVisuals::fallback()
+        ArtworkVisuals::fallback_for(ArtworkRequirement::IMMERSIVE)
             .ambient
             .expect("fallback visuals always contain an ambient image")
     });
@@ -227,6 +326,7 @@ pub(super) fn prepare_immersive_background(
     PreparedImmersiveBackground {
         texture: memory_texture_from_ambient(ambient),
         background,
+        backdrop_intensity: backdrop_intensity.unwrap_or(BackdropIntensity::Balanced),
         source_id: artwork.content_id(),
     }
 }
@@ -246,6 +346,7 @@ fn memory_texture_from_ambient(ambient: AmbientImage) -> gdk::MemoryTexture {
 fn generate_ambient_image<Container>(
     image: &ImageBuffer<Rgba<u8>, Container>,
     background: Background,
+    profile: BackdropProfile,
 ) -> AmbientImage
 where
     Container: Deref<Target = [u8]>,
@@ -280,9 +381,9 @@ where
     // DynamicImage selects the packed-u8 Gaussian implementation. The generic
     // imageops route expands RGBA into two full-size f32 scratch buffers first.
     let mut ambient = DynamicImage::ImageRgba8(thumbnail)
-        .blur(AMBIENT_BLUR_SIGMA)
+        .blur(profile.blur_sigma)
         .into_rgba8();
-    apply_ambient_tone(&mut ambient);
+    apply_ambient_tone(&mut ambient, profile);
 
     AmbientImage {
         width,
@@ -297,7 +398,7 @@ fn composite_channel(foreground: u8, background: u8, alpha: f32) -> u8 {
         .clamp(0.0, 255.0) as u8
 }
 
-fn apply_ambient_tone(image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>) {
+fn apply_ambient_tone(image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>, profile: BackdropProfile) {
     let width = image.width() as f32;
     let height = image.height() as f32;
 
@@ -313,10 +414,10 @@ fn apply_ambient_tone(image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>) {
         } else {
             chroma / maximum
         };
-        let lightness = (lightness * AMBIENT_LIGHTNESS_MULTIPLIER).min(AMBIENT_MAX_LIGHTNESS);
+        let lightness = (lightness * profile.lightness_multiplier).min(profile.max_lightness);
         let available_chroma = 1.0 - (2.0 * lightness - 1.0).abs();
         let target_chroma = (chroma * colorfulness_from_saturation(colorfulness))
-            .min(available_chroma * AMBIENT_MAX_SATURATION);
+            .min(available_chroma * profile.max_saturation);
         let chroma_scale = if chroma <= f32::EPSILON {
             0.0
         } else {
@@ -614,13 +715,13 @@ mod tests {
                     let decoded = start.elapsed();
                     let start = Instant::now();
                     let classic =
-                        super::visuals_from_artwork(&artwork, super::ArtworkRequirement::Cover);
+                        super::visuals_from_artwork(&artwork, super::ArtworkRequirement::COVER);
                     let classic_time = start.elapsed();
                     let start = Instant::now();
                     // This is also the pre-refactor eager Classic workload, with
                     // exactly the same image treatment and tuning values.
                     let immersive =
-                        super::visuals_from_artwork(&artwork, super::ArtworkRequirement::Immersive);
+                        super::visuals_from_artwork(&artwork, super::ArtworkRequirement::IMMERSIVE);
                     let immersive_time = start.elapsed();
                     let start = Instant::now();
                     let cover = super::prepare_artwork(&artwork, classic, None);
@@ -652,21 +753,36 @@ mod tests {
         }
     }
 
+    use super::BackdropProfile;
     use super::{
         AMBIENT_BLUR_SIGMA, AMBIENT_LIGHTNESS_MULTIPLIER, AMBIENT_MAX_LIGHTNESS,
         AMBIENT_MAX_SATURATION, AMBIENT_MAXIMUM_DIMENSION, ArtworkVisuals, Background,
-        apply_ambient_tone, colorfulness_strength, contrast_ratio, generate_ambient_image,
-        generate_background, hsl_to_rgb, hsv_saturation, rgb_chroma, rgb_to_hsl,
-        thumbnail_dimensions, visuals_from_artwork,
+        colorfulness_strength, contrast_ratio, generate_background, hsl_to_rgb, hsv_saturation,
+        rgb_chroma, rgb_to_hsl, thumbnail_dimensions, visuals_from_artwork,
     };
     use crate::core::artwork::Artwork;
-    use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
+    use crate::core::preferences::BackdropIntensity;
+    use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba, RgbaImage};
     use std::io::Cursor;
+
+    fn apply_ambient_tone(image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>) {
+        super::apply_ambient_tone(image, BackdropProfile::BALANCED);
+    }
+
+    fn generate_ambient_image<Container>(
+        image: &ImageBuffer<Rgba<u8>, Container>,
+        background: Background,
+    ) -> super::AmbientImage
+    where
+        Container: std::ops::Deref<Target = [u8]>,
+    {
+        super::generate_ambient_image(image, background, BackdropProfile::BALANCED)
+    }
 
     #[test]
     fn artist_background_is_required_only_when_selected_in_an_immersive_mode() {
         use crate::core::preferences::{
-            DisplayMode, ImmersiveBackgroundSource, NowPlayingPreferences,
+            BackdropIntensity, DisplayMode, ImmersiveBackgroundSource, NowPlayingPreferences,
             SharedNowPlayingPreferences,
         };
 
@@ -675,19 +791,27 @@ mod tests {
                 ImmersiveBackgroundSource::AlbumCover,
                 ImmersiveBackgroundSource::Artist,
             ] {
-                let settings = NowPlayingPreferences {
-                    display_mode: mode,
-                    shared: SharedNowPlayingPreferences {
-                        immersive_background_source: source,
-                        ..SharedNowPlayingPreferences::default()
-                    },
-                    ..NowPlayingPreferences::default()
-                };
-                assert_eq!(
-                    super::ArtworkRequirement::for_settings(settings).needs_artist_background(),
-                    matches!(mode, DisplayMode::Cinema | DisplayMode::Ambient)
-                        && source == ImmersiveBackgroundSource::Artist
-                );
+                for intensity in BackdropIntensity::ALL {
+                    let settings = NowPlayingPreferences {
+                        display_mode: mode,
+                        shared: SharedNowPlayingPreferences {
+                            immersive_background_source: source,
+                            backdrop_intensity: intensity,
+                            ..SharedNowPlayingPreferences::default()
+                        },
+                        ..NowPlayingPreferences::default()
+                    };
+                    let requirement = super::ArtworkRequirement::for_settings(settings);
+                    let immersive = matches!(mode, DisplayMode::Cinema | DisplayMode::Ambient);
+                    assert_eq!(
+                        requirement.needs_artist_background(),
+                        immersive && source == ImmersiveBackgroundSource::Artist
+                    );
+                    assert_eq!(
+                        requirement.backdrop_intensity(),
+                        immersive.then_some(intensity)
+                    );
+                }
             }
         }
     }
@@ -763,7 +887,7 @@ mod tests {
         let artwork = Artwork::decode(encoded.into_inner()).unwrap();
 
         assert_eq!(
-            visuals_from_artwork(&artwork, super::ArtworkRequirement::Cover).background,
+            visuals_from_artwork(&artwork, super::ArtworkRequirement::COVER).background,
             generate_background(&image)
         );
     }
@@ -823,22 +947,28 @@ mod tests {
             [215, 224, 232],
             [220, 220, 220],
         ] {
-            let image =
-                ImageBuffer::from_pixel(40, 40, Rgba([source[0], source[1], source[2], 255]));
-            let ambient = generate_ambient_image(&image, Background::fallback());
-            let output = center_rgb(&ambient);
+            for intensity in BackdropIntensity::ALL {
+                let image =
+                    ImageBuffer::from_pixel(40, 40, Rgba([source[0], source[1], source[2], 255]));
+                let ambient = super::generate_ambient_image(
+                    &image,
+                    Background::fallback(),
+                    BackdropProfile::for_intensity(intensity),
+                );
+                let output = center_rgb(&ambient);
 
-            assert!(
-                channel_range(output) <= channel_range(source) + 2,
-                "near-neutral {source:?} became {output:?}"
-            );
-            let source_saturation = hsv_saturation((source[0], source[1], source[2]));
-            let output_saturation = hsv_saturation((output[0], output[1], output[2]));
-            assert!(
-                output_saturation <= source_saturation + 0.01,
-                "near-neutral {source:?} became relatively more saturated: {output:?}"
-            );
-            assert!(output.iter().max() < source.iter().max());
+                assert!(
+                    channel_range(output) <= channel_range(source) + 2,
+                    "{intensity:?} near-neutral {source:?} became {output:?}"
+                );
+                let source_saturation = hsv_saturation((source[0], source[1], source[2]));
+                let output_saturation = hsv_saturation((output[0], output[1], output[2]));
+                assert!(
+                    output_saturation <= source_saturation + 0.01,
+                    "{intensity:?} near-neutral {source:?} became relatively more saturated: {output:?}"
+                );
+                assert!(output.iter().max() < source.iter().max());
+            }
         }
     }
 
@@ -921,13 +1051,121 @@ mod tests {
     }
 
     #[test]
+    fn backdrop_profiles_change_detail_brightness_and_colorfulness_in_order() {
+        let image = ImageBuffer::from_fn(128, 96, |x, y| {
+            let block = (x / 8 + y / 8) % 3;
+            match block {
+                0 => Rgba([210, 38, 30, 255]),
+                1 => Rgba([28, 150, 68, 255]),
+                _ => Rgba([35, 72, 220, 255]),
+            }
+        });
+        let generate = |intensity| {
+            super::generate_ambient_image(
+                &image,
+                Background::fallback(),
+                BackdropProfile::for_intensity(intensity),
+            )
+        };
+        let soft = generate(BackdropIntensity::Soft);
+        let balanced = generate(BackdropIntensity::Balanced);
+        let bold = generate(BackdropIntensity::Bold);
+
+        let metrics = |image: &super::AmbientImage| {
+            let width = image.width as usize;
+            let (pixels, remainder) = image.rgba.as_chunks::<4>();
+            assert!(remainder.is_empty());
+            let brightness = pixels
+                .iter()
+                .map(|pixel| {
+                    pixel[..3]
+                        .iter()
+                        .map(|channel| u64::from(*channel))
+                        .sum::<u64>()
+                })
+                .sum::<u64>();
+            let colorfulness = pixels
+                .iter()
+                .map(|pixel| {
+                    let maximum = *pixel[..3].iter().max().unwrap();
+                    let minimum = *pixel[..3].iter().min().unwrap();
+                    u64::from(maximum - minimum)
+                })
+                .sum::<u64>();
+            let edge_detail = pixels
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| index % width != 0)
+                .map(|(index, pixel)| {
+                    pixel[..3]
+                        .iter()
+                        .zip(&pixels[index - 1][..3])
+                        .map(|(current, previous)| u64::from(current.abs_diff(*previous)))
+                        .sum::<u64>()
+                })
+                .sum::<u64>();
+            (brightness, colorfulness, edge_detail)
+        };
+        let soft = metrics(&soft);
+        let balanced = metrics(&balanced);
+        let bold = metrics(&bold);
+
+        assert!(soft.0 < balanced.0 && balanced.0 < bold.0);
+        assert!(soft.1 < balanced.1 && balanced.1 < bold.1);
+        assert!(soft.2 < balanced.2 && balanced.2 < bold.2);
+    }
+
+    #[test]
+    fn prepared_backdrop_is_ready_only_for_its_generating_intensity() {
+        let image =
+            DynamicImage::ImageRgba8(RgbaImage::from_pixel(8, 8, Rgba([80, 130, 190, 255])));
+        let mut encoded = Cursor::new(Vec::new());
+        image.write_to(&mut encoded, ImageFormat::Png).unwrap();
+        let artwork = std::sync::Arc::new(Artwork::decode(encoded.into_inner()).unwrap());
+        let requirement = super::ArtworkRequirement::immersive(BackdropIntensity::Soft);
+        let prepared =
+            super::prepare_artwork(&artwork, visuals_from_artwork(&artwork, requirement), None);
+
+        assert_eq!(prepared.ambient_intensity(), Some(BackdropIntensity::Soft));
+        assert!(prepared.is_ready(requirement));
+        assert!(
+            prepared.is_ready(super::ArtworkRequirement::immersive_artist(
+                BackdropIntensity::Soft
+            ))
+        );
+        assert!(!prepared.is_ready(super::ArtworkRequirement::immersive(
+            BackdropIntensity::Balanced
+        )));
+        assert!(!prepared.is_ready(super::ArtworkRequirement::immersive(
+            BackdropIntensity::Bold
+        )));
+
+        let artist = super::prepare_immersive_background(
+            &artwork,
+            visuals_from_artwork(
+                &artwork,
+                super::ArtworkRequirement::immersive_artist(BackdropIntensity::Soft),
+            ),
+        );
+        assert_eq!(artist.backdrop_intensity(), BackdropIntensity::Soft);
+        assert!(artist.is_ready(super::ArtworkRequirement::immersive_artist(
+            BackdropIntensity::Soft
+        )));
+        assert!(
+            !artist.is_ready(super::ArtworkRequirement::immersive_artist(
+                BackdropIntensity::Bold
+            ))
+        );
+    }
+
+    #[test]
     fn classic_preparation_does_not_generate_an_immersive_background() {
         let image = image::DynamicImage::new_rgb8(48, 48);
         let mut bytes = std::io::Cursor::new(Vec::new());
         image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
         let artwork = crate::core::artwork::Artwork::decode(bytes.into_inner()).unwrap();
-        let cover = super::visuals_from_artwork(&artwork, super::ArtworkRequirement::Cover);
-        let immersive = super::visuals_from_artwork(&artwork, super::ArtworkRequirement::Immersive);
+        let cover = super::visuals_from_artwork(&artwork, super::ArtworkRequirement::COVER);
+        let immersive = super::visuals_from_artwork(&artwork, super::ArtworkRequirement::IMMERSIVE);
         assert!(cover.ambient.is_none());
         assert!(immersive.ambient.is_some());
         assert_eq!(cover.background, immersive.background);

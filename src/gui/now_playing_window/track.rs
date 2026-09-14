@@ -12,7 +12,9 @@ use super::state::{
 use super::ui::{
     AmbientArtworkLayout, CinemaArtworkLayout, TrackTransitionLayout, configure_immersive_info,
 };
-use super::{DisplayMode, NowPlayingSettings, NowPlayingWindow, TransitionEffect};
+use super::{
+    BackdropIntensity, DisplayMode, NowPlayingSettings, NowPlayingWindow, TransitionEffect,
+};
 use crate::core::artwork::{Artwork, ArtworkStatus};
 use crate::core::thread_messages::SongRecognizedMessage;
 use adw::prelude::*;
@@ -63,6 +65,7 @@ pub(super) struct TrackPresentation {
     background_area: gtk::DrawingArea,
     gradient_surface: Rc<RefCell<Option<CachedGradient>>>,
     settings: Rc<Cell<NowPlayingSettings>>,
+    applied_backdrop_intensity: Rc<Cell<BackdropIntensity>>,
     current_background: Rc<Cell<Background>>,
     track_state: Rc<RefCell<TrackPresentationState>>,
 }
@@ -133,7 +136,8 @@ impl ArtistBackgroundPreparation {
 
     fn start_preparation(&self, track_key: String, url: String, artwork: Arc<Artwork>) {
         let settings = self.settings.get();
-        if !ArtworkRequirement::for_settings(settings).needs_artist_background()
+        let requirement = ArtworkRequirement::for_settings(settings);
+        if !requirement.needs_artist_background()
             || !self
                 .window
                 .upgrade()
@@ -154,10 +158,14 @@ impl ArtistBackgroundPreparation {
         let prepared = {
             self.track_state
                 .borrow()
-                .prepared_immersive_background_for(&artwork)
+                .prepared_immersive_background_for(&artwork, requirement)
         };
         if let Some(prepared) = prepared {
-            self.set_state(&track_key, &url, ArtistBackgroundState::Ready(prepared));
+            self.set_state(
+                &track_key,
+                &url,
+                ArtistBackgroundState::Ready(prepared, artwork),
+            );
             return;
         }
 
@@ -175,6 +183,7 @@ impl ArtistBackgroundPreparation {
             let mut next_job = Some(job);
             while let Some(job) = next_job {
                 let artwork = job.artwork;
+                let requirement = ArtworkRequirement::for_settings(context.settings.get());
                 let recipient = {
                     context
                         .track_state
@@ -191,10 +200,7 @@ impl ArtistBackgroundPreparation {
                 let visuals = match gio::spawn_blocking(move || {
                     let started = Instant::now();
                     let queue_time = started.duration_since(job.queued_at);
-                    let visuals = visuals_from_artwork(
-                        &artwork_for_worker,
-                        ArtworkRequirement::Immersive,
-                    );
+                    let visuals = visuals_from_artwork(&artwork_for_worker, requirement);
                     log::debug!(
                         "Now Playing track {log_track_key}, artist background {}x{}: queue {:?}, processing {:?}",
                         artwork_for_worker.width(),
@@ -209,7 +215,7 @@ impl ArtistBackgroundPreparation {
                     Ok(visuals) => visuals,
                     Err(_) => {
                         log::warn!("Now Playing artist-background preparation task panicked");
-                        ArtworkVisuals::fallback()
+                        ArtworkVisuals::fallback_for(requirement)
                     }
                 };
 
@@ -223,9 +229,29 @@ impl ArtistBackgroundPreparation {
                     .artist_background_recipient(&artwork);
                 if let Some((track_key, url)) = recipient {
                     let prepared = prepare_immersive_background(&artwork, visuals);
-                    context.set_state(&track_key, &url, ArtistBackgroundState::Ready(prepared));
+                    context.set_state(
+                        &track_key,
+                        &url,
+                        ArtistBackgroundState::Ready(prepared, artwork.clone()),
+                    );
                 }
                 next_job = context.preparation_jobs.borrow_mut().finish(&artwork);
+                if next_job.is_none() {
+                    let current_requirement =
+                        ArtworkRequirement::for_settings(context.settings.get());
+                    let retry = context
+                        .track_state
+                        .borrow()
+                        .artist_background_work(current_requirement);
+                    if let Some(ArtistBackgroundWork::Prepare {
+                        track_key,
+                        url,
+                        artwork,
+                    }) = retry
+                    {
+                        context.start_preparation(track_key, url, artwork);
+                    }
+                }
             }
         });
     }
@@ -252,6 +278,7 @@ impl TrackPresentation {
             background_area: window.ui.background_area.clone(),
             gradient_surface: window.state.gradient_surface.clone(),
             settings: window.state.settings.clone(),
+            applied_backdrop_intensity: window.state.applied_backdrop_intensity.clone(),
             current_background: window.state.current_background.clone(),
             track_state: window.state.track_presentation.clone(),
         }
@@ -276,47 +303,55 @@ impl TrackPresentation {
         self.set_metadata(track);
 
         let settings = self.settings.get();
-        let use_artist_background =
-            ArtworkRequirement::for_settings(settings).needs_artist_background();
+        let requirement = ArtworkRequirement::for_settings(settings);
+        let use_artist_background = requirement.needs_artist_background();
         let artist_background = match (use_artist_background, &track.artist_background) {
-            (true, ArtistBackgroundState::Ready(background)) => Some(background),
+            (true, ArtistBackgroundState::Ready(background, _))
+                if background.is_ready(requirement) =>
+            {
+                Some(background)
+            }
             _ => None,
         };
         let foreground = track.artwork.as_ref().map(|artwork| &artwork.texture);
+        let album_backdrop = track
+            .artwork
+            .as_ref()
+            .and_then(|artwork| artwork.ambient_texture_for(requirement));
+        let artist_pending = use_artist_background
+            && track.artist_background_url.is_some()
+            && track.artist_background.is_waiting(requirement);
         let backdrop = artist_background
             .map(|background| &background.texture)
-            .or_else(|| {
-                track
-                    .artwork
-                    .as_ref()
-                    .and_then(|artwork| artwork.ambient_texture.as_ref())
-            });
+            .or_else(|| (!artist_pending).then_some(()).and(album_backdrop));
+        let album_background = track
+            .artwork
+            .as_ref()
+            .filter(|artwork| artwork.is_ready(requirement))
+            .map(|artwork| artwork.background);
         let artwork_background = artist_background
             .map(|background| background.background)
-            .or_else(|| track.artwork.as_ref().map(|artwork| artwork.background));
+            .or_else(|| (!artist_pending).then_some(()).and(album_background));
+        let artwork_pending = track.awaits_artwork(requirement);
 
-        if foreground.is_some() || backdrop.is_some() {
-            self.artwork.set_paintable(foreground);
+        // The sharp cover is shared by every mode. Immersive layers retain
+        // their already-painted backdrop until pixels for the exact selected
+        // intensity are ready, avoiding a fallback flash during reprocessing.
+        self.artwork.set_paintable(foreground);
+        if backdrop.is_some() || !settings.display_mode.uses_immersive_artwork() {
             self.cinema_artwork.set_artwork(foreground, backdrop);
             self.ambient_artwork.set_artwork(foreground, backdrop);
-        } else {
-            // Recognition metadata arrives before its separately downloaded
-            // visuals. Keep the outgoing scene until the selected source is
-            // ready so immersive modes never flash through an empty frame.
-            let artist_pending = use_artist_background
-                && track.artist_background_url.is_some()
-                && track.artist_background.is_waiting();
-            if !track.artwork_pending && !artist_pending {
-                self.clear_artwork();
-            }
+        } else if !artwork_pending {
+            self.cinema_artwork.set_artwork(foreground, None);
+            self.ambient_artwork.set_artwork(foreground, None);
+        }
+        if foreground.is_none() && backdrop.is_none() && !artwork_pending {
+            self.clear_artwork();
         }
         self.current_background.set(background_after_track_update(
             self.current_background.get(),
             artwork_background,
-            track.artwork_pending
-                || (use_artist_background
-                    && track.artist_background_url.is_some()
-                    && track.artist_background.is_waiting()),
+            artwork_pending,
         ));
 
         self.apply_background();
@@ -371,16 +406,20 @@ impl TrackPresentation {
     fn sync_artwork_visibility(&self) {
         let state = self.track_state.borrow();
         let settings = self.settings.get();
+        let requirement = ArtworkRequirement::for_settings(settings);
         let current_cover_available = state
             .displayed_track
             .as_ref()
             .is_some_and(|track| track.artwork.is_some());
         let current_artist_background_available =
             state.displayed_track.as_ref().is_some_and(|track| {
-                matches!(&track.artist_background, ArtistBackgroundState::Ready(_))
+                matches!(
+                    &track.artist_background,
+                    ArtistBackgroundState::Ready(background, _)
+                        if background.is_ready(requirement)
+                )
             });
-        let use_artist_background =
-            ArtworkRequirement::for_settings(settings).needs_artist_background();
+        let use_artist_background = requirement.needs_artist_background();
         let current_immersive_artwork_available = current_cover_available
             || (use_artist_background && current_artist_background_available);
         let retained_immersive_artwork_available = current_immersive_artwork_available
@@ -388,7 +427,7 @@ impl TrackPresentation {
                 (track.artwork_pending
                     || (use_artist_background
                         && track.artist_background_url.is_some()
-                        && track.artist_background.is_waiting()))
+                        && track.artist_background.is_waiting(requirement)))
                     && !matches!(state.mode, PresentationMode::Listening)
             });
         let visibility = presentation_visibility(
@@ -442,6 +481,8 @@ impl TrackPresentation {
 
     fn apply_background(&self) {
         let settings = self.settings.get();
+        self.applied_backdrop_intensity
+            .set(settings.shared.backdrop_intensity);
         redraw_background(
             &self.background_area,
             &self.gradient_surface,
@@ -525,11 +566,12 @@ impl NowPlayingWindow {
     /// Refreshes the displayed song metadata and artwork from a recognition result.
     pub fn update(&self, message: &SongRecognizedMessage) {
         self.state.deferred_artwork.borrow_mut().take();
+        let requirement = ArtworkRequirement::for_settings(self.state.settings.get());
         let prepared_artwork = message.cover_image().and_then(|artwork| {
             self.state
                 .track_presentation
                 .borrow()
-                .prepared_artwork_for(artwork)
+                .prepared_artwork_for(artwork, requirement)
         });
         let artist_background = self
             .state
@@ -540,7 +582,6 @@ impl NowPlayingWindow {
                 message.artist_background_url.as_deref(),
                 message.response_received_at,
             );
-        let requirement = ArtworkRequirement::for_settings(self.state.settings.get());
         let visuals_pending = message.cover_image().is_some()
             && prepared_artwork
                 .as_ref()
@@ -637,6 +678,43 @@ impl NowPlayingWindow {
             *self.state.deferred_artwork.borrow_mut() = Some(artwork);
             return;
         }
+        let requirement = ArtworkRequirement::for_settings(self.state.settings.get());
+        let cached = self
+            .state
+            .track_presentation
+            .borrow()
+            .prepared_artwork_for(&artwork, requirement);
+        if let Some(cached) = cached {
+            let track_key = self
+                .state
+                .track_presentation
+                .borrow()
+                .track_key_for_artwork(&artwork, requirement);
+            if let Some(track_key) = track_key {
+                let action = self
+                    .state
+                    .track_presentation
+                    .borrow_mut()
+                    .apply_prepared_artwork(&track_key, &artwork, cached, requirement);
+                match action {
+                    PresentationAction::BeginTransition => {
+                        begin_track_transition(
+                            &self.ui.content_transition,
+                            self.state.settings.get(),
+                        );
+                    }
+                    PresentationAction::RenderTrack(track) => {
+                        TrackPresentation::from_window(self)
+                            .apply_action(PresentationAction::RenderTrack(track));
+                        self.ui.content_transition.reveal();
+                    }
+                    PresentationAction::None
+                    | PresentationAction::HoldTransition
+                    | PresentationAction::RenderListening => {}
+                }
+            }
+            return;
+        }
         let Some(job) = self
             .state
             .artwork_preparations
@@ -696,7 +774,7 @@ impl NowPlayingWindow {
                     Ok(visuals) => visuals,
                     Err(_) => {
                         log::warn!("Now Playing artwork preparation task panicked");
-                        ArtworkVisuals::fallback()
+                        ArtworkVisuals::fallback_for(requirement)
                     }
                 };
 
@@ -708,7 +786,7 @@ impl NowPlayingWindow {
                     .track_key_for_artwork(&artwork, requirement);
                 if let Some(track_key) = track_key {
                     let texture_started = Instant::now();
-                    let previous = track_state.borrow().prepared_artwork_for(&artwork);
+                    let previous = track_state.borrow().prepared_artwork_for_source(&artwork);
                     let prepared = prepare_artwork(&artwork, visuals, previous.as_ref());
                     log::debug!(
                         "Now Playing track {track_key}: textures prepared in {:?}",
@@ -783,7 +861,7 @@ impl NowPlayingWindow {
             self.state
                 .track_presentation
                 .borrow()
-                .artist_background_work()
+                .artist_background_work(ArtworkRequirement::for_settings(settings))
         };
         let Some(work) = work else {
             return;
@@ -986,14 +1064,14 @@ mod tests {
         state.apply_artist_background_state(
             "track",
             artist_url,
-            ArtistBackgroundState::Ready(prepared),
-            ArtworkRequirement::ImmersiveArtist,
+            ArtistBackgroundState::Ready(prepared, source.clone()),
+            ArtworkRequirement::IMMERSIVE_ARTIST,
         );
         state.apply_artist_background_state(
             "track",
             artist_url,
             ArtistBackgroundState::Downloaded(source),
-            ArtworkRequirement::ImmersiveArtist,
+            ArtworkRequirement::IMMERSIVE_ARTIST,
         );
         drop(state);
 
@@ -1011,7 +1089,7 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .artist_background,
-            ArtistBackgroundState::Ready(_)
+            ArtistBackgroundState::Ready(..)
         ));
         if let Some(popover) = window
             .controls

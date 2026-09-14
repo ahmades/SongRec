@@ -9,7 +9,7 @@ use super::{
     TextSize, TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
 use crate::core::preferences::{
-    DisplayMode, ImmersiveBackgroundSource, NowPlayingPreferenceChange,
+    BackdropIntensity, DisplayMode, ImmersiveBackgroundSource, NowPlayingPreferenceChange,
 };
 use adw::prelude::*;
 use std::cell::Cell;
@@ -27,6 +27,9 @@ struct PreferencesWidgets {
     text_size: gtk::Scale,
     immersive_background_source_album_cover: gtk::ToggleButton,
     immersive_background_source_artist: gtk::ToggleButton,
+    backdrop_intensity_soft: gtk::ToggleButton,
+    backdrop_intensity_balanced: gtk::ToggleButton,
+    backdrop_intensity_bold: gtk::ToggleButton,
     background_motion_enabled: adw::SwitchRow,
     background_motion_zoom_row: adw::ActionRow,
     background_motion_zoom: gtk::Scale,
@@ -70,6 +73,9 @@ impl NowPlayingPreferencesView {
             immersive_background_source_artist: builder
                 .object("immersive_background_source_artist")
                 .unwrap(),
+            backdrop_intensity_soft: builder.object("backdrop_intensity_soft").unwrap(),
+            backdrop_intensity_balanced: builder.object("backdrop_intensity_balanced").unwrap(),
+            backdrop_intensity_bold: builder.object("backdrop_intensity_bold").unwrap(),
             background_motion_enabled: builder.object("background_motion_enabled_setting").unwrap(),
             background_motion_zoom_row: builder.object("background_motion_zoom_setting").unwrap(),
             background_motion_zoom: builder
@@ -200,6 +206,20 @@ impl NowPlayingPreferencesView {
                 settings.shared.immersive_background_source,
                 ImmersiveBackgroundSource::Artist
             ));
+        self.widgets.backdrop_intensity_soft.set_active(matches!(
+            settings.shared.backdrop_intensity,
+            BackdropIntensity::Soft
+        ));
+        self.widgets
+            .backdrop_intensity_balanced
+            .set_active(matches!(
+                settings.shared.backdrop_intensity,
+                BackdropIntensity::Balanced
+            ));
+        self.widgets.backdrop_intensity_bold.set_active(matches!(
+            settings.shared.backdrop_intensity,
+            BackdropIntensity::Bold
+        ));
         self.widgets
             .background_motion_enabled
             .set_active(settings.shared.background_motion_enabled);
@@ -366,6 +386,18 @@ impl NowPlayingPreferencesView {
                 NowPlayingPreferenceChange::ImmersiveBackgroundSource(
                     ImmersiveBackgroundSource::Artist,
                 ),
+            ),
+            (
+                &self.widgets.backdrop_intensity_soft,
+                NowPlayingPreferenceChange::BackdropIntensity(BackdropIntensity::Soft),
+            ),
+            (
+                &self.widgets.backdrop_intensity_balanced,
+                NowPlayingPreferenceChange::BackdropIntensity(BackdropIntensity::Balanced),
+            ),
+            (
+                &self.widgets.backdrop_intensity_bold,
+                NowPlayingPreferenceChange::BackdropIntensity(BackdropIntensity::Bold),
             ),
         ] {
             let applying = self.applying.clone();

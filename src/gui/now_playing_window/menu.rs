@@ -10,7 +10,7 @@ use super::{
     NowPlayingSettings, NowPlayingWindow, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
     TextSize, TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
-use crate::core::preferences::NowPlayingPreferenceChange;
+use crate::core::preferences::{BackdropIntensity, NowPlayingPreferenceChange};
 use adw::prelude::*;
 use gettextrs::gettext;
 use std::cell::{Cell, RefCell};
@@ -113,6 +113,9 @@ pub(super) struct NowPlayingControls {
     pub(super) text_size: gtk::Scale,
     pub(super) immersive_background_source_album_cover: gtk::ToggleButton,
     pub(super) immersive_background_source_artist: gtk::ToggleButton,
+    pub(super) backdrop_intensity_soft: gtk::ToggleButton,
+    pub(super) backdrop_intensity_balanced: gtk::ToggleButton,
+    pub(super) backdrop_intensity_bold: gtk::ToggleButton,
     pub(super) background_motion_enabled_label: gtk::Label,
     pub(super) background_motion_enabled: gtk::Switch,
     pub(super) background_motion_zoom_label: gtk::Label,
@@ -169,6 +172,11 @@ pub(super) fn build_controls() -> NowPlayingControls {
         gtk::ToggleButton::with_label(&gettext("Album cover"));
     let immersive_background_source_artist = gtk::ToggleButton::with_label(&gettext("Artist"));
     immersive_background_source_artist.set_group(Some(&immersive_background_source_album_cover));
+    let backdrop_intensity_soft = gtk::ToggleButton::with_label(&gettext("Soft"));
+    let backdrop_intensity_balanced = gtk::ToggleButton::with_label(&gettext("Balanced"));
+    let backdrop_intensity_bold = gtk::ToggleButton::with_label(&gettext("Bold"));
+    backdrop_intensity_balanced.set_group(Some(&backdrop_intensity_soft));
+    backdrop_intensity_bold.set_group(Some(&backdrop_intensity_soft));
     let background_motion_enabled_label = gtk::Label::new(Some(&gettext("Background motion")));
     let background_motion_enabled = gtk::Switch::new();
     let background_motion_zoom_label = gtk::Label::new(Some(&gettext("Zoom level (%)")));
@@ -248,6 +256,9 @@ pub(super) fn build_controls() -> NowPlayingControls {
         text_size,
         immersive_background_source_album_cover,
         immersive_background_source_artist,
+        backdrop_intensity_soft,
+        backdrop_intensity_balanced,
+        backdrop_intensity_bold,
         background_motion_enabled_label,
         background_motion_enabled,
         background_motion_zoom_label,
@@ -393,9 +404,14 @@ impl NowPlayingWindow {
             0,
             settings.shared.immersive_background_source,
         );
-        self.add_switch_menu_row_with_label(
+        self.add_backdrop_intensity_menu_row(
             &immersive_grid,
             1,
+            settings.shared.backdrop_intensity,
+        );
+        self.add_switch_menu_row_with_label(
+            &immersive_grid,
+            2,
             &self.controls.background_motion_enabled_label,
             &self.controls.background_motion_enabled,
             settings.shared.background_motion_enabled,
@@ -403,14 +419,14 @@ impl NowPlayingWindow {
         );
         self.add_scale_menu_row_with_label(
             &immersive_grid,
-            2,
+            3,
             &self.controls.background_motion_zoom_label,
             &self.controls.background_motion_zoom,
             f64::from(settings.shared.background_motion_zoom_percent),
         );
         self.add_scale_menu_row_with_label(
             &immersive_grid,
-            3,
+            4,
             &self.controls.background_motion_reversal_duration_label,
             &self.controls.background_motion_reversal_duration,
             settings.shared.background_motion_reversal_duration_secs as f64,
@@ -764,6 +780,46 @@ impl NowPlayingWindow {
         menu_grid.attach(&buttons, 1, row, 1, 1);
     }
 
+    /// Adds the shared Cinema/Ambient backdrop-intensity segmented control.
+    fn add_backdrop_intensity_menu_row(
+        &self,
+        menu_grid: &gtk::Grid,
+        row: i32,
+        intensity: BackdropIntensity,
+    ) {
+        let label = gtk::Label::new(Some(&gettext("Backdrop intensity")));
+        label.set_halign(gtk::Align::Start);
+        label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
+        menu_grid.attach(&label, 0, row, 1, 1);
+
+        let buttons = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(0)
+            .css_classes(["linked"])
+            .halign(gtk::Align::End)
+            .valign(gtk::Align::Center)
+            .hexpand(false)
+            .build();
+        buttons.append(&self.controls.backdrop_intensity_soft);
+        buttons.append(&self.controls.backdrop_intensity_balanced);
+        buttons.append(&self.controls.backdrop_intensity_bold);
+        self.sync_backdrop_intensity_controls(intensity);
+        label_control(&label, &buttons);
+        menu_grid.attach(&buttons, 1, row, 1, 1);
+    }
+
+    /// Selects the active backdrop-intensity button in the context menu.
+    pub(super) fn sync_backdrop_intensity_controls(&self, intensity: BackdropIntensity) {
+        match intensity {
+            BackdropIntensity::Soft => self.controls.backdrop_intensity_soft.set_active(true),
+            BackdropIntensity::Balanced => {
+                self.controls.backdrop_intensity_balanced.set_active(true)
+            }
+            BackdropIntensity::Bold => self.controls.backdrop_intensity_bold.set_active(true),
+        }
+    }
+
     /// Adds the transition effect drop-down to the context menu and selects the saved effect.
     fn add_transition_menu_row(
         &self,
@@ -970,6 +1026,18 @@ impl NowPlayingWindow {
                 NowPlayingPreferenceChange::ImmersiveBackgroundSource(
                     ImmersiveBackgroundSource::Artist,
                 ),
+            ),
+            (
+                &self.controls.backdrop_intensity_soft,
+                NowPlayingPreferenceChange::BackdropIntensity(BackdropIntensity::Soft),
+            ),
+            (
+                &self.controls.backdrop_intensity_balanced,
+                NowPlayingPreferenceChange::BackdropIntensity(BackdropIntensity::Balanced),
+            ),
+            (
+                &self.controls.backdrop_intensity_bold,
+                NowPlayingPreferenceChange::BackdropIntensity(BackdropIntensity::Bold),
             ),
             (
                 &self.controls.track_info_alignment_left,
