@@ -18,6 +18,7 @@ mod performance_tests;
 mod preferences;
 #[cfg(test)]
 mod regression_tests;
+mod screen_awake;
 mod state;
 mod style;
 mod text_size;
@@ -31,6 +32,7 @@ use crate::core::artwork_service::{ArtworkPolicy, ArtworkService};
 use adw::prelude::*;
 use controller::NowPlayingSettingsController;
 use menu::NowPlayingControls;
+use screen_awake::ScreenAwakeController;
 use state::NowPlayingState;
 use ui::NowPlayingWidgets;
 
@@ -59,16 +61,33 @@ pub struct NowPlayingWindow {
     controller: NowPlayingSettingsController,
     text_css: style::TextCss,
     applied_settings: std::cell::Cell<Option<NowPlayingSettings>>,
+    screen_awake: ScreenAwakeController,
     artwork_timing: Option<timing::ArtworkTimingProbe>,
     artist_background_service: ArtworkService,
 }
 
 impl NowPlayingWindow {
+    #[cfg(test)]
     pub(crate) fn new_with_controller(controller: NowPlayingSettingsController) -> Self {
+        Self::new(controller, None)
+    }
+
+    pub(crate) fn new_with_controller_and_application(
+        controller: NowPlayingSettingsController,
+        application: &impl IsA<gtk::Application>,
+    ) -> Self {
+        Self::new(controller, Some(application.as_ref()))
+    }
+
+    fn new(
+        controller: NowPlayingSettingsController,
+        application: Option<&gtk::Application>,
+    ) -> Self {
         let settings = controller.settings();
         let (ui, text_css) = ui::build_ui();
         let controls = menu::build_controls();
         let state = NowPlayingState::new(controller.settings_cell());
+        let screen_awake = ScreenAwakeController::new(application);
 
         let mut now_playing = Self {
             ui,
@@ -77,11 +96,13 @@ impl NowPlayingWindow {
             controller,
             text_css,
             applied_settings: std::cell::Cell::new(None),
+            screen_awake,
             artwork_timing: None,
             artist_background_service: ArtworkService::new(ArtworkPolicy::Thumbnail),
         };
 
         now_playing.setup_rendering();
+        now_playing.screen_awake.bind_window(&now_playing.ui.window);
         now_playing.setup_track_transition_handlers();
         now_playing.apply_initial_preferences(settings);
         now_playing.setup_context_menu(settings);
@@ -106,6 +127,7 @@ impl NowPlayingWindow {
 
     /// Closes the window while keeping its internal state available for reuse.
     pub fn close(&self) {
+        self.screen_awake.release();
         self.ui.window.close();
     }
 }

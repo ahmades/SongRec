@@ -19,6 +19,7 @@ use std::rc::Rc;
 struct PreferencesWidgets {
     reset: gtk::Button,
     display_mode: adw::ComboRow,
+    keep_screen_awake: adw::SwitchRow,
     classic_settings: adw::PreferencesGroup,
     immersive_settings: adw::PreferencesGroup,
     round_corners: adw::SwitchRow,
@@ -61,6 +62,7 @@ impl NowPlayingPreferencesView {
                 .object("reset_now_playing_preferences_button")
                 .unwrap(),
             display_mode: builder.object("display_mode_setting").unwrap(),
+            keep_screen_awake: builder.object("keep_screen_awake_setting").unwrap(),
             classic_settings: builder.object("classic_now_playing_preferences").unwrap(),
             immersive_settings: builder.object("immersive_now_playing_preferences").unwrap(),
             round_corners: builder.object("round_corners_setting").unwrap(),
@@ -182,6 +184,9 @@ impl NowPlayingPreferencesView {
         self.widgets
             .display_mode
             .set_selected(settings.display_mode.index());
+        self.widgets
+            .keep_screen_awake
+            .set_active(settings.shared.keep_screen_awake);
         self.widgets
             .classic_settings
             .set_visible(settings.display_mode.shows_classic_settings());
@@ -317,6 +322,10 @@ impl NowPlayingPreferencesView {
         bind_switch(
             &self.widgets.round_corners,
             NowPlayingPreferenceChange::RoundCorners,
+        );
+        bind_switch(
+            &self.widgets.keep_screen_awake,
+            NowPlayingPreferenceChange::KeepScreenAwake,
         );
         bind_switch(
             &self.widgets.hide_track_info,

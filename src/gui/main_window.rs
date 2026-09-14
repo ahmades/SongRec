@@ -84,6 +84,7 @@ struct App {
 }
 
 fn open_now_playing_window(
+    application: &adw::Application,
     now_playing_window: &Rc<RefCell<Option<NowPlayingWindow>>>,
     recognition_state: &Rc<RefCell<RecognitionState>>,
     controller: &SettingsController,
@@ -93,7 +94,8 @@ fn open_now_playing_window(
     }
 
     if now_playing_window.borrow().is_none() {
-        let window = NowPlayingWindow::new_with_controller(controller.clone());
+        let window =
+            NowPlayingWindow::new_with_controller_and_application(controller.clone(), application);
         let settings = controller.settings();
         if let Some(message) = recognition_state
             .borrow()
@@ -832,11 +834,15 @@ impl App {
         let now_playing_window_for_results = now_playing_window.clone();
         let recognition_state_for_results = recognition_state.clone();
         let now_playing_controller_for_results = now_playing_controller.clone();
+        let application_for_results = application.downgrade();
         let results_click = gtk::GestureClick::new();
         results_click.set_button(1);
         results_click.connect_pressed(move |_, n_press, _, _| {
-            if n_press == 2 {
+            if n_press == 2
+                && let Some(application) = application_for_results.upgrade()
+            {
                 open_now_playing_window(
+                    &application,
                     &now_playing_window_for_results,
                     &recognition_state_for_results,
                     &now_playing_controller_for_results,
@@ -1684,10 +1690,15 @@ impl App {
         let now_playing_window_for_action = self.now_playing_window.clone();
         let recognition_state_for_action = self.recognition_state.clone();
         let now_playing_controller_for_action = self.now_playing_controller.clone();
+        let application_for_now_playing = application.downgrade();
 
         let action_show_now_playing = gio::ActionEntry::builder("show-now-playing")
             .activate(move |_, _, _| {
+                let Some(application) = application_for_now_playing.upgrade() else {
+                    return;
+                };
                 open_now_playing_window(
+                    &application,
                     &now_playing_window_for_action,
                     &recognition_state_for_action,
                     &now_playing_controller_for_action,

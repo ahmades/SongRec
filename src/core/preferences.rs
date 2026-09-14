@@ -653,6 +653,8 @@ impl Default for ClassicNowPlayingPreferences {
 /// Settings and behavior shared by more than one display mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SharedNowPlayingPreferences {
+    #[serde(rename = "now_playing_keep_screen_awake")]
+    pub keep_screen_awake: bool,
     #[serde(rename = "hide_now_playing_info")]
     pub hide_track_info: bool,
     #[serde(rename = "now_playing_text_size_percent")]
@@ -677,6 +679,7 @@ pub struct SharedNowPlayingPreferences {
 impl Default for SharedNowPlayingPreferences {
     fn default() -> Self {
         Self {
+            keep_screen_awake: false,
             hide_track_info: false,
             text_size: TextSize::default(),
             immersive_background_source: ImmersiveBackgroundSource::default(),
@@ -720,6 +723,8 @@ impl Default for NowPlayingPreferences {
 struct NowPlayingPreferencesWire {
     #[serde(rename = "now_playing_display_mode")]
     display_mode: Option<DisplayMode>,
+    #[serde(rename = "now_playing_keep_screen_awake")]
+    keep_screen_awake: Option<bool>,
     #[serde(rename = "now_playing_round_corners")]
     round_corners: Option<bool>,
     #[serde(rename = "hide_now_playing_info")]
@@ -779,6 +784,9 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
                     .unwrap_or(defaults.classic.background_style),
             },
             shared: SharedNowPlayingPreferences {
+                keep_screen_awake: wire
+                    .keep_screen_awake
+                    .unwrap_or(defaults.shared.keep_screen_awake),
                 hide_track_info: wire
                     .hide_track_info
                     .unwrap_or(defaults.shared.hide_track_info),
@@ -828,6 +836,9 @@ impl NowPlayingPreferences {
         match change {
             NowPlayingPreferenceChange::Reset => *self = Self::default(),
             NowPlayingPreferenceChange::DisplayMode(value) => self.display_mode = value,
+            NowPlayingPreferenceChange::KeepScreenAwake(value) => {
+                self.shared.keep_screen_awake = value;
+            }
             NowPlayingPreferenceChange::RoundCorners(value) => self.classic.round_corners = value,
             NowPlayingPreferenceChange::HideTrackInfo(value) => {
                 self.shared.hide_track_info = value;
@@ -876,6 +887,7 @@ impl NowPlayingPreferences {
 pub enum NowPlayingPreferenceChange {
     Reset,
     DisplayMode(DisplayMode),
+    KeepScreenAwake(bool),
     RoundCorners(bool),
     HideTrackInfo(bool),
     TextSize(TextSize),
@@ -1113,6 +1125,7 @@ mod tests {
             AlbumCoverSize::MEDIUM_LARGE_MIDPOINT
         );
         assert_eq!(defaults.classic.background_style, BackgroundStyle::Gradient);
+        assert!(!defaults.shared.keep_screen_awake);
         assert!(!defaults.shared.hide_track_info);
         assert_eq!(defaults.shared.text_size, TextSize::MEDIUM);
         assert_eq!(
@@ -1148,6 +1161,10 @@ mod tests {
 
         assert!(!table.contains_key("now_playing"));
         assert_eq!(table["now_playing_display_mode"].as_str(), Some("classic"));
+        assert_eq!(
+            table["now_playing_keep_screen_awake"].as_bool(),
+            Some(false)
+        );
         assert_eq!(table["now_playing_round_corners"].as_bool(), Some(true));
         assert_eq!(table["hide_now_playing_info"].as_bool(), Some(false));
         assert_eq!(
@@ -1222,6 +1239,7 @@ lights_off_enabled = false
                     background_style: BackgroundStyle::Solid,
                 },
                 shared: SharedNowPlayingPreferences {
+                    keep_screen_awake: false,
                     hide_track_info: true,
                     text_size: TextSize::MEDIUM,
                     immersive_background_source: ImmersiveBackgroundSource::AlbumCover,
@@ -1286,6 +1304,19 @@ lights_off_enabled = false
                 intensity
             );
         }
+    }
+
+    #[test]
+    fn keep_screen_awake_is_backward_compatible_and_round_trips() {
+        let missing: Preferences = toml::from_str("hide_now_playing_info = false").unwrap();
+        assert!(!missing.now_playing.shared.keep_screen_awake);
+
+        let enabled: Preferences = toml::from_str("now_playing_keep_screen_awake = true").unwrap();
+        assert!(enabled.now_playing.shared.keep_screen_awake);
+
+        let serialized = toml::to_string(&enabled).unwrap();
+        let deserialized: Preferences = toml::from_str(&serialized).unwrap();
+        assert!(deserialized.now_playing.shared.keep_screen_awake);
     }
 
     #[test]
@@ -1451,6 +1482,7 @@ now_playing_background_motion_reversal_duration_secs = 23
                     ..ClassicNowPlayingPreferences::default()
                 },
                 shared: SharedNowPlayingPreferences {
+                    keep_screen_awake: true,
                     hide_track_info: true,
                     text_size: TextSize::LARGE,
                     background_motion_enabled: true,
@@ -1485,6 +1517,7 @@ now_playing_background_motion_reversal_duration_secs = 23
         };
 
         interface.update_now_playing(NowPlayingPreferenceChange::HideTrackInfo(true));
+        interface.update_now_playing(NowPlayingPreferenceChange::KeepScreenAwake(true));
         interface.update_now_playing(NowPlayingPreferenceChange::TextSize(
             TextSize::from_scale_value(113.0),
         ));
@@ -1505,6 +1538,7 @@ now_playing_background_motion_reversal_duration_secs = 23
             DisplayMode::Classic,
         ));
         assert!(interface.preferences.now_playing.shared.hide_track_info);
+        assert!(interface.preferences.now_playing.shared.keep_screen_awake);
         assert_eq!(
             interface.preferences.now_playing.shared.text_size,
             TextSize::from_scale_value(113.0)

@@ -297,6 +297,7 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
     let text: gtk::Scale = builder.object("text_size_setting_scale").unwrap();
     let album: gtk::Scale = builder.object("album_cover_size_setting_scale").unwrap();
     let hide: adw::SwitchRow = builder.object("hide_track_info_setting").unwrap();
+    let keep_screen_awake: adw::SwitchRow = builder.object("keep_screen_awake_setting").unwrap();
     let mode: adw::ComboRow = builder.object("display_mode_setting").unwrap();
     let artist_background: gtk::ToggleButton = builder
         .object("immersive_background_source_artist")
@@ -334,6 +335,14 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
         dispatch();
         assert!(hide.is_active());
         assert!(!text_row.get_visible());
+        window.0.controls.keep_screen_awake.set_active(true);
+        dispatch();
+        assert!(keep_screen_awake.is_active());
+        keep_screen_awake.set_active(false);
+        dispatch();
+        assert!(!window.0.controls.keep_screen_awake.is_active());
+        keep_screen_awake.set_active(true);
+        dispatch();
         mode.set_selected(super::DisplayMode::LightsOff.index());
         dispatch();
         assert!(!window.0.controls.hide_track_info.get_visible());
@@ -399,6 +408,7 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
     ));
     assert_eq!(reopened.0.controls.text_size.value(), 117.0);
     assert_eq!(reopened.0.controls.album_cover_size.value(), 122.0);
+    assert!(reopened.0.controls.keep_screen_awake.is_active());
 }
 
 #[test]

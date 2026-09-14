@@ -129,12 +129,15 @@ mod tests {
 
         controller.update(NowPlayingPreferenceChange::HideTrackInfo(true));
         assert!(controller.settings().shared.hide_track_info);
+        controller.update(NowPlayingPreferenceChange::KeepScreenAwake(true));
+        assert!(controller.settings().shared.keep_screen_awake);
 
         controller.update(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::LightsOff,
         ));
         assert_eq!(controller.settings().display_mode, DisplayMode::LightsOff);
         assert!(controller.settings().shared.hide_track_info);
+        assert!(controller.settings().shared.keep_screen_awake);
 
         controller.update(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Classic,

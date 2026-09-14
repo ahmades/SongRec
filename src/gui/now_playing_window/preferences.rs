@@ -41,6 +41,9 @@ impl NowPlayingWindow {
             if changed!(display_mode) {
                 self.set_display_mode(settings.display_mode);
             }
+            if changed!(shared.keep_screen_awake) {
+                self.set_keep_screen_awake(settings.shared.keep_screen_awake);
+            }
             if changed!(classic.round_corners) {
                 self.set_round_corners(settings.classic.round_corners);
             }
@@ -125,6 +128,16 @@ impl NowPlayingWindow {
         self.reconcile_pending_transition();
         self.resume_artwork_preparation();
         self.ensure_artist_background();
+    }
+
+    /// Keeps the desktop session active only while this window is viewable.
+    pub(super) fn set_keep_screen_awake(&self, enabled: bool) {
+        self.with_preference_updates_suspended(|| {
+            if self.controls.keep_screen_awake.is_active() != enabled {
+                self.controls.keep_screen_awake.set_active(enabled);
+            }
+        });
+        self.screen_awake.set_enabled(enabled);
     }
 
     /// Selects the image that supplies the blurred Cinema/Ambient backdrop.

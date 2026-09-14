@@ -104,6 +104,7 @@ fn label_control(label: &gtk::Label, control: &impl IsA<gtk::Widget>) {
 /// The context-menu controls whose state mirrors the active presentation settings.
 pub(super) struct NowPlayingControls {
     pub(super) display_mode_menu: gtk::DropDown,
+    pub(super) keep_screen_awake: gtk::Switch,
     pub(super) classic_settings: gtk::Box,
     pub(super) immersive_settings: gtk::Box,
     pub(super) round_corners: gtk::Switch,
@@ -146,6 +147,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         .map(String::as_str)
         .collect::<Vec<_>>();
     let display_mode_menu = gtk::DropDown::from_strings(&display_mode_label_references);
+    let keep_screen_awake = gtk::Switch::new();
     let classic_settings = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(6)
@@ -247,6 +249,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
 
     NowPlayingControls {
         display_mode_menu,
+        keep_screen_awake,
         classic_settings,
         immersive_settings,
         round_corners,
@@ -317,9 +320,17 @@ impl NowPlayingWindow {
             &self.controls.display_mode_menu,
             settings.display_mode,
         );
-        self.add_switch_menu_row_with_label(
+        self.add_switch_menu_row(
             &shared_grid,
             1,
+            &gettext("Keep screen awake"),
+            &self.controls.keep_screen_awake,
+            settings.shared.keep_screen_awake,
+            true,
+        );
+        self.add_switch_menu_row_with_label(
+            &shared_grid,
+            2,
             &self.controls.hide_track_info_label,
             &self.controls.hide_track_info,
             settings.shared.hide_track_info,
@@ -334,7 +345,7 @@ impl NowPlayingWindow {
             .set_visible(show_hide_track_info);
         self.add_scale_menu_row_with_label(
             &shared_grid,
-            2,
+            3,
             &self.controls.text_size_label,
             &self.controls.text_size,
             settings.shared.text_size.scale_value(),
@@ -345,7 +356,7 @@ impl NowPlayingWindow {
         );
         self.add_switch_menu_row(
             &shared_grid,
-            3,
+            4,
             &gettext("Always display last recognized song"),
             &self.controls.always_display_last_recognized_song,
             settings.shared.always_display_last_recognized_song,
@@ -353,13 +364,13 @@ impl NowPlayingWindow {
         );
         self.add_transition_menu_row(
             &shared_grid,
-            4,
+            5,
             &self.controls.transition_menu,
             settings.shared.transition,
         );
         self.add_transition_duration_menu_row(
             &shared_grid,
-            5,
+            6,
             &self.controls.transition_duration,
             settings.shared.transition_duration_ms,
             !matches!(settings.shared.transition, TransitionEffect::None),
@@ -977,6 +988,10 @@ impl NowPlayingWindow {
         bind_switch(
             &self.controls.round_corners,
             NowPlayingPreferenceChange::RoundCorners,
+        );
+        bind_switch(
+            &self.controls.keep_screen_awake,
+            NowPlayingPreferenceChange::KeepScreenAwake,
         );
         bind_switch(
             &self.controls.hide_track_info,

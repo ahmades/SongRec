@@ -543,6 +543,12 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           </object>
                         </child>
                         <child>
+                          <object class="AdwSwitchRow" id="keep_screen_awake_setting">
+                            <property name="subtitle" translatable="yes">Prevent the screen from sleeping while the Now Playing window is visible</property>
+                            <property name="title" translatable="yes">Keep screen awake</property>
+                          </object>
+                        </child>
+                        <child>
                           <object class="AdwSwitchRow" id="hide_track_info_setting">
                             <property name="subtitle" translatable="yes">Hide song details in every display mode</property>
                             <property name="title" translatable="yes">Hide track info</property>
