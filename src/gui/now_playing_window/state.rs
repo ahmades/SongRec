@@ -2,7 +2,9 @@
 
 use super::NowPlayingSettings;
 use super::background::CachedGradient;
-use super::palette::{ArtworkRequirement, Background, PreparedArtwork};
+use super::palette::{
+    ArtworkRequirement, Background, PreparedArtwork, PreparedImmersiveBackground,
+};
 use crate::core::artwork::Artwork;
 use crate::core::thread_messages::SongRecognizedMessage;
 use std::cell::{Cell, RefCell};
@@ -13,6 +15,8 @@ use std::time::Instant;
 
 const PREPARED_ARTWORK_CACHE_CAPACITY: usize = 4;
 const PREPARED_ARTWORK_CACHE_MAX_BYTES: usize = 32 * 1024 * 1024;
+const PREPARED_IMMERSIVE_BACKGROUND_CACHE_CAPACITY: usize = 4;
+const PREPARED_IMMERSIVE_BACKGROUND_CACHE_MAX_BYTES: usize = 32 * 1024 * 1024;
 const MAX_ARTWORK_PREPARATIONS: usize = 2;
 
 /// The content currently represented by the artwork portion of the window.
@@ -21,6 +25,43 @@ pub(super) enum PresentationMode {
     Listening,
     TrackWithArtwork,
     TrackWithoutArtwork,
+}
+
+/// Lifecycle of the optional artist image used only as an immersive backdrop.
+/// The decoded source is retained separately from its GUI-specific blurred
+/// texture so preparation can be deferred while the window is hidden.
+#[derive(Clone, Default)]
+pub(super) enum ArtistBackgroundState {
+    #[default]
+    NotRequested,
+    Downloading,
+    Downloaded(Arc<Artwork>),
+    Preparing(Arc<Artwork>),
+    Ready(PreparedImmersiveBackground),
+    Unavailable,
+}
+
+impl ArtistBackgroundState {
+    pub(super) fn is_waiting(&self) -> bool {
+        matches!(
+            self,
+            Self::NotRequested | Self::Downloading | Self::Downloaded(_) | Self::Preparing(_)
+        )
+    }
+
+    fn same_presentation(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::NotRequested, Self::NotRequested)
+            | (Self::Downloading, Self::Downloading)
+            | (Self::Unavailable, Self::Unavailable) => true,
+            (Self::Downloaded(first), Self::Downloaded(second))
+            | (Self::Preparing(first), Self::Preparing(second)) => {
+                first.content_id() == second.content_id()
+            }
+            (Self::Ready(first), Self::Ready(second)) => first.texture == second.texture,
+            _ => false,
+        }
+    }
 }
 
 /// The subset of a recognition result needed after its cover has been decoded.
@@ -37,6 +78,8 @@ pub(super) struct PresentedTrack {
     pub(super) release_year: Option<String>,
     pub(super) artwork: Option<PreparedArtwork>,
     pub(super) artwork_pending: bool,
+    pub(super) artist_background_url: Option<String>,
+    pub(super) artist_background: ArtistBackgroundState,
     expected_artwork_source: Option<Arc<Artwork>>,
 }
 
@@ -45,6 +88,7 @@ impl PresentedTrack {
         message: &SongRecognizedMessage,
         artwork: Option<PreparedArtwork>,
         visuals_pending: bool,
+        artist_background: ArtistBackgroundState,
     ) -> Self {
         Self {
             response_received_at: message.response_received_at,
@@ -55,6 +99,8 @@ impl PresentedTrack {
             release_year: message.release_year.clone(),
             artwork,
             artwork_pending: message.artwork_pending() || visuals_pending,
+            artist_background_url: message.artist_background_url.clone(),
+            artist_background,
             expected_artwork_source: message.cover_image().cloned(),
         }
     }
@@ -69,8 +115,16 @@ impl PresentedTrack {
             release_year: self.release_year.clone(),
             artwork: Some(artwork),
             artwork_pending: false,
+            artist_background_url: self.artist_background_url.clone(),
+            artist_background: self.artist_background.clone(),
             expected_artwork_source: self.expected_artwork_source.clone(),
         }
+    }
+
+    fn with_artist_background(&self, artist_background: ArtistBackgroundState) -> Self {
+        let mut updated = self.clone();
+        updated.artist_background = artist_background;
+        updated
     }
 
     pub(super) fn has_visible_information(&self) -> bool {
@@ -86,10 +140,13 @@ impl PresentedTrack {
                 .is_some_and(|value| !value.trim().is_empty())
             || self.artwork.is_some()
             || self.expected_artwork_source.is_some()
+            || matches!(self.artist_background, ArtistBackgroundState::Ready(_))
     }
 
     fn presentation_mode(&self) -> PresentationMode {
-        if self.artwork.is_some() {
+        if self.artwork.is_some()
+            || matches!(self.artist_background, ArtistBackgroundState::Ready(_))
+        {
             PresentationMode::TrackWithArtwork
         } else {
             PresentationMode::TrackWithoutArtwork
@@ -105,12 +162,19 @@ impl PresentedTrack {
     }
 
     fn awaits_artwork(&self, requirement: ArtworkRequirement) -> bool {
-        requirement != ArtworkRequirement::None
+        (requirement != ArtworkRequirement::None
             && (self.artwork_pending
                 || self
                     .artwork
                     .as_ref()
-                    .is_some_and(|artwork| !artwork.is_ready(requirement)))
+                    .is_some_and(|artwork| !artwork.is_ready(requirement))))
+            || (requirement.needs_artist_background()
+                && self.artist_background_url.is_some()
+                && self.artist_background.is_waiting())
+    }
+
+    fn matches_artist_background(&self, track_key: &str, url: &str) -> bool {
+        self.track_key == track_key && self.artist_background_url.as_deref() == Some(url)
     }
 
     fn same_presentation(&self, other: &Self) -> bool {
@@ -120,6 +184,10 @@ impl PresentedTrack {
             && self.album_name == other.album_name
             && self.release_year == other.release_year
             && self.artwork_pending == other.artwork_pending
+            && self.artist_background_url == other.artist_background_url
+            && self
+                .artist_background
+                .same_presentation(&other.artist_background)
             && match (
                 &self.expected_artwork_source,
                 &other.expected_artwork_source,
@@ -155,7 +223,10 @@ pub(super) struct TrackPresentationState {
     /// Latest recognition received after the active transition's scene was fixed.
     queued_track: Option<Rc<PresentedTrack>>,
     pending_transition_phase: Option<PendingTransitionPhase>,
+    /// A settings or artwork update arrived while the revealed scene was fixed.
+    refresh_after_transition: bool,
     prepared_cache: VecDeque<PreparedArtwork>,
+    prepared_immersive_background_cache: VecDeque<PreparedImmersiveBackground>,
     pub(super) mode: PresentationMode,
 }
 
@@ -176,6 +247,19 @@ enum PreparedArtworkTarget {
     Displayed,
 }
 
+/// Lazy work required by the latest track's selected artist background.
+pub(super) enum ArtistBackgroundWork {
+    Request {
+        track_key: String,
+        url: String,
+    },
+    Prepare {
+        track_key: String,
+        url: String,
+        artwork: Arc<Artwork>,
+    },
+}
+
 impl Default for TrackPresentationState {
     fn default() -> Self {
         Self {
@@ -183,7 +267,9 @@ impl Default for TrackPresentationState {
             pending_track: None,
             queued_track: None,
             pending_transition_phase: None,
+            refresh_after_transition: false,
             prepared_cache: VecDeque::new(),
+            prepared_immersive_background_cache: VecDeque::new(),
             mode: PresentationMode::Listening,
         }
     }
@@ -202,6 +288,136 @@ impl TrackPresentationState {
             .filter(|prepared| prepared.matches(artwork))
             .max_by_key(|prepared| prepared.ambient_texture.is_some())
             .cloned()
+    }
+
+    /// Carries a background request/preparation across repeated updates for the
+    /// same recognition (for example when its album cover arrives later).
+    pub(super) fn artist_background_state_for(
+        &self,
+        track_key: &str,
+        url: Option<&str>,
+        response_received_at: Option<i64>,
+    ) -> ArtistBackgroundState {
+        let Some(url) = url else {
+            return ArtistBackgroundState::NotRequested;
+        };
+        self.queued_track
+            .as_ref()
+            .into_iter()
+            .chain(self.pending_track.as_ref())
+            .chain(self.displayed_track.as_ref())
+            .find(|track| track.matches_artist_background(track_key, url))
+            .map(|track| {
+                let is_new_response = match (track.response_received_at, response_received_at) {
+                    (Some(previous), Some(current)) => current > previous,
+                    (None, Some(_)) => true,
+                    (Some(_), None) | (None, None) => false,
+                };
+                if matches!(track.artist_background, ArtistBackgroundState::Unavailable)
+                    && is_new_response
+                {
+                    ArtistBackgroundState::NotRequested
+                } else {
+                    track.artist_background.clone()
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    pub(super) fn prepared_immersive_background_for(
+        &self,
+        artwork: &Arc<Artwork>,
+    ) -> Option<PreparedImmersiveBackground> {
+        self.queued_track
+            .as_ref()
+            .into_iter()
+            .chain(self.pending_track.as_ref())
+            .chain(self.displayed_track.as_ref())
+            .filter_map(|track| match &track.artist_background {
+                ArtistBackgroundState::Ready(background) => Some(background),
+                _ => None,
+            })
+            .chain(self.prepared_immersive_background_cache.iter())
+            .find(|prepared| prepared.matches(artwork))
+            .cloned()
+    }
+
+    /// Returns at most one lazy action for the newest relevant track.
+    pub(super) fn artist_background_work(&self) -> Option<ArtistBackgroundWork> {
+        let track = self
+            .queued_track
+            .as_ref()
+            .or(self.pending_track.as_ref())
+            .or(self.displayed_track.as_ref())?;
+        let url = track.artist_background_url.as_ref()?.clone();
+        match &track.artist_background {
+            ArtistBackgroundState::NotRequested => Some(ArtistBackgroundWork::Request {
+                track_key: track.track_key.clone(),
+                url,
+            }),
+            ArtistBackgroundState::Downloaded(artwork) => Some(ArtistBackgroundWork::Prepare {
+                track_key: track.track_key.clone(),
+                url,
+                artwork: artwork.clone(),
+            }),
+            ArtistBackgroundState::Downloading
+            | ArtistBackgroundState::Preparing(_)
+            | ArtistBackgroundState::Ready(_)
+            | ArtistBackgroundState::Unavailable => None,
+        }
+    }
+
+    pub(super) fn track_key_for_artist_background(
+        &self,
+        url: &str,
+        source: &Arc<Artwork>,
+    ) -> Option<String> {
+        self.queued_track
+            .as_ref()
+            .or(self.pending_track.as_ref())
+            .or(self.displayed_track.as_ref())
+            .filter(|track| {
+                track.artist_background_url.as_deref() == Some(url)
+                    && match &track.artist_background {
+                        ArtistBackgroundState::Downloaded(expected)
+                        | ArtistBackgroundState::Preparing(expected) => {
+                            expected.content_id() == source.content_id()
+                        }
+                        ArtistBackgroundState::NotRequested
+                        | ArtistBackgroundState::Downloading
+                        | ArtistBackgroundState::Ready(_)
+                        | ArtistBackgroundState::Unavailable => false,
+                    }
+            })
+            .map(|track| track.track_key.clone())
+    }
+
+    pub(super) fn artist_background_recipient(
+        &self,
+        source: &Arc<Artwork>,
+    ) -> Option<(String, String)> {
+        let track = self
+            .queued_track
+            .as_ref()
+            .or(self.pending_track.as_ref())
+            .or(self.displayed_track.as_ref())?;
+        let expected = match &track.artist_background {
+            ArtistBackgroundState::Downloaded(expected)
+            | ArtistBackgroundState::Preparing(expected) => expected,
+            ArtistBackgroundState::NotRequested
+            | ArtistBackgroundState::Downloading
+            | ArtistBackgroundState::Ready(_)
+            | ArtistBackgroundState::Unavailable => return None,
+        };
+        (expected.content_id() == source.content_id()).then(|| {
+            (
+                track.track_key.clone(),
+                track
+                    .artist_background_url
+                    .clone()
+                    .expect("artist background state requires its URL"),
+            )
+        })
     }
 
     /// Finds the current recipient before spending main-thread work on textures.
@@ -266,6 +482,106 @@ impl TrackPresentationState {
         self.prepared_cache.push_back(artwork.clone());
     }
 
+    fn cache_immersive_background(&mut self, background: &PreparedImmersiveBackground) {
+        let bytes = background.storage_bytes();
+        if bytes > PREPARED_IMMERSIVE_BACKGROUND_CACHE_MAX_BYTES {
+            return;
+        }
+        self.prepared_immersive_background_cache
+            .retain(|cached| cached.source_id() != background.source_id());
+        let mut total_bytes = self
+            .prepared_immersive_background_cache
+            .iter()
+            .map(PreparedImmersiveBackground::storage_bytes)
+            .sum::<usize>();
+        while self.prepared_immersive_background_cache.len()
+            >= PREPARED_IMMERSIVE_BACKGROUND_CACHE_CAPACITY
+            || total_bytes + bytes > PREPARED_IMMERSIVE_BACKGROUND_CACHE_MAX_BYTES
+        {
+            let Some(oldest) = self.prepared_immersive_background_cache.pop_front() else {
+                break;
+            };
+            total_bytes -= oldest.storage_bytes();
+        }
+        self.prepared_immersive_background_cache
+            .push_back(background.clone());
+    }
+
+    /// Updates the matching track's artist-background lifecycle. Both the
+    /// track key and exact payload URL participate in stale-result rejection.
+    pub(super) fn apply_artist_background_state(
+        &mut self,
+        track_key: &str,
+        url: &str,
+        state: ArtistBackgroundState,
+        requirement: ArtworkRequirement,
+    ) -> PresentationAction {
+        let target = self.artist_background_target(track_key, url);
+        if let ArtistBackgroundState::Ready(background) = &state
+            && target.is_some()
+        {
+            self.cache_immersive_background(background);
+        }
+
+        let updated = match target {
+            Some(PreparedArtworkTarget::Queued) => self
+                .queued_track
+                .as_ref()
+                .map(|track| Rc::new(track.with_artist_background(state))),
+            Some(PreparedArtworkTarget::Pending) => self
+                .pending_track
+                .as_ref()
+                .map(|track| Rc::new(track.with_artist_background(state))),
+            Some(PreparedArtworkTarget::Displayed) => self
+                .displayed_track
+                .as_ref()
+                .map(|track| Rc::new(track.with_artist_background(state))),
+            None => None,
+        };
+
+        let Some(updated) = updated else {
+            return PresentationAction::None;
+        };
+        match target {
+            Some(PreparedArtworkTarget::Queued) => {
+                self.queued_track = Some(updated);
+                PresentationAction::None
+            }
+            Some(PreparedArtworkTarget::Pending) => {
+                self.pending_track = Some(updated);
+                if requirement.needs_artist_background()
+                    && self.pending_transition_phase
+                        == Some(PendingTransitionPhase::AwaitingArtworkVisible)
+                    && !self
+                        .pending_track
+                        .as_ref()
+                        .unwrap()
+                        .awaits_artwork(requirement)
+                {
+                    self.pending_transition_phase = Some(PendingTransitionPhase::Hiding);
+                    PresentationAction::BeginTransition
+                } else {
+                    PresentationAction::None
+                }
+            }
+            Some(PreparedArtworkTarget::Displayed) => {
+                self.mode = updated.presentation_mode();
+                self.displayed_track = Some(updated.clone());
+                if requirement.needs_artist_background() && !updated.awaits_artwork(requirement) {
+                    if self.transition_scene_is_animating() {
+                        self.refresh_after_transition = true;
+                        PresentationAction::None
+                    } else {
+                        PresentationAction::RenderTrack(updated)
+                    }
+                } else {
+                    PresentationAction::None
+                }
+            }
+            None => PresentationAction::None,
+        }
+    }
+
     /// Attaches worker-prepared artwork only to the latest matching track.
     ///
     /// A pending track supersedes the still-visible outgoing track, so a late
@@ -316,9 +632,13 @@ impl TrackPresentationState {
                     .as_ref()
                     .expect("prepared artwork target guarantees a displayed track");
                 let track = Rc::new(displayed.with_artwork(artwork));
-                self.mode = PresentationMode::TrackWithArtwork;
+                self.mode = track.presentation_mode();
                 self.displayed_track = Some(track.clone());
-                PresentationAction::RenderTrack(track)
+                if track.awaits_artwork(requirement) {
+                    PresentationAction::None
+                } else {
+                    PresentationAction::RenderTrack(track)
+                }
             }
             None => PresentationAction::None,
         }
@@ -401,6 +721,8 @@ impl TrackPresentationState {
         self.mode = track.presentation_mode();
         self.displayed_track = Some(track.clone());
         self.pending_transition_phase = Some(PendingTransitionPhase::Revealing);
+        // The new scene is rendered from the latest settings at this midpoint.
+        self.refresh_after_transition = false;
         PresentationAction::RenderTrack(track)
     }
 
@@ -460,6 +782,29 @@ impl TrackPresentationState {
         self.commit_pending_track()
     }
 
+    /// Once either animated leg starts, its visible scene must remain fixed
+    /// until the reveal completes.
+    pub(super) fn transition_scene_is_animating(&self) -> bool {
+        matches!(
+            self.pending_transition_phase,
+            Some(PendingTransitionPhase::Hiding | PendingTransitionPhase::Revealing)
+        )
+    }
+
+    /// Defers a renderer-only settings refresh until the active scene is fully revealed.
+    pub(super) fn defer_scene_refresh_if_animating(&mut self) -> bool {
+        if !self.transition_scene_is_animating() {
+            return false;
+        }
+        self.refresh_after_transition = true;
+        true
+    }
+
+    /// Returns and clears a refresh deferred by an immutable transition scene.
+    pub(super) fn take_deferred_scene_refresh(&mut self) -> bool {
+        std::mem::take(&mut self.refresh_after_transition)
+    }
+
     /// Resolves a no-match result according to the keep-last preference.
     pub(super) fn no_recognition(&mut self, keep_last: bool) -> PresentationAction {
         if keep_last {
@@ -478,6 +823,7 @@ impl TrackPresentationState {
         self.pending_track = None;
         self.queued_track = None;
         self.pending_transition_phase = None;
+        self.refresh_after_transition = false;
         self.mode = PresentationMode::Listening;
         PresentationAction::RenderListening
     }
@@ -487,6 +833,7 @@ impl TrackPresentationState {
         self.pending_track = None;
         self.queued_track = None;
         self.pending_transition_phase = None;
+        self.refresh_after_transition = false;
         self.displayed_track = Some(track.clone());
         PresentationAction::RenderTrack(track)
     }
@@ -524,6 +871,36 @@ impl TrackPresentationState {
         self.displayed_track
             .as_ref()
             .is_some_and(|track| track.matches_artwork_source(track_key, source))
+            .then_some(PreparedArtworkTarget::Displayed)
+    }
+
+    fn artist_background_target(
+        &self,
+        track_key: &str,
+        url: &str,
+    ) -> Option<PreparedArtworkTarget> {
+        if self
+            .queued_track
+            .as_ref()
+            .is_some_and(|track| track.matches_artist_background(track_key, url))
+        {
+            return Some(PreparedArtworkTarget::Queued);
+        }
+        if self
+            .pending_track
+            .as_ref()
+            .is_some_and(|track| track.matches_artist_background(track_key, url))
+        {
+            return Some(PreparedArtworkTarget::Pending);
+        }
+
+        if self.pending_track.is_some() {
+            return None;
+        }
+
+        self.displayed_track
+            .as_ref()
+            .is_some_and(|track| track.matches_artist_background(track_key, url))
             .then_some(PreparedArtworkTarget::Displayed)
     }
 }
@@ -590,6 +967,7 @@ pub(super) struct NowPlayingState {
     pub(super) current_background: Rc<Cell<Background>>,
     pub(super) track_presentation: Rc<RefCell<TrackPresentationState>>,
     pub(super) artwork_preparations: Rc<RefCell<ArtworkPreparationJobs>>,
+    pub(super) artist_background_preparations: Rc<RefCell<ArtworkPreparationJobs>>,
     /// Only the latest source is needed when presentation is hidden or artwork-free.
     pub(super) deferred_artwork: Rc<RefCell<Option<Arc<Artwork>>>>,
 }
@@ -603,6 +981,9 @@ impl NowPlayingState {
             current_background: Rc::new(Cell::new(Background::fallback())),
             track_presentation: Rc::new(RefCell::new(TrackPresentationState::default())),
             artwork_preparations: Rc::new(RefCell::new(ArtworkPreparationJobs::default())),
+            artist_background_preparations: Rc::new(
+                RefCell::new(ArtworkPreparationJobs::default()),
+            ),
             deferred_artwork: Rc::new(RefCell::new(None)),
         }
     }
@@ -610,11 +991,14 @@ impl NowPlayingState {
 
 #[cfg(test)]
 mod tests {
-    use super::super::palette::{ArtworkRequirement, ArtworkVisuals, prepare_artwork};
+    use super::super::palette::{
+        ArtworkRequirement, ArtworkVisuals, prepare_artwork, prepare_immersive_background,
+        visuals_from_artwork,
+    };
     use super::{
-        ArtworkPreparationJobs, PREPARED_ARTWORK_CACHE_CAPACITY, PendingTransitionPhase,
-        PreparedArtworkTarget, PresentationAction, PresentationMode, PresentedTrack,
-        TrackPresentationState,
+        ArtistBackgroundState, ArtworkPreparationJobs, PREPARED_ARTWORK_CACHE_CAPACITY,
+        PendingTransitionPhase, PreparedArtworkTarget, PresentationAction, PresentationMode,
+        PresentedTrack, TrackPresentationState,
     };
     use crate::core::artwork::Artwork;
     use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
@@ -632,6 +1016,8 @@ mod tests {
             release_year: None,
             artwork: None,
             artwork_pending: false,
+            artist_background_url: None,
+            artist_background: ArtistBackgroundState::NotRequested,
             expected_artwork_source: None,
         })
     }
@@ -645,6 +1031,12 @@ mod tests {
     fn pending_track_expecting(key: &str, artwork: &Arc<Artwork>) -> Rc<PresentedTrack> {
         let mut track = (*track_expecting(key, artwork)).clone();
         track.artwork_pending = true;
+        Rc::new(track)
+    }
+
+    fn artist_track(key: &str, url: &str) -> Rc<PresentedTrack> {
+        let mut track = (*track(key)).clone();
+        track.artist_background_url = Some(url.to_string());
         Rc::new(track)
     }
 
@@ -664,6 +1056,13 @@ mod tests {
 
     fn prepared_artwork(source: &Arc<Artwork>) -> super::PreparedArtwork {
         prepare_artwork(source, ArtworkVisuals::fallback(), None)
+    }
+
+    fn prepared_artist_background(source: &Arc<Artwork>) -> super::PreparedImmersiveBackground {
+        prepare_immersive_background(
+            source,
+            visuals_from_artwork(source, ArtworkRequirement::Immersive),
+        )
     }
 
     #[test]
@@ -886,6 +1285,206 @@ mod tests {
             PresentationAction::BeginTransition
         ));
         assert_rendered_track(state.transition_hidden(), "b");
+    }
+
+    #[test]
+    fn artist_background_is_part_of_an_immersive_track_transition() {
+        let artist = artwork(7);
+        let url = "https://example.test/artist.jpg";
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, ArtworkRequirement::None);
+
+        assert!(matches!(
+            state.receive_track(
+                artist_track("b", url),
+                true,
+                ArtworkRequirement::ImmersiveArtist,
+            ),
+            PresentationAction::None
+        ));
+        assert_eq!(
+            state.pending_transition_phase,
+            Some(PendingTransitionPhase::AwaitingArtworkVisible)
+        );
+        assert!(matches!(
+            state.artist_background_work(),
+            Some(super::ArtistBackgroundWork::Request { ref track_key, url: ref request_url })
+                if track_key == "b" && request_url == url
+        ));
+
+        state.apply_artist_background_state(
+            "b",
+            url,
+            ArtistBackgroundState::Preparing(artist.clone()),
+            ArtworkRequirement::ImmersiveArtist,
+        );
+        assert!(matches!(
+            state.apply_artist_background_state(
+                "b",
+                url,
+                ArtistBackgroundState::Ready(prepared_artist_background(&artist)),
+                ArtworkRequirement::ImmersiveArtist,
+            ),
+            PresentationAction::BeginTransition
+        ));
+        assert_rendered_track(state.transition_hidden(), "b");
+    }
+
+    #[test]
+    fn unavailable_artist_background_falls_back_without_stranding_transition() {
+        let url = "https://example.test/missing.jpg";
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, ArtworkRequirement::None);
+        state.receive_track(
+            artist_track("b", url),
+            true,
+            ArtworkRequirement::ImmersiveArtist,
+        );
+
+        assert!(matches!(
+            state.apply_artist_background_state(
+                "b",
+                url,
+                ArtistBackgroundState::Unavailable,
+                ArtworkRequirement::ImmersiveArtist,
+            ),
+            PresentationAction::BeginTransition
+        ));
+        assert_rendered_track(state.transition_hidden(), "b");
+    }
+
+    #[test]
+    fn failed_artist_background_retries_only_for_a_new_recognition_response() {
+        let url = "https://example.test/artist.jpg";
+        let mut state = TrackPresentationState::default();
+        let mut recognized = (*artist_track("a", url)).clone();
+        recognized.response_received_at = Some(10);
+        state.receive_track(Rc::new(recognized), false, ArtworkRequirement::None);
+        state.apply_artist_background_state(
+            "a",
+            url,
+            ArtistBackgroundState::Unavailable,
+            ArtworkRequirement::ImmersiveArtist,
+        );
+
+        assert!(matches!(
+            state.artist_background_state_for("a", Some(url), Some(10)),
+            ArtistBackgroundState::Unavailable
+        ));
+        assert!(matches!(
+            state.artist_background_state_for("a", Some(url), Some(9)),
+            ArtistBackgroundState::Unavailable
+        ));
+        assert!(matches!(
+            state.artist_background_state_for("a", Some(url), Some(11)),
+            ArtistBackgroundState::NotRequested
+        ));
+    }
+
+    #[test]
+    fn artist_background_ready_during_reveal_refreshes_only_after_completion() {
+        let source = artwork(8);
+        let url = "https://example.test/artist.jpg";
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, ArtworkRequirement::None);
+        assert!(matches!(
+            state.receive_track(artist_track("b", url), true, ArtworkRequirement::None),
+            PresentationAction::BeginTransition
+        ));
+        assert_rendered_track(state.transition_hidden(), "b");
+
+        assert!(matches!(
+            state.apply_artist_background_state(
+                "b",
+                url,
+                ArtistBackgroundState::Ready(prepared_artist_background(&source)),
+                ArtworkRequirement::ImmersiveArtist,
+            ),
+            PresentationAction::None
+        ));
+        assert!(state.transition_scene_is_animating());
+        assert!(matches!(
+            state.transition_revealed(true, ArtworkRequirement::ImmersiveArtist),
+            PresentationAction::None
+        ));
+        assert!(state.take_deferred_scene_refresh());
+        assert!(!state.take_deferred_scene_refresh());
+    }
+
+    #[test]
+    fn artist_background_completion_is_rejected_after_its_exact_url_changes() {
+        let old_url = "https://example.test/old.jpg";
+        let new_url = "https://example.test/new.jpg";
+        let mut state = TrackPresentationState::default();
+        state.receive_track(track("a"), false, ArtworkRequirement::None);
+        state.receive_track(
+            artist_track("b", old_url),
+            true,
+            ArtworkRequirement::ImmersiveArtist,
+        );
+        state.receive_track(
+            artist_track("b", new_url),
+            true,
+            ArtworkRequirement::ImmersiveArtist,
+        );
+
+        assert!(matches!(
+            state.apply_artist_background_state(
+                "b",
+                old_url,
+                ArtistBackgroundState::Unavailable,
+                ArtworkRequirement::ImmersiveArtist,
+            ),
+            PresentationAction::None
+        ));
+        assert!(matches!(
+            state.artist_background_work(),
+            Some(super::ArtistBackgroundWork::Request { ref url, .. }) if url == new_url
+        ));
+        assert_eq!(
+            state.pending_transition_phase,
+            Some(PendingTransitionPhase::AwaitingArtworkVisible)
+        );
+    }
+
+    #[test]
+    fn shared_in_flight_artist_background_follows_the_latest_track() {
+        let source = artwork(9);
+        let url = "https://example.test/shared-artist.jpg";
+        let mut state = TrackPresentationState::default();
+        state.receive_track(artist_track("a", url), false, ArtworkRequirement::None);
+        state.apply_artist_background_state(
+            "a",
+            url,
+            ArtistBackgroundState::Preparing(source.clone()),
+            ArtworkRequirement::ImmersiveArtist,
+        );
+
+        state.receive_track(
+            artist_track("b", url),
+            true,
+            ArtworkRequirement::ImmersiveArtist,
+        );
+        state.apply_artist_background_state(
+            "b",
+            url,
+            ArtistBackgroundState::Preparing(source.clone()),
+            ArtworkRequirement::ImmersiveArtist,
+        );
+
+        assert_eq!(
+            state.artist_background_recipient(&source),
+            Some(("b".to_string(), url.to_string()))
+        );
+        assert!(matches!(
+            state.apply_artist_background_state(
+                "b",
+                url,
+                ArtistBackgroundState::Ready(prepared_artist_background(&source)),
+                ArtworkRequirement::ImmersiveArtist,
+            ),
+            PresentationAction::BeginTransition
+        ));
     }
 
     #[test]

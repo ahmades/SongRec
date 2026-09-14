@@ -580,9 +580,31 @@ Adw.ApplicationWindow main_window {
               }
             }
 
-            Adw.PreferencesGroup background_motion_preferences {
+            Adw.PreferencesGroup immersive_now_playing_preferences {
               title: _("Cinema and Ambient settings");
               visible: false;
+
+              Adw.ActionRow immersive_background_source_setting {
+                subtitle: _("Choose the image used for the blurred background");
+                title: _("Background");
+
+                Box {
+                  spacing: 0;
+                  css-classes: [
+                    "linked",
+                  ];
+
+                  ToggleButton immersive_background_source_album_cover {
+                    active: true;
+                    label: _("Album cover");
+                  }
+
+                  ToggleButton immersive_background_source_artist {
+                    group: immersive_background_source_album_cover;
+                    label: _("Artist");
+                  }
+                }
+              }
 
               Adw.SwitchRow background_motion_enabled_setting {
                 subtitle: _("Gently drift the blurred background while keeping the cover still");

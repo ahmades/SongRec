@@ -74,6 +74,10 @@ pub(crate) fn parse_recognition(json_object: Value) -> Option<ParsedRecognition>
             artist_name,
             album_name,
             song_name,
+            artist_background_url: json_object["track"]["images"]["background"]
+                .as_str()
+                .filter(|url| !url.is_empty())
+                .map(str::to_owned),
             artwork: crate::core::artwork::ArtworkStatus::Unavailable,
             track_key,
             release_year,
@@ -155,9 +159,12 @@ mod tests {
 
     #[test]
     fn post_response_parser_preserves_metadata_and_arrival_time() {
+        let artist_background =
+            "https://is1-ssl.mzstatic.com/image/thumb/Features/a/b/c/800x800cc.jpg?x=1#image";
         let response = json!({"track": {
             "key": "123", "title": "Song", "subtitle": "Artist",
-            "images": {"coverarthq": "cover.jpg"}, "genres": {"primary": "Rock"},
+            "images": {"coverarthq": "cover.jpg", "background": artist_background},
+            "genres": {"primary": "Rock"},
             "sections": [{"type": "SONG", "metadata": [
                 {"title": "Album", "text": "Album"}, {"title": "Released", "text": "1977"}
             ]}]
@@ -169,6 +176,10 @@ mod tests {
         assert_eq!(parsed.message.album_name.as_deref(), Some("Album"));
         assert_eq!(parsed.message.release_year.as_deref(), Some("1977"));
         assert_eq!(parsed.message.genre.as_deref(), Some("Rock"));
+        assert_eq!(
+            parsed.message.artist_background_url.as_deref(),
+            Some(artist_background)
+        );
         assert_eq!(parsed.images, response["track"]["images"]);
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&parsed.message.shazam_json).unwrap(),
@@ -191,6 +202,35 @@ mod tests {
                 json!({"track": {"key": "123", "title": "Song", "subtitle": "Artist"}});
             response["track"].as_object_mut().unwrap().remove(field);
             assert!(parse_recognition(response).is_none());
+        }
+    }
+
+    #[test]
+    fn post_response_parser_treats_missing_invalid_or_empty_artist_background_as_unavailable() {
+        let response = |background: serde_json::Value| {
+            json!({"track": {
+                "key": "123", "title": "Song", "subtitle": "Artist",
+                "images": {"background": background}
+            }})
+        };
+
+        assert!(
+            parse_recognition(json!({"track": {
+                "key": "123", "title": "Song", "subtitle": "Artist"
+            }}))
+            .unwrap()
+            .message
+            .artist_background_url
+            .is_none()
+        );
+        for background in [json!(null), json!(123), json!("")] {
+            assert!(
+                parse_recognition(response(background))
+                    .unwrap()
+                    .message
+                    .artist_background_url
+                    .is_none()
+            );
         }
     }
 }

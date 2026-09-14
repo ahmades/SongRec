@@ -487,6 +487,50 @@ impl<'de> Deserialize<'de> for DisplayMode {
     }
 }
 
+/// Selects the image used to generate Cinema and Ambient backgrounds.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ImmersiveBackgroundSource {
+    #[default]
+    AlbumCover,
+    Artist,
+}
+
+impl ImmersiveBackgroundSource {
+    /// Returns the persisted string representation of this background source.
+    pub fn as_preference_value(self) -> &'static str {
+        match self {
+            Self::AlbumCover => "album-cover",
+            Self::Artist => "artist",
+        }
+    }
+
+    /// Parses a persisted background source, defaulting to the album cover.
+    pub fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("artist") => Self::Artist,
+            _ => Self::AlbumCover,
+        }
+    }
+}
+
+impl Serialize for ImmersiveBackgroundSource {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_preference_value())
+    }
+}
+
+impl<'de> Deserialize<'de> for ImmersiveBackgroundSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(|value| Self::from_preference(Some(&value)))
+    }
+}
+
 /// Controls the visual treatment of the Now Playing background.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum BackgroundStyle {
@@ -562,6 +606,8 @@ pub struct SharedNowPlayingPreferences {
     pub hide_track_info: bool,
     #[serde(rename = "now_playing_text_size_percent")]
     pub text_size: TextSize,
+    #[serde(rename = "now_playing_immersive_background_source")]
+    pub immersive_background_source: ImmersiveBackgroundSource,
     #[serde(rename = "now_playing_background_motion_enabled")]
     pub background_motion_enabled: bool,
     #[serde(rename = "now_playing_background_motion_zoom_percent")]
@@ -580,6 +626,7 @@ impl Default for SharedNowPlayingPreferences {
         Self {
             hide_track_info: false,
             text_size: TextSize::default(),
+            immersive_background_source: ImmersiveBackgroundSource::default(),
             background_motion_enabled: false,
             background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
             background_motion_reversal_duration_secs:
@@ -625,6 +672,8 @@ struct NowPlayingPreferencesWire {
     hide_track_info: Option<bool>,
     #[serde(rename = "now_playing_text_size_percent")]
     text_size: Option<TextSize>,
+    #[serde(rename = "now_playing_immersive_background_source")]
+    immersive_background_source: Option<ImmersiveBackgroundSource>,
     #[serde(rename = "now_playing_background_motion_enabled")]
     background_motion_enabled: Option<bool>,
     #[serde(rename = "now_playing_background_motion_zoom_percent")]
@@ -678,6 +727,9 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
                     .hide_track_info
                     .unwrap_or(defaults.shared.hide_track_info),
                 text_size: wire.text_size.unwrap_or(defaults.shared.text_size),
+                immersive_background_source: wire
+                    .immersive_background_source
+                    .unwrap_or(defaults.shared.immersive_background_source),
                 background_motion_enabled: wire
                     .background_motion_enabled
                     .unwrap_or(defaults.shared.background_motion_enabled),
@@ -724,6 +776,9 @@ impl NowPlayingPreferences {
             NowPlayingPreferenceChange::TextSize(value) => {
                 self.shared.text_size = value;
             }
+            NowPlayingPreferenceChange::ImmersiveBackgroundSource(value) => {
+                self.shared.immersive_background_source = value;
+            }
             NowPlayingPreferenceChange::BackgroundMotionEnabled(value) => {
                 self.shared.background_motion_enabled = value;
             }
@@ -762,6 +817,7 @@ pub enum NowPlayingPreferenceChange {
     RoundCorners(bool),
     HideTrackInfo(bool),
     TextSize(TextSize),
+    ImmersiveBackgroundSource(ImmersiveBackgroundSource),
     BackgroundMotionEnabled(bool),
     BackgroundMotionZoomPercent(u16),
     BackgroundMotionReversalDurationSecs(u64),
@@ -954,8 +1010,8 @@ mod tests {
         BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
         BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
         BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BackgroundStyle, ClassicNowPlayingPreferences,
-        DisplayMode, NowPlayingPreferenceChange, NowPlayingPreferences, Preferences,
-        PreferencesInterface, PreferencesPatch, SharedNowPlayingPreferences,
+        DisplayMode, ImmersiveBackgroundSource, NowPlayingPreferenceChange, NowPlayingPreferences,
+        Preferences, PreferencesInterface, PreferencesPatch, SharedNowPlayingPreferences,
         TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
         TextSize, TrackInfoAlignment, TransitionEffect,
     };
@@ -995,6 +1051,10 @@ mod tests {
         assert_eq!(defaults.classic.background_style, BackgroundStyle::Gradient);
         assert!(!defaults.shared.hide_track_info);
         assert_eq!(defaults.shared.text_size, TextSize::MEDIUM);
+        assert_eq!(
+            defaults.shared.immersive_background_source,
+            ImmersiveBackgroundSource::AlbumCover
+        );
         assert!(!defaults.shared.background_motion_enabled);
         assert_eq!(
             defaults.shared.background_motion_zoom_percent,
@@ -1025,6 +1085,10 @@ mod tests {
         assert_eq!(
             table["now_playing_text_size_percent"].as_integer(),
             Some(100)
+        );
+        assert_eq!(
+            table["now_playing_immersive_background_source"].as_str(),
+            Some("album-cover")
         );
         assert_eq!(
             table["now_playing_background_motion_enabled"].as_bool(),
@@ -1088,6 +1152,7 @@ lights_off_enabled = false
                 shared: SharedNowPlayingPreferences {
                     hide_track_info: true,
                     text_size: TextSize::MEDIUM,
+                    immersive_background_source: ImmersiveBackgroundSource::AlbumCover,
                     background_motion_enabled: false,
                     background_motion_zoom_percent: BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
                     background_motion_reversal_duration_secs:
@@ -1228,12 +1293,12 @@ now_playing_background_motion_reversal_duration_secs = 23
                     shared: SharedNowPlayingPreferences {
                         hide_track_info: true,
                         text_size: TextSize::from_scale_value(113.0),
+                        immersive_background_source: ImmersiveBackgroundSource::Artist,
                         background_motion_enabled: true,
                         background_motion_zoom_percent: 117,
                         background_motion_reversal_duration_secs: 45,
                         ..SharedNowPlayingPreferences::default()
                     },
-                    ..NowPlayingPreferences::default()
                 },
                 ..Preferences::default()
             };
@@ -1292,7 +1357,6 @@ now_playing_background_motion_reversal_duration_secs = 23
                     transition_duration_ms: TRANSITION_DURATION_MAX_MS,
                     ..SharedNowPlayingPreferences::default()
                 },
-                ..NowPlayingPreferences::default()
             },
             ..Preferences::default()
         };
@@ -1321,6 +1385,9 @@ now_playing_background_motion_reversal_duration_secs = 23
         interface.update_now_playing(NowPlayingPreferenceChange::TextSize(
             TextSize::from_scale_value(113.0),
         ));
+        interface.update_now_playing(NowPlayingPreferenceChange::ImmersiveBackgroundSource(
+            ImmersiveBackgroundSource::Artist,
+        ));
         interface.update_now_playing(NowPlayingPreferenceChange::RoundCorners(false));
         interface.update_now_playing(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Ambient,
@@ -1335,6 +1402,14 @@ now_playing_background_motion_reversal_duration_secs = 23
         assert_eq!(
             interface.preferences.now_playing.shared.text_size,
             TextSize::from_scale_value(113.0)
+        );
+        assert_eq!(
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .immersive_background_source,
+            ImmersiveBackgroundSource::Artist
         );
         assert!(!interface.preferences.now_playing.classic.round_corners);
 
@@ -1443,6 +1518,20 @@ now_playing_background_motion_reversal_duration_secs = 23
                 style
             );
         }
+
+        for source in [
+            ImmersiveBackgroundSource::AlbumCover,
+            ImmersiveBackgroundSource::Artist,
+        ] {
+            assert_eq!(
+                ImmersiveBackgroundSource::from_preference(Some(source.as_preference_value())),
+                source
+            );
+        }
+        assert_eq!(
+            ImmersiveBackgroundSource::from_preference(Some("unknown")),
+            ImmersiveBackgroundSource::AlbumCover
+        );
 
         for size in [
             AlbumCoverSize::SMALL,

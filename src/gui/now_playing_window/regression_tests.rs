@@ -298,6 +298,12 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
     let album: gtk::Scale = builder.object("album_cover_size_setting_scale").unwrap();
     let hide: adw::SwitchRow = builder.object("hide_track_info_setting").unwrap();
     let mode: adw::ComboRow = builder.object("display_mode_setting").unwrap();
+    let artist_background: gtk::ToggleButton = builder
+        .object("immersive_background_source_artist")
+        .unwrap();
+    let album_background: gtk::ToggleButton = builder
+        .object("immersive_background_source_album_cover")
+        .unwrap();
     let text_row: adw::ActionRow = builder.object("text_size_setting").unwrap();
     let expected = Rc::new(Cell::new(controller.settings()));
     let saved_expected = expected.clone();
@@ -332,6 +338,26 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
         mode.set_selected(super::DisplayMode::Classic.index());
         dispatch();
         hide.set_active(false);
+        dispatch();
+        mode.set_selected(super::DisplayMode::Cinema.index());
+        dispatch();
+        window
+            .0
+            .controls
+            .immersive_background_source_artist
+            .set_active(true);
+        dispatch();
+        assert!(artist_background.is_active());
+        album_background.set_active(true);
+        dispatch();
+        assert!(
+            window
+                .0
+                .controls
+                .immersive_background_source_album_cover
+                .is_active()
+        );
+        mode.set_selected(super::DisplayMode::Classic.index());
         dispatch();
         // Test the controls' own visibility, not that of the closed outer menu
         // or the unpresented preferences page.

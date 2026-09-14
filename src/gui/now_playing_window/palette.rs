@@ -1,7 +1,7 @@
 //! Derives Now Playing colors and combines them with GTK artwork textures.
 
 use super::tuning::ambient::*;
-use crate::core::artwork::Artwork;
+use crate::core::artwork::{Artwork, ArtworkId};
 use gdk::prelude::TextureExt;
 use image::{DynamicImage, ImageBuffer, Rgba};
 use std::collections::HashMap;
@@ -14,15 +14,35 @@ pub(super) enum ArtworkRequirement {
     None,
     Cover,
     Immersive,
+    ImmersiveArtist,
 }
 
 impl ArtworkRequirement {
+    pub(super) fn for_settings(settings: super::NowPlayingSettings) -> Self {
+        use crate::core::preferences::ImmersiveBackgroundSource;
+
+        if settings.display_mode.uses_immersive_artwork()
+            && settings.shared.immersive_background_source == ImmersiveBackgroundSource::Artist
+        {
+            return Self::ImmersiveArtist;
+        }
+        Self::for_mode(settings.display_mode)
+    }
+
     pub(super) fn for_mode(mode: super::DisplayMode) -> Self {
         match mode {
             super::DisplayMode::LightsOff => Self::None,
             super::DisplayMode::Classic => Self::Cover,
             super::DisplayMode::Cinema | super::DisplayMode::Ambient => Self::Immersive,
         }
+    }
+
+    pub(super) const fn needs_ambient_texture(self) -> bool {
+        matches!(self, Self::Immersive | Self::ImmersiveArtist)
+    }
+
+    pub(super) const fn needs_artist_background(self) -> bool {
+        matches!(self, Self::ImmersiveArtist)
     }
 }
 
@@ -54,6 +74,35 @@ pub(super) struct PreparedArtwork {
     source: Arc<Artwork>,
 }
 
+/// A blurred immersive backdrop prepared independently from the album cover.
+///
+/// Cinema and Ambient still use [`PreparedArtwork::texture`] as their sharp
+/// foreground. Keeping the backdrop separate prevents an artist photograph
+/// from accidentally replacing that foreground when it is selected as the
+/// background source.
+#[derive(Clone)]
+pub(super) struct PreparedImmersiveBackground {
+    pub(super) texture: gdk::MemoryTexture,
+    pub(super) background: Background,
+    source_id: ArtworkId,
+}
+
+impl PreparedImmersiveBackground {
+    pub(super) const fn source_id(&self) -> ArtworkId {
+        self.source_id
+    }
+
+    pub(super) fn matches(&self, artwork: &Arc<Artwork>) -> bool {
+        self.source_id == artwork.content_id()
+    }
+
+    pub(super) fn storage_bytes(&self) -> usize {
+        (self.texture.width() as usize)
+            .saturating_mul(self.texture.height() as usize)
+            .saturating_mul(4)
+    }
+}
+
 impl PreparedArtwork {
     pub(super) fn source(&self) -> &Arc<Artwork> {
         &self.source
@@ -65,7 +114,7 @@ impl PreparedArtwork {
     }
 
     pub(super) fn is_ready(&self, requirement: ArtworkRequirement) -> bool {
-        requirement != ArtworkRequirement::Immersive || self.ambient_texture.is_some()
+        !requirement.needs_ambient_texture() || self.ambient_texture.is_some()
     }
 
     /// RGBA payload retained by the two textures, for the presentation cache budget.
@@ -128,7 +177,8 @@ pub(super) fn visuals_from_artwork(
 
     ArtworkVisuals {
         background,
-        ambient: (requirement == ArtworkRequirement::Immersive)
+        ambient: requirement
+            .needs_ambient_texture()
             .then(|| generate_ambient_image(&image, background)),
     }
 }
@@ -143,17 +193,7 @@ pub(super) fn prepare_artwork(
         background,
         ambient,
     } = visuals;
-    let ambient_texture = ambient.map(|ambient| {
-        let ambient_stride = ambient.width as usize * 4;
-        let ambient_bytes = glib::Bytes::from_owned(ambient.rgba);
-        gdk::MemoryTexture::new(
-            i32::try_from(ambient.width).expect("bounded ambient width fits i32"),
-            i32::try_from(ambient.height).expect("bounded ambient height fits i32"),
-            gdk::MemoryFormat::R8g8b8a8,
-            &ambient_bytes,
-            ambient_stride,
-        )
-    });
+    let ambient_texture = ambient.map(memory_texture_from_ambient);
     let previous = previous.filter(|previous| previous.matches(artwork));
 
     PreparedArtwork {
@@ -166,6 +206,41 @@ pub(super) fn prepare_artwork(
         background,
         source: artwork.clone(),
     }
+}
+
+/// Creates the blurred texture used when an artist image supplies the
+/// Cinema/Ambient background. This intentionally creates no sharp texture.
+pub(super) fn prepare_immersive_background(
+    artwork: &Arc<Artwork>,
+    visuals: ArtworkVisuals,
+) -> PreparedImmersiveBackground {
+    let ArtworkVisuals {
+        background,
+        ambient,
+    } = visuals;
+    let ambient = ambient.unwrap_or_else(|| {
+        ArtworkVisuals::fallback()
+            .ambient
+            .expect("fallback visuals always contain an ambient image")
+    });
+
+    PreparedImmersiveBackground {
+        texture: memory_texture_from_ambient(ambient),
+        background,
+        source_id: artwork.content_id(),
+    }
+}
+
+fn memory_texture_from_ambient(ambient: AmbientImage) -> gdk::MemoryTexture {
+    let ambient_stride = ambient.width as usize * 4;
+    let ambient_bytes = glib::Bytes::from_owned(ambient.rgba);
+    gdk::MemoryTexture::new(
+        i32::try_from(ambient.width).expect("bounded ambient width fits i32"),
+        i32::try_from(ambient.height).expect("bounded ambient height fits i32"),
+        gdk::MemoryFormat::R8g8b8a8,
+        &ambient_bytes,
+        ambient_stride,
+    )
 }
 
 fn generate_ambient_image<Container>(
@@ -587,6 +662,35 @@ mod tests {
     use crate::core::artwork::Artwork;
     use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
     use std::io::Cursor;
+
+    #[test]
+    fn artist_background_is_required_only_when_selected_in_an_immersive_mode() {
+        use crate::core::preferences::{
+            DisplayMode, ImmersiveBackgroundSource, NowPlayingPreferences,
+            SharedNowPlayingPreferences,
+        };
+
+        for mode in DisplayMode::ALL {
+            for source in [
+                ImmersiveBackgroundSource::AlbumCover,
+                ImmersiveBackgroundSource::Artist,
+            ] {
+                let settings = NowPlayingPreferences {
+                    display_mode: mode,
+                    shared: SharedNowPlayingPreferences {
+                        immersive_background_source: source,
+                        ..SharedNowPlayingPreferences::default()
+                    },
+                    ..NowPlayingPreferences::default()
+                };
+                assert_eq!(
+                    super::ArtworkRequirement::for_settings(settings).needs_artist_background(),
+                    matches!(mode, DisplayMode::Cinema | DisplayMode::Ambient)
+                        && source == ImmersiveBackgroundSource::Artist
+                );
+            }
+        }
+    }
 
     fn channel_range(channels: [u8; 3]) -> u8 {
         channels.iter().max().unwrap() - channels.iter().min().unwrap()

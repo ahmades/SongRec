@@ -193,13 +193,43 @@ impl ArtworkService {
         images: &Value,
         complete: impl Fn(String, Option<Arc<Artwork>>) + 'static,
     ) -> ArtworkStatus {
+        self.request_candidates(
+            track_key,
+            preferred_cover_image_urls(images, self.policy),
+            None,
+            complete,
+        )
+    }
+
+    /// Fetches exactly the response-provided URL without requesting a different
+    /// rendition or falling back to another image.
+    pub fn request_exact_url(
+        &self,
+        track_key: &str,
+        url: &str,
+        complete: impl Fn(String, Option<Arc<Artwork>>) + 'static,
+    ) -> ArtworkStatus {
+        let Some(candidate) = exact_artwork_url(url) else {
+            return ArtworkStatus::Unavailable;
+        };
+        // Exact-response consumers also use the literal URL as their request
+        // identity. Canonicalizing CDN shard/query differences is safe for a
+        // cover selected only by track key, but would make a completion carry
+        // the wrong URL identity after an artist-background response changes.
+        self.request_candidates(track_key, vec![candidate], Some(url.to_owned()), complete)
+    }
+
+    fn request_candidates(
+        &self,
+        track_key: &str,
+        candidates: Vec<Candidate>,
+        exact_key: Option<String>,
+        complete: impl Fn(String, Option<Arc<Artwork>>) + 'static,
+    ) -> ArtworkStatus {
         if self.policy == ArtworkPolicy::None {
             return ArtworkStatus::Unavailable;
         }
-        let candidates = preferred_cover_image_urls(images, self.policy);
-        let key = candidates
-            .first()
-            .map(|candidate| artwork_key(&candidate.url));
+        let key = request_key(&candidates, exact_key);
         let mut state = self.state.borrow_mut();
         state.select_artwork(track_key, key.as_deref());
         if let Some(image) = state.cached_artwork(track_key, key.as_deref()) {
@@ -243,6 +273,21 @@ impl ArtworkService {
         });
         ArtworkStatus::Pending
     }
+}
+
+fn exact_artwork_url(url: &str) -> Option<Candidate> {
+    (!url.is_empty()).then(|| Candidate {
+        url: url.to_owned(),
+        original: true,
+    })
+}
+
+fn request_key(candidates: &[Candidate], exact_key: Option<String>) -> Option<String> {
+    exact_key.or_else(|| {
+        candidates
+            .first()
+            .map(|candidate| artwork_key(&candidate.url))
+    })
 }
 
 async fn download_and_decode(
@@ -419,10 +464,10 @@ mod tests {
 
     use super::{
         ArtworkRequestState, COVER_IMAGE_CACHE_CAPACITY, COVER_IMAGE_CACHE_MAX_BYTES,
-        CoverImageCache, PREFERRED_COVER_ART_SIZE_PX, preferred_cover_image_urls,
-        upscale_mzstatic_artwork_url,
+        CoverImageCache, PREFERRED_COVER_ART_SIZE_PX, exact_artwork_url,
+        preferred_cover_image_urls, request_key, upscale_mzstatic_artwork_url,
     };
-    use crate::core::artwork::Artwork;
+    use crate::core::artwork::{Artwork, ArtworkStatus};
 
     fn urls(images: &serde_json::Value) -> Vec<String> {
         preferred_cover_image_urls(images, super::ArtworkPolicy::Display)
@@ -627,6 +672,44 @@ mod tests {
         assert_eq!(thumbnails.len(), 1);
         assert_eq!(thumbnails[0].url, original);
         assert!(thumbnails[0].original);
+
+        let artist_only = json!({"background": "https://example.test/artist.jpg"});
+        assert!(preferred_cover_image_urls(&artist_only, super::ArtworkPolicy::Display).is_empty());
+        assert!(
+            preferred_cover_image_urls(&artist_only, super::ArtworkPolicy::Thumbnail).is_empty()
+        );
+    }
+
+    #[test]
+    fn exact_artwork_request_preserves_the_payload_url_and_has_no_fallback() {
+        let source =
+            "https://is1-ssl.mzstatic.com/image/thumb/Features/a/b/c/400x400cc.jpg?foo=bar#image";
+        let candidate = exact_artwork_url(source).unwrap();
+
+        assert_eq!(candidate.url, source);
+        assert!(candidate.original);
+        assert!(exact_artwork_url("").is_none());
+
+        let other_shard = source.replacen("is1-ssl", "is9-ssl", 1);
+        assert_eq!(
+            request_key(std::slice::from_ref(&candidate), Some(source.to_owned())),
+            Some(source.to_owned())
+        );
+        assert_ne!(
+            request_key(std::slice::from_ref(&candidate), Some(source.to_owned())),
+            request_key(
+                &[exact_artwork_url(&other_shard).unwrap()],
+                Some(other_shard)
+            )
+        );
+
+        let service = super::ArtworkService::new(super::ArtworkPolicy::Thumbnail);
+        assert!(matches!(
+            service.request_exact_url("track", "", |_, _| {
+                panic!("an empty exact URL must not schedule a completion")
+            }),
+            ArtworkStatus::Unavailable
+        ));
     }
 
     #[test]

@@ -678,9 +678,33 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           </object>
                         </child>
                         <child>
-                          <object class="AdwPreferencesGroup" id="background_motion_preferences">
+                          <object class="AdwPreferencesGroup" id="immersive_now_playing_preferences">
                             <property name="title" translatable="yes">Cinema and Ambient settings</property>
                             <property name="visible">false</property>
+                            <child>
+                              <object class="AdwActionRow" id="immersive_background_source_setting">
+                                <property name="subtitle" translatable="yes">Choose the image used for the blurred background</property>
+                                <property name="title" translatable="yes">Background</property>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="spacing">0</property>
+                                    <property name="css-classes">linked</property>
+                                    <child>
+                                      <object class="GtkToggleButton" id="immersive_background_source_album_cover">
+                                        <property name="active">true</property>
+                                        <property name="label" translatable="yes">Album cover</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkToggleButton" id="immersive_background_source_artist">
+                                        <property name="group">immersive_background_source_album_cover</property>
+                                        <property name="label" translatable="yes">Artist</property>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
                             <child>
                               <object class="AdwSwitchRow" id="background_motion_enabled_setting">
                                 <property name="subtitle" translatable="yes">Gently drift the blurred background while keeping the cover still</property>

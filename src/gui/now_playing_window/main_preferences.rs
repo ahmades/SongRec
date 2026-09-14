@@ -8,7 +8,9 @@ use super::{
     BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, NowPlayingSettings, SettingsController,
     TextSize, TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
-use crate::core::preferences::{DisplayMode, NowPlayingPreferenceChange};
+use crate::core::preferences::{
+    DisplayMode, ImmersiveBackgroundSource, NowPlayingPreferenceChange,
+};
 use adw::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -18,11 +20,13 @@ struct PreferencesWidgets {
     reset: gtk::Button,
     display_mode: adw::ComboRow,
     classic_settings: adw::PreferencesGroup,
-    background_motion_settings: adw::PreferencesGroup,
+    immersive_settings: adw::PreferencesGroup,
     round_corners: adw::SwitchRow,
     hide_track_info: adw::SwitchRow,
     text_size_row: adw::ActionRow,
     text_size: gtk::Scale,
+    immersive_background_source_album_cover: gtk::ToggleButton,
+    immersive_background_source_artist: gtk::ToggleButton,
     background_motion_enabled: adw::SwitchRow,
     background_motion_zoom_row: adw::ActionRow,
     background_motion_zoom: gtk::Scale,
@@ -55,11 +59,17 @@ impl NowPlayingPreferencesView {
                 .unwrap(),
             display_mode: builder.object("display_mode_setting").unwrap(),
             classic_settings: builder.object("classic_now_playing_preferences").unwrap(),
-            background_motion_settings: builder.object("background_motion_preferences").unwrap(),
+            immersive_settings: builder.object("immersive_now_playing_preferences").unwrap(),
             round_corners: builder.object("round_corners_setting").unwrap(),
             hide_track_info: builder.object("hide_track_info_setting").unwrap(),
             text_size_row: builder.object("text_size_setting").unwrap(),
             text_size: builder.object("text_size_setting_scale").unwrap(),
+            immersive_background_source_album_cover: builder
+                .object("immersive_background_source_album_cover")
+                .unwrap(),
+            immersive_background_source_artist: builder
+                .object("immersive_background_source_artist")
+                .unwrap(),
             background_motion_enabled: builder.object("background_motion_enabled_setting").unwrap(),
             background_motion_zoom_row: builder.object("background_motion_zoom_setting").unwrap(),
             background_motion_zoom: builder
@@ -179,6 +189,18 @@ impl NowPlayingPreferencesView {
             .text_size
             .set_value(settings.shared.text_size.scale_value());
         self.widgets
+            .immersive_background_source_album_cover
+            .set_active(matches!(
+                settings.shared.immersive_background_source,
+                ImmersiveBackgroundSource::AlbumCover
+            ));
+        self.widgets
+            .immersive_background_source_artist
+            .set_active(matches!(
+                settings.shared.immersive_background_source,
+                ImmersiveBackgroundSource::Artist
+            ));
+        self.widgets
             .background_motion_enabled
             .set_active(settings.shared.background_motion_enabled);
         self.widgets
@@ -235,12 +257,12 @@ impl NowPlayingPreferencesView {
                 .display_mode
                 .shows_track_info(settings.shared.hide_track_info),
         );
-        let supports_background_motion = settings.display_mode.supports_background_motion();
+        let shows_immersive_settings = settings.display_mode.uses_immersive_artwork();
         self.widgets
-            .background_motion_settings
-            .set_visible(supports_background_motion);
-        let show_motion_controls =
-            supports_background_motion && settings.shared.background_motion_enabled;
+            .immersive_settings
+            .set_visible(shows_immersive_settings);
+        let show_motion_controls = settings.display_mode.supports_background_motion()
+            && settings.shared.background_motion_enabled;
         self.widgets
             .background_motion_zoom_row
             .set_visible(show_motion_controls);
@@ -332,6 +354,18 @@ impl NowPlayingPreferencesView {
             (
                 &self.widgets.background_style_solid,
                 NowPlayingPreferenceChange::BackgroundStyle(BackgroundStyle::Solid),
+            ),
+            (
+                &self.widgets.immersive_background_source_album_cover,
+                NowPlayingPreferenceChange::ImmersiveBackgroundSource(
+                    ImmersiveBackgroundSource::AlbumCover,
+                ),
+            ),
+            (
+                &self.widgets.immersive_background_source_artist,
+                NowPlayingPreferenceChange::ImmersiveBackgroundSource(
+                    ImmersiveBackgroundSource::Artist,
+                ),
             ),
         ] {
             let applying = self.applying.clone();

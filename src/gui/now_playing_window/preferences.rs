@@ -3,8 +3,8 @@
 use super::track::TrackPresentation;
 use super::ui::apply_classic_track_info_alignment;
 use super::{
-    AlbumCoverSize, DisplayMode, NowPlayingSettings, NowPlayingWindow, TextSize,
-    TrackInfoAlignment, TransitionEffect, clamp_background_motion_zoom_percent,
+    AlbumCoverSize, DisplayMode, ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow,
+    TextSize, TrackInfoAlignment, TransitionEffect, clamp_background_motion_zoom_percent,
     clamp_transition_duration_ms, normalize_background_motion_reversal_duration_secs,
 };
 use adw::prelude::*;
@@ -48,6 +48,9 @@ impl NowPlayingWindow {
             }
             if changed!(shared.text_size) {
                 self.set_text_size(settings.shared.text_size);
+            }
+            if changed!(shared.immersive_background_source) {
+                self.set_immersive_background_source(settings.shared.immersive_background_source);
             }
             if changed!(shared.background_motion_enabled)
                 || changed!(shared.background_motion_zoom_percent)
@@ -109,14 +112,47 @@ impl NowPlayingWindow {
                 display_mode,
                 self.controls.hide_track_info.is_active(),
             );
-            self.update_background_motion_control_visibility(
+            self.update_immersive_control_visibility(
                 display_mode,
                 self.controls.background_motion_enabled.is_active(),
             );
         });
-        TrackPresentation::from_window(self).refresh_mode();
+        self.refresh_track_for_visual_change();
         self.reconcile_pending_transition();
         self.resume_artwork_preparation();
+        self.ensure_artist_background();
+    }
+
+    /// Selects the image that supplies the blurred Cinema/Ambient backdrop.
+    pub(super) fn set_immersive_background_source(&self, source: ImmersiveBackgroundSource) {
+        self.with_preference_updates_suspended(|| {
+            let selected = match source {
+                ImmersiveBackgroundSource::AlbumCover => {
+                    &self.controls.immersive_background_source_album_cover
+                }
+                ImmersiveBackgroundSource::Artist => {
+                    &self.controls.immersive_background_source_artist
+                }
+            };
+            if !selected.is_active() {
+                selected.set_active(true);
+            }
+        });
+        self.refresh_track_for_visual_change();
+        self.reconcile_pending_transition();
+        self.ensure_artist_background();
+    }
+
+    /// Rebuilds a mode/source-dependent scene without mutating an animated leg.
+    fn refresh_track_for_visual_change(&self) {
+        let refresh_deferred = self
+            .state
+            .track_presentation
+            .borrow_mut()
+            .defer_scene_refresh_if_animating();
+        if !refresh_deferred {
+            TrackPresentation::from_window(self).refresh_current_track();
+        }
     }
 
     /// Synchronizes the shared immersive-background motion controls and renderer.
@@ -145,7 +181,7 @@ impl NowPlayingWindow {
                     .background_motion_reversal_duration
                     .set_value(reversal_duration_secs as f64);
             }
-            self.update_background_motion_control_visibility(
+            self.update_immersive_control_visibility(
                 self.state.settings.get().display_mode,
                 enabled,
             );

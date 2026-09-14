@@ -27,6 +27,7 @@ mod transition;
 mod tuning;
 mod ui;
 
+use crate::core::artwork_service::{ArtworkPolicy, ArtworkService};
 use adw::prelude::*;
 use controller::NowPlayingSettingsController;
 use menu::NowPlayingControls;
@@ -34,7 +35,8 @@ use state::NowPlayingState;
 use ui::NowPlayingWidgets;
 
 pub use crate::core::preferences::{
-    AlbumCoverSize, BackgroundStyle, DisplayMode, TextSize, TrackInfoAlignment, TransitionEffect,
+    AlbumCoverSize, BackgroundStyle, DisplayMode, ImmersiveBackgroundSource, TextSize,
+    TrackInfoAlignment, TransitionEffect,
 };
 pub(crate) use crate::core::preferences::{
     BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS,
@@ -58,6 +60,7 @@ pub struct NowPlayingWindow {
     text_css: style::TextCss,
     applied_settings: std::cell::Cell<Option<NowPlayingSettings>>,
     artwork_timing: Option<timing::ArtworkTimingProbe>,
+    artist_background_service: ArtworkService,
 }
 
 impl NowPlayingWindow {
@@ -75,6 +78,7 @@ impl NowPlayingWindow {
             text_css,
             applied_settings: std::cell::Cell::new(None),
             artwork_timing: None,
+            artist_background_service: ArtworkService::new(ArtworkPolicy::Thumbnail),
         };
 
         now_playing.setup_rendering();
@@ -97,6 +101,7 @@ impl NowPlayingWindow {
     pub fn present(&self) {
         self.ui.window.present();
         self.resume_artwork_preparation();
+        self.ensure_artist_background();
     }
 
     /// Closes the window while keeping its internal state available for reuse.

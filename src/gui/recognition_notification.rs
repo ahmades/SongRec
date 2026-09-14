@@ -263,6 +263,7 @@ mod tests {
             album_name: None,
             release_year: None,
             genre: None,
+            artist_background_url: None,
             artwork: if pending {
                 crate::core::artwork::ArtworkStatus::Pending
             } else {

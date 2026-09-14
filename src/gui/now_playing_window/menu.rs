@@ -6,9 +6,9 @@ use super::{
     BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
     BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS, BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
     BACKGROUND_MOTION_ZOOM_MAX_PERCENT, BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
-    BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, DisplayMode, NowPlayingSettings,
-    NowPlayingWindow, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TextSize,
-    TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
+    BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, DisplayMode, ImmersiveBackgroundSource,
+    NowPlayingSettings, NowPlayingWindow, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
+    TextSize, TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
 use crate::core::preferences::NowPlayingPreferenceChange;
 use adw::prelude::*;
@@ -105,12 +105,14 @@ fn label_control(label: &gtk::Label, control: &impl IsA<gtk::Widget>) {
 pub(super) struct NowPlayingControls {
     pub(super) display_mode_menu: gtk::DropDown,
     pub(super) classic_settings: gtk::Box,
-    pub(super) background_motion_settings: gtk::Box,
+    pub(super) immersive_settings: gtk::Box,
     pub(super) round_corners: gtk::Switch,
     pub(super) hide_track_info_label: gtk::Label,
     pub(super) hide_track_info: gtk::Switch,
     pub(super) text_size_label: gtk::Label,
     pub(super) text_size: gtk::Scale,
+    pub(super) immersive_background_source_album_cover: gtk::ToggleButton,
+    pub(super) immersive_background_source_artist: gtk::ToggleButton,
     pub(super) background_motion_enabled_label: gtk::Label,
     pub(super) background_motion_enabled: gtk::Switch,
     pub(super) background_motion_zoom_label: gtk::Label,
@@ -145,7 +147,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         .orientation(gtk::Orientation::Vertical)
         .spacing(6)
         .build();
-    let background_motion_settings = gtk::Box::builder()
+    let immersive_settings = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(6)
         .build();
@@ -163,6 +165,10 @@ pub(super) fn build_controls() -> NowPlayingControls {
     TextSize::install_slider_snap(&text_size);
     text_size.set_value(TextSize::default().scale_value());
     text_size.set_width_request(190);
+    let immersive_background_source_album_cover =
+        gtk::ToggleButton::with_label(&gettext("Album cover"));
+    let immersive_background_source_artist = gtk::ToggleButton::with_label(&gettext("Artist"));
+    immersive_background_source_artist.set_group(Some(&immersive_background_source_album_cover));
     let background_motion_enabled_label = gtk::Label::new(Some(&gettext("Background motion")));
     let background_motion_enabled = gtk::Switch::new();
     let background_motion_zoom_label = gtk::Label::new(Some(&gettext("Zoom level (%)")));
@@ -234,12 +240,14 @@ pub(super) fn build_controls() -> NowPlayingControls {
     NowPlayingControls {
         display_mode_menu,
         classic_settings,
-        background_motion_settings,
+        immersive_settings,
         round_corners,
         hide_track_info_label,
         hide_track_info,
         text_size_label,
         text_size,
+        immersive_background_source_album_cover,
+        immersive_background_source_artist,
         background_motion_enabled_label,
         background_motion_enabled,
         background_motion_zoom_label,
@@ -377,41 +385,42 @@ impl NowPlayingWindow {
             .set_visible(settings.display_mode.shows_classic_settings());
         menu_box.append(&self.controls.classic_settings);
 
-        let background_motion_heading = section_heading(&gettext("Cinema and Ambient settings"));
-        self.controls
-            .background_motion_settings
-            .append(&background_motion_heading);
-        let background_motion_grid = menu_grid();
-        self.add_switch_menu_row_with_label(
-            &background_motion_grid,
+        let immersive_heading = section_heading(&gettext("Cinema and Ambient settings"));
+        self.controls.immersive_settings.append(&immersive_heading);
+        let immersive_grid = menu_grid();
+        self.add_immersive_background_source_menu_row(
+            &immersive_grid,
             0,
+            settings.shared.immersive_background_source,
+        );
+        self.add_switch_menu_row_with_label(
+            &immersive_grid,
+            1,
             &self.controls.background_motion_enabled_label,
             &self.controls.background_motion_enabled,
             settings.shared.background_motion_enabled,
             true,
         );
         self.add_scale_menu_row_with_label(
-            &background_motion_grid,
-            1,
+            &immersive_grid,
+            2,
             &self.controls.background_motion_zoom_label,
             &self.controls.background_motion_zoom,
             f64::from(settings.shared.background_motion_zoom_percent),
         );
         self.add_scale_menu_row_with_label(
-            &background_motion_grid,
-            2,
+            &immersive_grid,
+            3,
             &self.controls.background_motion_reversal_duration_label,
             &self.controls.background_motion_reversal_duration,
             settings.shared.background_motion_reversal_duration_secs as f64,
         );
-        self.controls
-            .background_motion_settings
-            .append(&background_motion_grid);
-        self.update_background_motion_control_visibility(
+        self.controls.immersive_settings.append(&immersive_grid);
+        self.update_immersive_control_visibility(
             settings.display_mode,
             settings.shared.background_motion_enabled,
         );
-        menu_box.append(&self.controls.background_motion_settings);
+        menu_box.append(&self.controls.immersive_settings);
 
         let menu_scroll = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
@@ -696,15 +705,13 @@ impl NowPlayingWindow {
         self.controls.text_size.set_visible(visible);
     }
 
-    pub(super) fn update_background_motion_control_visibility(
+    pub(super) fn update_immersive_control_visibility(
         &self,
         display_mode: DisplayMode,
         enabled: bool,
     ) {
         let supported = display_mode.supports_background_motion();
-        self.controls
-            .background_motion_settings
-            .set_visible(supported);
+        self.controls.immersive_settings.set_visible(supported);
         let show_details = supported && enabled;
         self.controls
             .background_motion_zoom_label
@@ -718,6 +725,43 @@ impl NowPlayingWindow {
         self.controls
             .background_motion_reversal_duration
             .set_visible(show_details);
+    }
+
+    /// Adds the shared Cinema/Ambient background-source segmented control.
+    fn add_immersive_background_source_menu_row(
+        &self,
+        menu_grid: &gtk::Grid,
+        row: i32,
+        source: ImmersiveBackgroundSource,
+    ) {
+        let label = gtk::Label::new(Some(&gettext("Background")));
+        label.set_halign(gtk::Align::Start);
+        label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
+        menu_grid.attach(&label, 0, row, 1, 1);
+
+        let buttons = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(0)
+            .css_classes(["linked"])
+            .halign(gtk::Align::End)
+            .valign(gtk::Align::Center)
+            .hexpand(false)
+            .build();
+        buttons.append(&self.controls.immersive_background_source_album_cover);
+        buttons.append(&self.controls.immersive_background_source_artist);
+        match source {
+            ImmersiveBackgroundSource::AlbumCover => self
+                .controls
+                .immersive_background_source_album_cover
+                .set_active(true),
+            ImmersiveBackgroundSource::Artist => self
+                .controls
+                .immersive_background_source_artist
+                .set_active(true),
+        }
+        label_control(&label, &buttons);
+        menu_grid.attach(&buttons, 1, row, 1, 1);
     }
 
     /// Adds the transition effect drop-down to the context menu and selects the saved effect.
@@ -915,6 +959,18 @@ impl NowPlayingWindow {
             });
 
         for (button, change) in [
+            (
+                &self.controls.immersive_background_source_album_cover,
+                NowPlayingPreferenceChange::ImmersiveBackgroundSource(
+                    ImmersiveBackgroundSource::AlbumCover,
+                ),
+            ),
+            (
+                &self.controls.immersive_background_source_artist,
+                NowPlayingPreferenceChange::ImmersiveBackgroundSource(
+                    ImmersiveBackgroundSource::Artist,
+                ),
+            ),
             (
                 &self.controls.track_info_alignment_left,
                 NowPlayingPreferenceChange::TrackInfoAlignment(TrackInfoAlignment::Left),

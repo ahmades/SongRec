@@ -29,6 +29,9 @@ pub struct SongRecognizedMessage {
     pub artist_name: String,
     pub album_name: Option<String>,
     pub song_name: String,
+    /// Response-provided artist image URL used on demand by immersive displays.
+    /// Kept separately from the full response so consumers never need to parse it again.
+    pub artist_background_url: Option<String>,
     pub artwork: ArtworkStatus,
 
     // Used only in the CSV export for now:
@@ -247,6 +250,7 @@ mod tests {
             artist_name: "Artist".to_string(),
             album_name: None,
             song_name: format!("Song {key}"),
+            artist_background_url: None,
             artwork: ArtworkStatus::Pending,
             track_key: key.to_string(),
             release_year: None,
