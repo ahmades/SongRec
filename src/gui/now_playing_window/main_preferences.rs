@@ -1,5 +1,6 @@
 //! Bindings for the Now Playing section of the main preferences page.
 
+use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::{
     AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
     BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
@@ -21,6 +22,10 @@ struct PreferencesWidgets {
     display_mode: adw::ComboRow,
     keep_screen_awake: adw::SwitchRow,
     classic_settings: adw::PreferencesGroup,
+    cinema_settings: adw::PreferencesGroup,
+    cinema_artwork_framing: CinemaArtworkFramingControls,
+    cinema_crop_focus_row: adw::ActionRow,
+    cinema_crop_focus: CinemaCropFocusControls,
     immersive_settings: adw::PreferencesGroup,
     round_corners: adw::SwitchRow,
     hide_track_info: adw::SwitchRow,
@@ -57,6 +62,16 @@ pub(crate) struct NowPlayingPreferencesView {
 
 impl NowPlayingPreferencesView {
     pub(crate) fn new(builder: &gtk::Builder, controller: SettingsController) -> Self {
+        let cinema_artwork_framing = CinemaArtworkFramingControls::new();
+        let cinema_artwork_framing_row: adw::ActionRow =
+            builder.object("cinema_artwork_framing_setting").unwrap();
+        cinema_artwork_framing_row.add_suffix(cinema_artwork_framing.widget());
+
+        let cinema_crop_focus = CinemaCropFocusControls::new();
+        let cinema_crop_focus_row: adw::ActionRow =
+            builder.object("cinema_crop_focus_setting").unwrap();
+        cinema_crop_focus_row.add_suffix(cinema_crop_focus.widget());
+
         let widgets = PreferencesWidgets {
             reset: builder
                 .object("reset_now_playing_preferences_button")
@@ -64,6 +79,10 @@ impl NowPlayingPreferencesView {
             display_mode: builder.object("display_mode_setting").unwrap(),
             keep_screen_awake: builder.object("keep_screen_awake_setting").unwrap(),
             classic_settings: builder.object("classic_now_playing_preferences").unwrap(),
+            cinema_settings: builder.object("cinema_now_playing_preferences").unwrap(),
+            cinema_artwork_framing,
+            cinema_crop_focus_row,
+            cinema_crop_focus,
             immersive_settings: builder.object("immersive_now_playing_preferences").unwrap(),
             round_corners: builder.object("round_corners_setting").unwrap(),
             hide_track_info: builder.object("hide_track_info_setting").unwrap(),
@@ -191,6 +210,12 @@ impl NowPlayingPreferencesView {
             .classic_settings
             .set_visible(settings.display_mode.shows_classic_settings());
         self.widgets
+            .cinema_artwork_framing
+            .set_value(settings.cinema.artwork_framing);
+        self.widgets
+            .cinema_crop_focus
+            .set_value(settings.cinema.crop_focus);
+        self.widgets
             .round_corners
             .set_active(settings.classic.round_corners);
         self.widgets
@@ -286,6 +311,15 @@ impl NowPlayingPreferencesView {
         self.widgets
             .immersive_settings
             .set_visible(shows_immersive_settings);
+        let shows_cinema_settings = settings.display_mode.shows_cinema_settings();
+        self.widgets
+            .cinema_settings
+            .set_visible(shows_cinema_settings);
+        self.widgets.cinema_crop_focus_row.set_visible(
+            settings
+                .display_mode
+                .shows_cinema_crop_focus(settings.cinema.artwork_framing),
+        );
         let show_motion_controls = settings.display_mode.supports_background_motion()
             && settings.shared.background_motion_enabled;
         self.widgets
@@ -360,6 +394,28 @@ impl NowPlayingPreferencesView {
                     controller_for_transition.update(NowPlayingPreferenceChange::Transition(
                         TransitionEffect::from_index(combo.selected()),
                     ));
+                }
+            });
+
+        let applying = self.applying.clone();
+        let controller_for_cinema_framing = controller.clone();
+        self.widgets
+            .cinema_artwork_framing
+            .connect_changed(move |framing| {
+                if !applying.get() {
+                    controller_for_cinema_framing
+                        .update(NowPlayingPreferenceChange::CinemaArtworkFraming(framing));
+                }
+            });
+
+        let applying = self.applying.clone();
+        let controller_for_crop_focus = controller.clone();
+        self.widgets
+            .cinema_crop_focus
+            .connect_changed(move |focus| {
+                if !applying.get() {
+                    controller_for_crop_focus
+                        .update(NowPlayingPreferenceChange::CinemaCropFocus(focus));
                 }
             });
 

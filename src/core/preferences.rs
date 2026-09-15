@@ -487,6 +487,139 @@ impl<'de> Deserialize<'de> for DisplayMode {
     }
 }
 
+/// Selects how Cinema mode frames the foreground album artwork.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum CinemaArtworkFraming {
+    /// Keep the existing aspect-ratio-dependent framing behavior.
+    #[default]
+    Automatic,
+    /// Preserve the complete artwork without cropping it.
+    Fit,
+    /// Fill the available artwork region, cropping when necessary.
+    Fill,
+}
+
+impl CinemaArtworkFraming {
+    /// All framing choices used by serialization round-trip tests.
+    #[cfg(test)]
+    pub const ALL: [Self; 3] = [Self::Automatic, Self::Fit, Self::Fill];
+
+    /// Returns the persisted string representation of this framing choice.
+    pub fn as_preference_value(self) -> &'static str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::Fit => "fit",
+            Self::Fill => "fill",
+        }
+    }
+
+    /// Parses a persisted framing choice, defaulting to automatic framing.
+    pub fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("fit") => Self::Fit,
+            Some("fill") => Self::Fill,
+            _ => Self::Automatic,
+        }
+    }
+}
+
+impl Serialize for CinemaArtworkFraming {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_preference_value())
+    }
+}
+
+impl<'de> Deserialize<'de> for CinemaArtworkFraming {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(|value| Self::from_preference(Some(&value)))
+    }
+}
+
+/// Selects the point retained when Cinema artwork is cropped to fill its region.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum CinemaCropFocus {
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    #[default]
+    Center,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+impl CinemaCropFocus {
+    /// All crop-focus choices used by serialization round-trip tests.
+    #[cfg(test)]
+    pub const ALL: [Self; 9] = [
+        Self::TopLeft,
+        Self::Top,
+        Self::TopRight,
+        Self::Left,
+        Self::Center,
+        Self::Right,
+        Self::BottomLeft,
+        Self::Bottom,
+        Self::BottomRight,
+    ];
+
+    /// Returns the persisted string representation of this crop focus.
+    pub fn as_preference_value(self) -> &'static str {
+        match self {
+            Self::TopLeft => "top-left",
+            Self::Top => "top",
+            Self::TopRight => "top-right",
+            Self::Left => "left",
+            Self::Center => "center",
+            Self::Right => "right",
+            Self::BottomLeft => "bottom-left",
+            Self::Bottom => "bottom",
+            Self::BottomRight => "bottom-right",
+        }
+    }
+
+    /// Parses a persisted crop focus, defaulting to the center.
+    pub fn from_preference(value: Option<&str>) -> Self {
+        match value {
+            Some("top-left") => Self::TopLeft,
+            Some("top") => Self::Top,
+            Some("top-right") => Self::TopRight,
+            Some("left") => Self::Left,
+            Some("right") => Self::Right,
+            Some("bottom-left") => Self::BottomLeft,
+            Some("bottom") => Self::Bottom,
+            Some("bottom-right") => Self::BottomRight,
+            _ => Self::Center,
+        }
+    }
+}
+
+impl Serialize for CinemaCropFocus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_preference_value())
+    }
+}
+
+impl<'de> Deserialize<'de> for CinemaCropFocus {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(|value| Self::from_preference(Some(&value)))
+    }
+}
+
 /// Selects the image used to generate Cinema and Ambient backgrounds.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum ImmersiveBackgroundSource {
@@ -650,6 +783,15 @@ impl Default for ClassicNowPlayingPreferences {
     }
 }
 
+/// Settings that apply only to the Cinema Now Playing presentation.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct CinemaNowPlayingPreferences {
+    #[serde(rename = "now_playing_cinema_artwork_framing")]
+    pub artwork_framing: CinemaArtworkFraming,
+    #[serde(rename = "now_playing_cinema_crop_focus")]
+    pub crop_focus: CinemaCropFocus,
+}
+
 /// Settings and behavior shared by more than one display mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SharedNowPlayingPreferences {
@@ -706,6 +848,8 @@ pub struct NowPlayingPreferences {
     #[serde(flatten)]
     pub classic: ClassicNowPlayingPreferences,
     #[serde(flatten)]
+    pub cinema: CinemaNowPlayingPreferences,
+    #[serde(flatten)]
     pub shared: SharedNowPlayingPreferences,
 }
 
@@ -714,6 +858,7 @@ impl Default for NowPlayingPreferences {
         Self {
             display_mode: DisplayMode::default(),
             classic: ClassicNowPlayingPreferences::default(),
+            cinema: CinemaNowPlayingPreferences::default(),
             shared: SharedNowPlayingPreferences::default(),
         }
     }
@@ -747,6 +892,10 @@ struct NowPlayingPreferencesWire {
     album_cover_size: Option<AlbumCoverSize>,
     #[serde(rename = "now_playing_background_style")]
     background_style: Option<BackgroundStyle>,
+    #[serde(rename = "now_playing_cinema_artwork_framing")]
+    cinema_artwork_framing: Option<CinemaArtworkFraming>,
+    #[serde(rename = "now_playing_cinema_crop_focus")]
+    cinema_crop_focus: Option<CinemaCropFocus>,
     always_display_last_recognized_song: Option<bool>,
     #[serde(rename = "now_playing_transition")]
     transition: Option<TransitionEffect>,
@@ -782,6 +931,12 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
                 background_style: wire
                     .background_style
                     .unwrap_or(defaults.classic.background_style),
+            },
+            cinema: CinemaNowPlayingPreferences {
+                artwork_framing: wire
+                    .cinema_artwork_framing
+                    .unwrap_or(defaults.cinema.artwork_framing),
+                crop_focus: wire.cinema_crop_focus.unwrap_or(defaults.cinema.crop_focus),
             },
             shared: SharedNowPlayingPreferences {
                 keep_screen_awake: wire
@@ -840,6 +995,12 @@ impl NowPlayingPreferences {
                 self.shared.keep_screen_awake = value;
             }
             NowPlayingPreferenceChange::RoundCorners(value) => self.classic.round_corners = value,
+            NowPlayingPreferenceChange::CinemaArtworkFraming(value) => {
+                self.cinema.artwork_framing = value;
+            }
+            NowPlayingPreferenceChange::CinemaCropFocus(value) => {
+                self.cinema.crop_focus = value;
+            }
             NowPlayingPreferenceChange::HideTrackInfo(value) => {
                 self.shared.hide_track_info = value;
             }
@@ -889,6 +1050,8 @@ pub enum NowPlayingPreferenceChange {
     DisplayMode(DisplayMode),
     KeepScreenAwake(bool),
     RoundCorners(bool),
+    CinemaArtworkFraming(CinemaArtworkFraming),
+    CinemaCropFocus(CinemaCropFocus),
     HideTrackInfo(bool),
     TextSize(TextSize),
     ImmersiveBackgroundSource(ImmersiveBackgroundSource),
@@ -1085,6 +1248,7 @@ mod tests {
         BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
         BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
         BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BackdropIntensity, BackgroundStyle,
+        CinemaArtworkFraming, CinemaCropFocus, CinemaNowPlayingPreferences,
         ClassicNowPlayingPreferences, DisplayMode, ImmersiveBackgroundSource,
         NowPlayingPreferenceChange, NowPlayingPreferences, Preferences, PreferencesInterface,
         PreferencesPatch, SharedNowPlayingPreferences, TRANSITION_DURATION_DEFAULT_MS,
@@ -1125,6 +1289,11 @@ mod tests {
             AlbumCoverSize::MEDIUM_LARGE_MIDPOINT
         );
         assert_eq!(defaults.classic.background_style, BackgroundStyle::Gradient);
+        assert_eq!(
+            defaults.cinema.artwork_framing,
+            CinemaArtworkFraming::Automatic
+        );
+        assert_eq!(defaults.cinema.crop_focus, CinemaCropFocus::Center);
         assert!(!defaults.shared.keep_screen_awake);
         assert!(!defaults.shared.hide_track_info);
         assert_eq!(defaults.shared.text_size, TextSize::MEDIUM);
@@ -1203,6 +1372,14 @@ mod tests {
             table["now_playing_background_style"].as_str(),
             Some("gradient")
         );
+        assert_eq!(
+            table["now_playing_cinema_artwork_framing"].as_str(),
+            Some("automatic")
+        );
+        assert_eq!(
+            table["now_playing_cinema_crop_focus"].as_str(),
+            Some("center")
+        );
         assert_eq!(table["now_playing_transition"].as_str(), Some("none"));
         assert_eq!(
             table["now_playing_transition_duration_ms"].as_integer(),
@@ -1238,6 +1415,7 @@ lights_off_enabled = false
                     album_cover_size: AlbumCoverSize::SMALL,
                     background_style: BackgroundStyle::Solid,
                 },
+                cinema: CinemaNowPlayingPreferences::default(),
                 shared: SharedNowPlayingPreferences {
                     keep_screen_awake: false,
                     hide_track_info: true,
@@ -1254,6 +1432,47 @@ lights_off_enabled = false
                 },
             }
         );
+    }
+
+    #[test]
+    fn cinema_framing_preferences_are_backward_compatible_and_round_trip() {
+        let missing: Preferences = toml::from_str("hide_now_playing_info = false").unwrap();
+        assert_eq!(
+            missing.now_playing.cinema,
+            CinemaNowPlayingPreferences::default()
+        );
+
+        let unknown: Preferences = toml::from_str(
+            r#"
+now_playing_cinema_artwork_framing = "unknown"
+now_playing_cinema_crop_focus = "unknown"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            unknown.now_playing.cinema,
+            CinemaNowPlayingPreferences::default()
+        );
+
+        let configured: Preferences = toml::from_str(
+            r#"
+now_playing_cinema_artwork_framing = "fill"
+now_playing_cinema_crop_focus = "top-right"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            configured.now_playing.cinema.artwork_framing,
+            CinemaArtworkFraming::Fill
+        );
+        assert_eq!(
+            configured.now_playing.cinema.crop_focus,
+            CinemaCropFocus::TopRight
+        );
+
+        let serialized = toml::to_string(&configured).unwrap();
+        let deserialized: Preferences = toml::from_str(&serialized).unwrap();
+        assert_eq!(deserialized.now_playing, configured.now_playing);
     }
 
     #[test]
@@ -1423,6 +1642,10 @@ now_playing_background_motion_reversal_duration_secs = 23
                         background_style: BackgroundStyle::Solid,
                         ..ClassicNowPlayingPreferences::default()
                     },
+                    cinema: CinemaNowPlayingPreferences {
+                        artwork_framing: CinemaArtworkFraming::Fill,
+                        crop_focus: CinemaCropFocus::BottomLeft,
+                    },
                     shared: SharedNowPlayingPreferences {
                         hide_track_info: true,
                         text_size: TextSize::from_scale_value(113.0),
@@ -1481,6 +1704,10 @@ now_playing_background_motion_reversal_duration_secs = 23
                     album_cover_size: AlbumCoverSize::SMALL,
                     ..ClassicNowPlayingPreferences::default()
                 },
+                cinema: CinemaNowPlayingPreferences {
+                    artwork_framing: CinemaArtworkFraming::Fill,
+                    crop_focus: CinemaCropFocus::BottomRight,
+                },
                 shared: SharedNowPlayingPreferences {
                     keep_screen_awake: true,
                     hide_track_info: true,
@@ -1527,6 +1754,12 @@ now_playing_background_motion_reversal_duration_secs = 23
         interface.update_now_playing(NowPlayingPreferenceChange::BackdropIntensity(
             BackdropIntensity::Bold,
         ));
+        interface.update_now_playing(NowPlayingPreferenceChange::CinemaArtworkFraming(
+            CinemaArtworkFraming::Fill,
+        ));
+        interface.update_now_playing(NowPlayingPreferenceChange::CinemaCropFocus(
+            CinemaCropFocus::TopLeft,
+        ));
         interface.update_now_playing(NowPlayingPreferenceChange::RoundCorners(false));
         interface.update_now_playing(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Ambient,
@@ -1554,6 +1787,14 @@ now_playing_background_motion_reversal_duration_secs = 23
         assert_eq!(
             interface.preferences.now_playing.shared.backdrop_intensity,
             BackdropIntensity::Bold
+        );
+        assert_eq!(
+            interface.preferences.now_playing.cinema.artwork_framing,
+            CinemaArtworkFraming::Fill
+        );
+        assert_eq!(
+            interface.preferences.now_playing.cinema.crop_focus,
+            CinemaCropFocus::TopLeft
         );
         assert!(!interface.preferences.now_playing.classic.round_corners);
 
@@ -1637,6 +1878,28 @@ now_playing_background_motion_reversal_duration_secs = 23
                 mode
             );
         }
+
+        for framing in CinemaArtworkFraming::ALL {
+            assert_eq!(
+                CinemaArtworkFraming::from_preference(Some(framing.as_preference_value())),
+                framing
+            );
+        }
+        assert_eq!(
+            CinemaArtworkFraming::from_preference(Some("unknown")),
+            CinemaArtworkFraming::Automatic
+        );
+
+        for focus in CinemaCropFocus::ALL {
+            assert_eq!(
+                CinemaCropFocus::from_preference(Some(focus.as_preference_value())),
+                focus
+            );
+        }
+        assert_eq!(
+            CinemaCropFocus::from_preference(Some("unknown")),
+            CinemaCropFocus::Center
+        );
 
         for effect in TransitionEffect::ALL {
             assert_eq!(

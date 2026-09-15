@@ -585,6 +585,22 @@ Adw.ApplicationWindow main_window {
               }
             }
 
+            Adw.PreferencesGroup cinema_now_playing_preferences {
+              title: _("Cinema settings");
+              visible: false;
+
+              Adw.ActionRow cinema_artwork_framing_setting {
+                subtitle: _("Choose whether the whole cover is shown or cropped to fill its frame");
+                title: _("Artwork framing");
+              }
+
+              Adw.ActionRow cinema_crop_focus_setting {
+                subtitle: _("Choose which part of the cover stays visible when Fill crops it");
+                title: _("Crop focus");
+                visible: false;
+              }
+            }
+
             Adw.PreferencesGroup immersive_now_playing_preferences {
               title: _("Cinema and Ambient settings");
               visible: false;

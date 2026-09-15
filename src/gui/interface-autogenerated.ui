@@ -684,6 +684,25 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           </object>
                         </child>
                         <child>
+                          <object class="AdwPreferencesGroup" id="cinema_now_playing_preferences">
+                            <property name="title" translatable="yes">Cinema settings</property>
+                            <property name="visible">false</property>
+                            <child>
+                              <object class="AdwActionRow" id="cinema_artwork_framing_setting">
+                                <property name="subtitle" translatable="yes">Choose whether the whole cover is shown or cropped to fill its frame</property>
+                                <property name="title" translatable="yes">Artwork framing</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwActionRow" id="cinema_crop_focus_setting">
+                                <property name="subtitle" translatable="yes">Choose which part of the cover stays visible when Fill crops it</property>
+                                <property name="title" translatable="yes">Crop focus</property>
+                                <property name="visible">false</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
                           <object class="AdwPreferencesGroup" id="immersive_now_playing_preferences">
                             <property name="title" translatable="yes">Cinema and Ambient settings</property>
                             <property name="visible">false</property>

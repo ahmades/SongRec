@@ -1,12 +1,22 @@
 //! GTK selector presentation for the Now Playing display mode.
 
-use crate::core::preferences::DisplayMode;
+use crate::core::preferences::{CinemaArtworkFraming, DisplayMode};
 use gettextrs::gettext;
 
 impl DisplayMode {
     /// Whether the Classic-only settings group applies to this mode.
     pub(crate) const fn shows_classic_settings(self) -> bool {
         matches!(self, Self::Classic)
+    }
+
+    /// Whether the Cinema-only artwork-framing controls apply to this mode.
+    pub(crate) const fn shows_cinema_settings(self) -> bool {
+        matches!(self, Self::Cinema)
+    }
+
+    /// Whether the crop-focus detail is relevant to the current Cinema framing.
+    pub(crate) const fn shows_cinema_crop_focus(self, framing: CinemaArtworkFraming) -> bool {
+        self.shows_cinema_settings() && matches!(framing, CinemaArtworkFraming::Fill)
     }
 
     /// Whether this mode can remain useful after its metadata is hidden.
@@ -60,7 +70,7 @@ impl DisplayMode {
 
 #[cfg(test)]
 mod tests {
-    use super::DisplayMode;
+    use super::{CinemaArtworkFraming, DisplayMode};
 
     #[test]
     fn display_mode_dropdown_indices_follow_the_all_table() {
@@ -79,6 +89,21 @@ mod tests {
                 matches!(display_mode, DisplayMode::Classic)
             );
         }
+    }
+
+    #[test]
+    fn only_cinema_exposes_cinema_settings() {
+        for display_mode in DisplayMode::ALL {
+            assert_eq!(
+                display_mode.shows_cinema_settings(),
+                matches!(display_mode, DisplayMode::Cinema)
+            );
+        }
+
+        assert!(!DisplayMode::Cinema.shows_cinema_crop_focus(CinemaArtworkFraming::Automatic));
+        assert!(!DisplayMode::Cinema.shows_cinema_crop_focus(CinemaArtworkFraming::Fit));
+        assert!(DisplayMode::Cinema.shows_cinema_crop_focus(CinemaArtworkFraming::Fill));
+        assert!(!DisplayMode::Ambient.shows_cinema_crop_focus(CinemaArtworkFraming::Fill));
     }
 
     #[test]

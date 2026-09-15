@@ -1,14 +1,16 @@
 //! Context-menu construction and preference-update signal bindings.
 
+use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::ui::toggle_fullscreen;
 use super::{
     AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
     BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
     BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS, BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
     BACKGROUND_MOTION_ZOOM_MAX_PERCENT, BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
-    BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, DisplayMode, ImmersiveBackgroundSource,
-    NowPlayingSettings, NowPlayingWindow, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
-    TextSize, TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
+    BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus,
+    DisplayMode, ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow,
+    TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TextSize, TrackInfoAlignment,
+    TransitionEffect, transition_duration_from_scale,
 };
 use crate::core::preferences::{BackdropIntensity, NowPlayingPreferenceChange};
 use adw::prelude::*;
@@ -106,6 +108,7 @@ pub(super) struct NowPlayingControls {
     pub(super) display_mode_menu: gtk::DropDown,
     pub(super) keep_screen_awake: gtk::Switch,
     pub(super) classic_settings: gtk::Box,
+    pub(super) cinema_settings: gtk::Box,
     pub(super) immersive_settings: gtk::Box,
     pub(super) round_corners: gtk::Switch,
     pub(super) hide_track_info_label: gtk::Label,
@@ -129,6 +132,9 @@ pub(super) struct NowPlayingControls {
     pub(super) track_info_alignment_center: gtk::ToggleButton,
     pub(super) track_info_alignment_right: gtk::ToggleButton,
     pub(super) album_cover_size: gtk::Scale,
+    pub(super) cinema_artwork_framing: CinemaArtworkFramingControls,
+    pub(super) cinema_crop_focus_label: gtk::Label,
+    pub(super) cinema_crop_focus: CinemaCropFocusControls,
     pub(super) always_display_last_recognized_song: gtk::Switch,
     pub(super) transition_menu: gtk::DropDown,
     pub(super) transition_duration: gtk::Scale,
@@ -149,6 +155,10 @@ pub(super) fn build_controls() -> NowPlayingControls {
     let display_mode_menu = gtk::DropDown::from_strings(&display_mode_label_references);
     let keep_screen_awake = gtk::Switch::new();
     let classic_settings = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(6)
+        .build();
+    let cinema_settings = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(6)
         .build();
@@ -215,6 +225,9 @@ pub(super) fn build_controls() -> NowPlayingControls {
     AlbumCoverSize::install_slider_snap(&album_cover_size);
     album_cover_size.set_value(AlbumCoverSize::default().scale_value());
     album_cover_size.set_width_request(190);
+    let cinema_artwork_framing = CinemaArtworkFramingControls::new();
+    let cinema_crop_focus_label = gtk::Label::new(Some(&gettext("Crop focus")));
+    let cinema_crop_focus = CinemaCropFocusControls::new();
     let always_display_last_recognized_song = gtk::Switch::new();
     let transition_labels: Vec<_> = TransitionEffect::ALL
         .into_iter()
@@ -251,6 +264,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         display_mode_menu,
         keep_screen_awake,
         classic_settings,
+        cinema_settings,
         immersive_settings,
         round_corners,
         hide_track_info_label,
@@ -274,6 +288,9 @@ pub(super) fn build_controls() -> NowPlayingControls {
         track_info_alignment_center,
         track_info_alignment_right,
         album_cover_size,
+        cinema_artwork_framing,
+        cinema_crop_focus_label,
+        cinema_crop_focus,
         always_display_last_recognized_song,
         transition_menu,
         transition_duration,
@@ -406,6 +423,18 @@ impl NowPlayingWindow {
             .classic_settings
             .set_visible(settings.display_mode.shows_classic_settings());
         menu_box.append(&self.controls.classic_settings);
+
+        let cinema_heading = section_heading(&gettext("Cinema settings"));
+        self.controls.cinema_settings.append(&cinema_heading);
+        let cinema_grid = menu_grid();
+        self.add_cinema_artwork_framing_menu_row(&cinema_grid, 0, settings.cinema.artwork_framing);
+        self.add_cinema_crop_focus_menu_row(&cinema_grid, 1, settings.cinema.crop_focus);
+        self.controls.cinema_settings.append(&cinema_grid);
+        self.update_cinema_control_visibility(
+            settings.display_mode,
+            settings.cinema.artwork_framing,
+        );
+        menu_box.append(&self.controls.cinema_settings);
 
         let immersive_heading = section_heading(&gettext("Cinema and Ambient settings"));
         self.controls.immersive_settings.append(&immersive_heading);
@@ -732,6 +761,23 @@ impl NowPlayingWindow {
         self.controls.text_size.set_visible(visible);
     }
 
+    pub(super) fn update_cinema_control_visibility(
+        &self,
+        display_mode: DisplayMode,
+        framing: CinemaArtworkFraming,
+    ) {
+        let shows_cinema = display_mode.shows_cinema_settings();
+        self.controls.cinema_settings.set_visible(shows_cinema);
+        let shows_crop_focus = display_mode.shows_cinema_crop_focus(framing);
+        self.controls
+            .cinema_crop_focus_label
+            .set_visible(shows_crop_focus);
+        self.controls
+            .cinema_crop_focus
+            .widget()
+            .set_visible(shows_crop_focus);
+    }
+
     pub(super) fn update_immersive_control_visibility(
         &self,
         display_mode: DisplayMode,
@@ -752,6 +798,40 @@ impl NowPlayingWindow {
         self.controls
             .background_motion_reversal_duration
             .set_visible(show_details);
+    }
+
+    /// Adds Cinema's framing selector without changing its responsive outer layout.
+    fn add_cinema_artwork_framing_menu_row(
+        &self,
+        menu_grid: &gtk::Grid,
+        row: i32,
+        framing: CinemaArtworkFraming,
+    ) {
+        let label = gtk::Label::new(Some(&gettext("Artwork framing")));
+        label.set_halign(gtk::Align::Start);
+        label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
+        menu_grid.attach(&label, 0, row, 1, 1);
+        self.controls.cinema_artwork_framing.set_value(framing);
+        label_control(&label, self.controls.cinema_artwork_framing.widget());
+        menu_grid.attach(self.controls.cinema_artwork_framing.widget(), 1, row, 1, 1);
+    }
+
+    /// Adds the retained 3×3 selector used only by Cinema's Fill framing.
+    fn add_cinema_crop_focus_menu_row(
+        &self,
+        menu_grid: &gtk::Grid,
+        row: i32,
+        focus: CinemaCropFocus,
+    ) {
+        let label = &self.controls.cinema_crop_focus_label;
+        label.set_halign(gtk::Align::Start);
+        label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
+        menu_grid.attach(label, 0, row, 1, 1);
+        self.controls.cinema_crop_focus.set_value(focus);
+        label_control(label, self.controls.cinema_crop_focus.widget());
+        menu_grid.attach(self.controls.cinema_crop_focus.widget(), 1, row, 1, 1);
     }
 
     /// Adds the shared Cinema/Ambient background-source segmented control.
@@ -1026,6 +1106,25 @@ impl NowPlayingWindow {
                     controller.update(NowPlayingPreferenceChange::Transition(
                         TransitionEffect::from_index(dropdown.selected()),
                     ));
+                }
+            });
+
+        let applying = self.state.applying_settings.clone();
+        let controller = self.controller.clone();
+        self.controls
+            .cinema_artwork_framing
+            .connect_changed(move |framing| {
+                if !applying.get() {
+                    controller.update(NowPlayingPreferenceChange::CinemaArtworkFraming(framing));
+                }
+            });
+        let applying = self.state.applying_settings.clone();
+        let controller = self.controller.clone();
+        self.controls
+            .cinema_crop_focus
+            .connect_changed(move |focus| {
+                if !applying.get() {
+                    controller.update(NowPlayingPreferenceChange::CinemaCropFocus(focus));
                 }
             });
 

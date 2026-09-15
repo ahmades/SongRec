@@ -11,8 +11,8 @@ use super::transition::RevealerLayout;
 use super::tuning::layout::*;
 use super::tuning::missing_artwork::*;
 use super::{
-    AlbumCoverSize, DisplayMode, TRANSITION_DURATION_DEFAULT_MS, TrackInfoAlignment,
-    TransitionEffect,
+    AlbumCoverSize, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
+    TRANSITION_DURATION_DEFAULT_MS, TrackInfoAlignment, TransitionEffect,
 };
 use adw::prelude::*;
 use gettextrs::gettext;
@@ -59,14 +59,92 @@ fn cinema_layout(width: i32, height: i32, source: (i32, i32)) -> CinemaLayout {
     }
 }
 
+/// Allocates the sharp cover inside Cinema's existing responsive artwork region.
+///
+/// This deliberately operates inside [`CinemaLayout::artwork`]: changing the
+/// user-facing framing must not move the metadata or switch between the
+/// overlay, side-by-side, and stacked Cinema compositions.
+fn cinema_foreground_rect(
+    viewport_width: i32,
+    viewport_height: i32,
+    source_dimensions: (i32, i32),
+    framing: CinemaArtworkFraming,
+    crop_focus: CinemaCropFocus,
+) -> gdk::Rectangle {
+    let viewport = gdk::Rectangle::new(0, 0, viewport_width.max(0), viewport_height.max(0));
+    let (source_width, source_height) = source_dimensions;
+    if viewport_width <= 0 || viewport_height <= 0 || source_width <= 0 || source_height <= 0 {
+        return viewport;
+    }
+
+    if framing == CinemaArtworkFraming::Automatic {
+        return viewport;
+    }
+
+    let width_scale = f64::from(viewport_width) / f64::from(source_width);
+    let height_scale = f64::from(viewport_height) / f64::from(source_height);
+    let scale = match framing {
+        CinemaArtworkFraming::Automatic => unreachable!("handled above"),
+        CinemaArtworkFraming::Fit => width_scale.min(height_scale),
+        CinemaArtworkFraming::Fill => width_scale.max(height_scale),
+    };
+    let scaled_dimension = |source: i32, round_up: bool| {
+        let scaled = f64::from(source) * scale;
+        let rounded = if round_up {
+            scaled.ceil()
+        } else {
+            scaled.round()
+        };
+        rounded.clamp(1.0, f64::from(i32::MAX)) as i32
+    };
+    let round_up = framing == CinemaArtworkFraming::Fill;
+    let draw_width = scaled_dimension(source_width, round_up);
+    let draw_height = scaled_dimension(source_height, round_up);
+
+    match framing {
+        CinemaArtworkFraming::Automatic => unreachable!("handled above"),
+        CinemaArtworkFraming::Fit => gdk::Rectangle::new(
+            viewport_width.saturating_sub(draw_width) / 2,
+            viewport_height.saturating_sub(draw_height) / 2,
+            draw_width.min(viewport_width),
+            draw_height.min(viewport_height),
+        ),
+        CinemaArtworkFraming::Fill => {
+            let (focus_x, focus_y) = cinema_crop_focus_coordinates(crop_focus);
+            let overflow_x = draw_width.saturating_sub(viewport_width);
+            let overflow_y = draw_height.saturating_sub(viewport_height);
+            let x = -((f64::from(overflow_x) * focus_x).round() as i32);
+            let y = -((f64::from(overflow_y) * focus_y).round() as i32);
+            gdk::Rectangle::new(x, y, draw_width, draw_height)
+        }
+    }
+}
+
+fn cinema_crop_focus_coordinates(focus: CinemaCropFocus) -> (f64, f64) {
+    match focus {
+        CinemaCropFocus::TopLeft => (0.0, 0.0),
+        CinemaCropFocus::Top => (0.5, 0.0),
+        CinemaCropFocus::TopRight => (1.0, 0.0),
+        CinemaCropFocus::Left => (0.0, 0.5),
+        CinemaCropFocus::Center => (0.5, 0.5),
+        CinemaCropFocus::Right => (1.0, 0.5),
+        CinemaCropFocus::BottomLeft => (0.0, 1.0),
+        CinemaCropFocus::Bottom => (0.5, 1.0),
+        CinemaCropFocus::BottomRight => (1.0, 1.0),
+    }
+}
+
 /// Cinema artwork with an automatic non-destructive fallback for mismatched aspect ratios.
 #[derive(Clone)]
 pub(super) struct CinemaArtworkLayout {
     pub(super) container: gtk::Overlay,
     backdrop: gtk::Picture,
+    foreground_viewport: gtk::Overlay,
     foreground: gtk::Picture,
     backdrop_motion: BackdropMotion,
     source_dimensions: Rc<Cell<(i32, i32)>>,
+    artwork_framing: Rc<Cell<CinemaArtworkFraming>>,
+    crop_focus: Rc<Cell<CinemaCropFocus>>,
 }
 
 impl CinemaArtworkLayout {
@@ -87,22 +165,39 @@ impl CinemaArtworkLayout {
             .build();
         foreground.set_can_target(false);
 
+        // The outer allocation remains the responsive Cinema artwork region.
+        // This inner viewport clips an oversized Fill allocation so crop focus
+        // can move the source without letting it spill into the metadata area.
+        let foreground_viewport = gtk::Overlay::builder()
+            .hexpand(true)
+            .vexpand(true)
+            .overflow(gtk::Overflow::Hidden)
+            .build();
+        let foreground_reservation = gtk::Box::builder().hexpand(true).vexpand(true).build();
+        foreground_viewport.set_child(Some(&foreground_reservation));
+        foreground_viewport.add_overlay(&foreground);
+        foreground_viewport.set_measure_overlay(&foreground, false);
+        foreground_viewport.set_clip_overlay(&foreground, true);
+        foreground_viewport.set_can_target(false);
+
         let container = gtk::Overlay::builder().hexpand(true).vexpand(true).build();
         let reservation = gtk::Box::builder().hexpand(true).vexpand(true).build();
         container.set_child(Some(&reservation));
         container.add_overlay(&backdrop);
         container.set_measure_overlay(&backdrop, false);
         container.set_clip_overlay(&backdrop, true);
-        container.add_overlay(&foreground);
-        container.set_measure_overlay(&foreground, false);
-        container.set_clip_overlay(&foreground, true);
+        container.add_overlay(&foreground_viewport);
+        container.set_measure_overlay(&foreground_viewport, false);
+        container.set_clip_overlay(&foreground_viewport, true);
         container.set_can_target(false);
 
         let backdrop_motion = BackdropMotion::new(&container);
         let source_dimensions = Rc::new(Cell::new((0, 0)));
+        let artwork_framing = Rc::new(Cell::new(CinemaArtworkFraming::default()));
+        let crop_focus = Rc::new(Cell::new(CinemaCropFocus::default()));
         let source_dimensions_for_position = source_dimensions.clone();
         let backdrop_widget = backdrop.clone().upcast::<gtk::Widget>();
-        let foreground_widget = foreground.clone().upcast::<gtk::Widget>();
+        let foreground_viewport_widget = foreground_viewport.clone().upcast::<gtk::Widget>();
         let backdrop_motion_for_position = backdrop_motion.clone();
         container.connect_get_child_position(move |overlay, child| {
             if child == &backdrop_widget {
@@ -110,7 +205,7 @@ impl CinemaArtworkLayout {
                     backdrop_motion_for_position.backdrop_rect(overlay.width(), overlay.height()),
                 );
             }
-            if child != &foreground_widget {
+            if child != &foreground_viewport_widget {
                 return None;
             }
 
@@ -124,12 +219,33 @@ impl CinemaArtworkLayout {
             )
         });
 
+        let source_dimensions_for_framing = source_dimensions.clone();
+        let artwork_framing_for_position = artwork_framing.clone();
+        let crop_focus_for_position = crop_focus.clone();
+        let foreground_widget = foreground.clone().upcast::<gtk::Widget>();
+        foreground_viewport.connect_get_child_position(move |overlay, child| {
+            if child != &foreground_widget {
+                return None;
+            }
+
+            Some(cinema_foreground_rect(
+                overlay.width(),
+                overlay.height(),
+                source_dimensions_for_framing.get(),
+                artwork_framing_for_position.get(),
+                crop_focus_for_position.get(),
+            ))
+        });
+
         Self {
             container,
             backdrop,
+            foreground_viewport,
             foreground,
             backdrop_motion,
             source_dimensions,
+            artwork_framing,
+            crop_focus,
         }
     }
 
@@ -149,6 +265,28 @@ impl CinemaArtworkLayout {
         }
         self.backdrop.set_paintable(ambient);
         self.container.queue_allocate();
+    }
+
+    /// Changes how the existing foreground texture occupies its Cinema region.
+    pub(super) fn set_artwork_framing(&self, framing: CinemaArtworkFraming) {
+        let content_fit = if framing == CinemaArtworkFraming::Fit {
+            gtk::ContentFit::Contain
+        } else {
+            gtk::ContentFit::Cover
+        };
+        if self.foreground.content_fit() != content_fit {
+            self.foreground.set_content_fit(content_fit);
+        }
+        if self.artwork_framing.replace(framing) != framing {
+            self.foreground_viewport.queue_allocate();
+        }
+    }
+
+    /// Moves the crop window used by explicit Fill framing.
+    pub(super) fn set_crop_focus(&self, crop_focus: CinemaCropFocus) {
+        if self.crop_focus.replace(crop_focus) != crop_focus {
+            self.foreground_viewport.queue_allocate();
+        }
     }
 
     pub(super) fn set_background_motion(
@@ -1142,10 +1280,10 @@ fn cinema_artwork_rect(
 #[cfg(test)]
 mod tests {
     use super::{
-        CinemaFraming, cinema_artwork_rect, cinema_framing, classic_padding_for_size,
-        immersive_info_placement,
+        CinemaFraming, cinema_artwork_rect, cinema_foreground_rect, cinema_framing,
+        classic_padding_for_size, immersive_info_placement,
     };
-    use crate::gui::now_playing_window::DisplayMode;
+    use crate::gui::now_playing_window::{CinemaArtworkFraming, CinemaCropFocus, DisplayMode};
     use adw::prelude::*;
 
     #[test]
@@ -1343,5 +1481,127 @@ mod tests {
     #[test]
     fn cinema_framing_handles_unallocated_widgets() {
         assert_eq!(cinema_framing(0, 0, (0, 0)), CinemaFraming::Cover);
+    }
+
+    #[test]
+    fn cinema_automatic_framing_preserves_the_existing_cover_allocation() {
+        assert_eq!(
+            cinema_foreground_rect(
+                820,
+                720,
+                (1_000, 1_000),
+                CinemaArtworkFraming::Automatic,
+                CinemaCropFocus::BottomRight,
+            ),
+            gdk::Rectangle::new(0, 0, 820, 720)
+        );
+    }
+
+    #[test]
+    fn cinema_fit_centers_the_complete_artwork_without_distortion() {
+        assert_eq!(
+            cinema_foreground_rect(
+                820,
+                720,
+                (1_000, 1_000),
+                CinemaArtworkFraming::Fit,
+                CinemaCropFocus::Center,
+            ),
+            gdk::Rectangle::new(50, 0, 720, 720)
+        );
+        assert_eq!(
+            cinema_foreground_rect(
+                720,
+                820,
+                (1_000, 1_000),
+                CinemaArtworkFraming::Fit,
+                CinemaCropFocus::Center,
+            ),
+            gdk::Rectangle::new(0, 50, 720, 720)
+        );
+    }
+
+    #[test]
+    fn cinema_fill_uses_vertical_focus_for_vertical_crop_overflow() {
+        let render = |focus| {
+            cinema_foreground_rect(820, 720, (1_000, 1_000), CinemaArtworkFraming::Fill, focus)
+        };
+
+        assert_eq!(
+            render(CinemaCropFocus::Top),
+            gdk::Rectangle::new(0, 0, 820, 820)
+        );
+        assert_eq!(
+            render(CinemaCropFocus::Center),
+            gdk::Rectangle::new(0, -50, 820, 820)
+        );
+        assert_eq!(
+            render(CinemaCropFocus::Bottom),
+            gdk::Rectangle::new(0, -100, 820, 820)
+        );
+    }
+
+    #[test]
+    fn cinema_fill_uses_horizontal_focus_for_horizontal_crop_overflow() {
+        let render = |focus| {
+            cinema_foreground_rect(720, 820, (1_000, 1_000), CinemaArtworkFraming::Fill, focus)
+        };
+
+        assert_eq!(
+            render(CinemaCropFocus::Left),
+            gdk::Rectangle::new(0, 0, 820, 820)
+        );
+        assert_eq!(
+            render(CinemaCropFocus::Center),
+            gdk::Rectangle::new(-50, 0, 820, 820)
+        );
+        assert_eq!(
+            render(CinemaCropFocus::Right),
+            gdk::Rectangle::new(-100, 0, 820, 820)
+        );
+    }
+
+    #[test]
+    fn cinema_crop_focus_does_not_move_an_exact_aspect_image() {
+        for focus in [
+            CinemaCropFocus::TopLeft,
+            CinemaCropFocus::Top,
+            CinemaCropFocus::TopRight,
+            CinemaCropFocus::Left,
+            CinemaCropFocus::Center,
+            CinemaCropFocus::Right,
+            CinemaCropFocus::BottomLeft,
+            CinemaCropFocus::Bottom,
+            CinemaCropFocus::BottomRight,
+        ] {
+            assert_eq!(
+                cinema_foreground_rect(800, 400, (1_600, 800), CinemaArtworkFraming::Fill, focus,),
+                gdk::Rectangle::new(0, 0, 800, 400)
+            );
+        }
+    }
+
+    #[test]
+    fn cinema_user_framing_handles_unallocated_or_missing_sources() {
+        assert_eq!(
+            cinema_foreground_rect(
+                0,
+                720,
+                (1_000, 1_000),
+                CinemaArtworkFraming::Fill,
+                CinemaCropFocus::Center,
+            ),
+            gdk::Rectangle::new(0, 0, 0, 720)
+        );
+        assert_eq!(
+            cinema_foreground_rect(
+                820,
+                720,
+                (0, 0),
+                CinemaArtworkFraming::Fit,
+                CinemaCropFocus::Center,
+            ),
+            gdk::Rectangle::new(0, 0, 820, 720)
+        );
     }
 }

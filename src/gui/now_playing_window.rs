@@ -7,6 +7,7 @@
 
 mod album_cover_size;
 mod background;
+mod cinema_framing;
 mod controller;
 mod display_mode;
 mod main_preferences;
@@ -37,8 +38,8 @@ use state::NowPlayingState;
 use ui::NowPlayingWidgets;
 
 pub use crate::core::preferences::{
-    AlbumCoverSize, BackdropIntensity, BackgroundStyle, DisplayMode, ImmersiveBackgroundSource,
-    TextSize, TrackInfoAlignment, TransitionEffect,
+    AlbumCoverSize, BackdropIntensity, BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus,
+    DisplayMode, ImmersiveBackgroundSource, TextSize, TrackInfoAlignment, TransitionEffect,
 };
 pub(crate) use crate::core::preferences::{
     BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS,

@@ -3,9 +3,9 @@
 use super::track::TrackPresentation;
 use super::ui::apply_classic_track_info_alignment;
 use super::{
-    AlbumCoverSize, BackdropIntensity, DisplayMode, ImmersiveBackgroundSource, NowPlayingSettings,
-    NowPlayingWindow, TextSize, TrackInfoAlignment, TransitionEffect,
-    clamp_background_motion_zoom_percent, clamp_transition_duration_ms,
+    AlbumCoverSize, BackdropIntensity, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
+    ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow, TextSize, TrackInfoAlignment,
+    TransitionEffect, clamp_background_motion_zoom_percent, clamp_transition_duration_ms,
     normalize_background_motion_reversal_duration_secs,
 };
 use adw::prelude::*;
@@ -46,6 +46,12 @@ impl NowPlayingWindow {
             }
             if changed!(classic.round_corners) {
                 self.set_round_corners(settings.classic.round_corners);
+            }
+            if changed!(cinema.artwork_framing) || changed!(cinema.crop_focus) {
+                self.set_cinema_artwork_framing(
+                    settings.cinema.artwork_framing,
+                    settings.cinema.crop_focus,
+                );
             }
             if changed!(shared.hide_track_info) {
                 self.set_show_track_info(!settings.shared.hide_track_info);
@@ -109,6 +115,10 @@ impl NowPlayingWindow {
             self.controls
                 .classic_settings
                 .set_visible(display_mode.shows_classic_settings());
+            self.update_cinema_control_visibility(
+                display_mode,
+                self.state.settings.get().cinema.artwork_framing,
+            );
             self.controls
                 .hide_track_info_label
                 .set_visible(display_mode.supports_hiding_track_info());
@@ -128,6 +138,21 @@ impl NowPlayingWindow {
         self.reconcile_pending_transition();
         self.resume_artwork_preparation();
         self.ensure_artist_background();
+    }
+
+    /// Applies Cinema foreground fitting and crop focus to the retained texture.
+    pub(super) fn set_cinema_artwork_framing(
+        &self,
+        framing: CinemaArtworkFraming,
+        crop_focus: CinemaCropFocus,
+    ) {
+        self.with_preference_updates_suspended(|| {
+            self.controls.cinema_artwork_framing.set_value(framing);
+            self.controls.cinema_crop_focus.set_value(crop_focus);
+            self.update_cinema_control_visibility(self.state.settings.get().display_mode, framing);
+        });
+        self.ui.cinema_artwork.set_artwork_framing(framing);
+        self.ui.cinema_artwork.set_crop_focus(crop_focus);
     }
 
     /// Keeps the desktop session active only while this window is viewable.

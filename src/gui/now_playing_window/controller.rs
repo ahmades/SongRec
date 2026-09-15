@@ -120,7 +120,8 @@ mod tests {
     use super::NowPlayingSettingsController;
     use crate::core::preferences::{
         BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
-        DisplayMode, NowPlayingPreferenceChange, NowPlayingPreferences, TextSize,
+        CinemaArtworkFraming, CinemaCropFocus, DisplayMode, NowPlayingPreferenceChange,
+        NowPlayingPreferences, TextSize,
     };
 
     #[test]
@@ -147,6 +148,21 @@ mod tests {
         controller.update(NowPlayingPreferenceChange::DisplayMode(
             DisplayMode::Ambient,
         ));
+        controller.update(NowPlayingPreferenceChange::CinemaArtworkFraming(
+            CinemaArtworkFraming::Fill,
+        ));
+        controller.update(NowPlayingPreferenceChange::CinemaCropFocus(
+            CinemaCropFocus::TopRight,
+        ));
+        controller.update(NowPlayingPreferenceChange::DisplayMode(DisplayMode::Cinema));
+        assert_eq!(
+            controller.settings().cinema.artwork_framing,
+            CinemaArtworkFraming::Fill
+        );
+        assert_eq!(
+            controller.settings().cinema.crop_focus,
+            CinemaCropFocus::TopRight
+        );
         controller.update(NowPlayingPreferenceChange::BackgroundMotionEnabled(true));
         controller.update(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(
             u16::MAX,

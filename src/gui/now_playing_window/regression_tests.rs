@@ -246,7 +246,9 @@ impl Drop for TestWindow {
 #[test]
 #[ignore = "requires a GTK display and private D-Bus session"]
 fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
-    use crate::core::preferences::{BackdropIntensity, Preferences, PreferencesInterface};
+    use crate::core::preferences::{
+        BackdropIntensity, CinemaArtworkFraming, CinemaCropFocus, Preferences, PreferencesInterface,
+    };
     use crate::core::thread_messages::GUIMessage;
     use std::cell::Cell;
     use std::rc::Rc;
@@ -308,6 +310,10 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
     let backdrop_soft: gtk::ToggleButton = builder.object("backdrop_intensity_soft").unwrap();
     let backdrop_bold: gtk::ToggleButton = builder.object("backdrop_intensity_bold").unwrap();
     let text_row: adw::ActionRow = builder.object("text_size_setting").unwrap();
+    let cinema_group: adw::PreferencesGroup =
+        builder.object("cinema_now_playing_preferences").unwrap();
+    let cinema_crop_focus_row: adw::ActionRow =
+        builder.object("cinema_crop_focus_setting").unwrap();
     let expected = Rc::new(Cell::new(controller.settings()));
     let saved_expected = expected.clone();
     let preferences_for_activate = preferences.clone();
@@ -352,6 +358,35 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
         dispatch();
         mode.set_selected(super::DisplayMode::Cinema.index());
         dispatch();
+        assert!(cinema_group.get_visible());
+        assert!(!cinema_crop_focus_row.get_visible());
+        window
+            .0
+            .controls
+            .cinema_artwork_framing
+            .set_value(CinemaArtworkFraming::Fill);
+        dispatch();
+        assert!(cinema_crop_focus_row.get_visible());
+        window
+            .0
+            .controls
+            .cinema_crop_focus
+            .set_value(CinemaCropFocus::BottomRight);
+        dispatch();
+        assert_eq!(
+            controller.settings().cinema.crop_focus,
+            CinemaCropFocus::BottomRight
+        );
+        mode.set_selected(super::DisplayMode::Ambient.index());
+        dispatch();
+        assert!(!cinema_group.get_visible());
+        assert_eq!(
+            controller.settings().cinema.artwork_framing,
+            CinemaArtworkFraming::Fill
+        );
+        mode.set_selected(super::DisplayMode::Cinema.index());
+        dispatch();
+        assert!(cinema_crop_focus_row.get_visible());
         window
             .0
             .controls

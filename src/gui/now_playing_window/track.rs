@@ -446,6 +446,13 @@ impl TrackPresentation {
         );
         drop(state);
 
+        // Framing changes reuse the retained sharp texture and affect only its
+        // allocation inside Cinema's existing responsive artwork region.
+        self.cinema_artwork
+            .set_artwork_framing(settings.cinema.artwork_framing);
+        self.cinema_artwork
+            .set_crop_focus(settings.cinema.crop_focus);
+
         let width = self.background_area.width();
         let height = self.background_area.height();
         configure_immersive_info(
