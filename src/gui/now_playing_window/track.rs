@@ -1126,7 +1126,8 @@ mod tests {
         ));
         if let Some(popover) = window
             .controls
-            .display_mode_menu
+            .display_mode
+            .widget()
             .ancestor(gtk::Popover::static_type())
         {
             popover.unparent();
@@ -1287,7 +1288,8 @@ mod tests {
         // teardown must also detach its manually parented context popover.
         if let Some(popover) = window
             .controls
-            .display_mode_menu
+            .display_mode
+            .widget()
             .ancestor(gtk::Popover::static_type())
         {
             popover.unparent();

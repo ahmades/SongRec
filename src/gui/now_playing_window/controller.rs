@@ -167,7 +167,7 @@ mod tests {
         controller.update(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(
             u16::MAX,
         ));
-        controller.update(NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(21));
+        controller.update(NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(1));
         assert!(controller.settings().shared.background_motion_enabled);
         assert_eq!(
             controller.settings().shared.background_motion_zoom_percent,
@@ -207,7 +207,7 @@ mod tests {
         controller.update_debounced(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(119));
         let (settings, persist) = receive();
         assert_eq!(settings.shared.text_size, TextSize::LARGE);
-        assert_eq!(settings.shared.background_motion_zoom_percent, 119);
+        assert_eq!(settings.shared.background_motion_zoom_percent, 120);
         assert!(!persist);
 
         context.block_on(glib::timeout_future(Duration::from_millis(190)));

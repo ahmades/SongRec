@@ -1,15 +1,11 @@
 //! Context-menu construction and preference-update signal bindings.
 
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
+use super::display_mode::{DisplayModeControls, NowPlayingControlState};
 use super::ui::toggle_fullscreen;
 use super::{
-    AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
-    BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
-    BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS, BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
-    BACKGROUND_MOTION_ZOOM_MAX_PERCENT, BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
-    BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus,
-    DisplayMode, ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow,
-    TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TextSize, TrackInfoAlignment,
+    AlbumCoverSize, BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
+    ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow, TextSize, TrackInfoAlignment,
     TransitionEffect, transition_duration_from_scale,
 };
 use crate::core::preferences::{BackdropIntensity, NowPlayingPreferenceChange};
@@ -19,8 +15,10 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
-const TRANSITION_DURATION_STEP_MS: f64 = 100.0;
 const FULLSCREEN_CURSOR_HIDE_DELAY_MS: u64 = 1_500;
+const DEPENDENT_ROW_INDENT: i32 = 12;
+const DEPENDENT_ROW_SPACING: i32 = 10;
+const DEPENDENT_REVEAL_DURATION_MS: u32 = 150;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ContextMenuPointerAction {
@@ -89,6 +87,35 @@ fn menu_grid() -> gtk::Grid {
         .build()
 }
 
+fn dependent_revealer() -> gtk::Revealer {
+    gtk::Revealer::builder()
+        .transition_type(gtk::RevealerTransitionType::SlideDown)
+        .transition_duration(DEPENDENT_REVEAL_DURATION_MS)
+        .reveal_child(false)
+        .build()
+}
+
+/// Places dependent rows behind a small inset and a vertical guide so they
+/// remain visibly associated with the setting that controls their relevance.
+fn set_dependent_rows(revealer: &gtk::Revealer, grid: &gtk::Grid) {
+    let guide = gtk::Separator::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .accessible_role(gtk::AccessibleRole::None)
+        .build();
+    guide.set_vexpand(true);
+    guide.set_margin_top(3);
+    guide.set_margin_bottom(3);
+
+    let content = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(DEPENDENT_ROW_SPACING)
+        .margin_start(DEPENDENT_ROW_INDENT)
+        .build();
+    content.append(&guide);
+    content.append(grid);
+    revealer.set_child(Some(&content));
+}
+
 fn section_heading(title: &str) -> gtk::Label {
     gtk::Label::builder()
         .label(title)
@@ -105,7 +132,7 @@ fn label_control(label: &gtk::Label, control: &impl IsA<gtk::Widget>) {
 
 /// The context-menu controls whose state mirrors the active presentation settings.
 pub(super) struct NowPlayingControls {
-    pub(super) display_mode_menu: gtk::DropDown,
+    pub(super) display_mode: DisplayModeControls,
     pub(super) keep_screen_awake: gtk::Switch,
     pub(super) classic_settings: gtk::Box,
     pub(super) cinema_settings: gtk::Box,
@@ -115,6 +142,7 @@ pub(super) struct NowPlayingControls {
     pub(super) hide_track_info: gtk::Switch,
     pub(super) text_size_label: gtk::Label,
     pub(super) text_size: gtk::Scale,
+    pub(super) text_size_details: gtk::Revealer,
     pub(super) immersive_background_source_album_cover: gtk::ToggleButton,
     pub(super) immersive_background_source_artist: gtk::ToggleButton,
     pub(super) backdrop_intensity_soft: gtk::ToggleButton,
@@ -126,8 +154,10 @@ pub(super) struct NowPlayingControls {
     pub(super) background_motion_zoom: gtk::Scale,
     pub(super) background_motion_reversal_duration_label: gtk::Label,
     pub(super) background_motion_reversal_duration: gtk::Scale,
+    pub(super) background_motion_details: gtk::Revealer,
     pub(super) background_style_gradient: gtk::ToggleButton,
     pub(super) background_style_solid: gtk::ToggleButton,
+    pub(super) track_info_alignment_label: gtk::Label,
     pub(super) track_info_alignment_left: gtk::ToggleButton,
     pub(super) track_info_alignment_center: gtk::ToggleButton,
     pub(super) track_info_alignment_right: gtk::ToggleButton,
@@ -135,24 +165,18 @@ pub(super) struct NowPlayingControls {
     pub(super) cinema_artwork_framing: CinemaArtworkFramingControls,
     pub(super) cinema_crop_focus_label: gtk::Label,
     pub(super) cinema_crop_focus: CinemaCropFocusControls,
+    pub(super) cinema_crop_focus_details: gtk::Revealer,
     pub(super) always_display_last_recognized_song: gtk::Switch,
     pub(super) transition_menu: gtk::DropDown,
     pub(super) transition_duration: gtk::Scale,
+    pub(super) transition_duration_details: gtk::Revealer,
     pub(super) fullscreen_button: gtk::Button,
     pub(super) fullscreen_button_content: adw::ButtonContent,
 }
 
 /// Creates the controls used by the Now Playing context menu.
 pub(super) fn build_controls() -> NowPlayingControls {
-    let display_mode_labels = DisplayMode::ALL
-        .into_iter()
-        .map(DisplayMode::translated_label)
-        .collect::<Vec<_>>();
-    let display_mode_label_references = display_mode_labels
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let display_mode_menu = gtk::DropDown::from_strings(&display_mode_label_references);
+    let display_mode = DisplayModeControls::new();
     let keep_screen_awake = gtk::Switch::new();
     let classic_settings = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -180,6 +204,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     TextSize::install_slider_snap(&text_size);
     text_size.set_value(TextSize::default().scale_value());
     text_size.set_width_request(190);
+    let text_size_details = dependent_revealer();
     let immersive_background_source_album_cover =
         gtk::ToggleButton::with_label(&gettext("Album cover"));
     let immersive_background_source_artist = gtk::ToggleButton::with_label(&gettext("Artist"));
@@ -192,29 +217,19 @@ pub(super) fn build_controls() -> NowPlayingControls {
     let background_motion_enabled_label = gtk::Label::new(Some(&gettext("Background motion")));
     let background_motion_enabled = gtk::Switch::new();
     let background_motion_zoom_label = gtk::Label::new(Some(&gettext("Zoom level (%)")));
-    let background_motion_zoom = gtk::Scale::with_range(
-        gtk::Orientation::Horizontal,
-        f64::from(BACKGROUND_MOTION_ZOOM_MIN_PERCENT),
-        f64::from(BACKGROUND_MOTION_ZOOM_MAX_PERCENT),
-        f64::from(BACKGROUND_MOTION_ZOOM_STEP_PERCENT),
-    );
-    background_motion_zoom.set_value(f64::from(BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT));
-    background_motion_zoom.set_digits(0);
-    background_motion_zoom.set_draw_value(true);
+    let background_motion_zoom =
+        gtk::Scale::new(gtk::Orientation::Horizontal, None::<&gtk::Adjustment>);
+    super::settings_scale::configure_background_motion_zoom_scale(&background_motion_zoom);
     background_motion_zoom.set_width_request(190);
     let background_motion_reversal_duration_label =
-        gtk::Label::new(Some(&gettext("Direction change interval (seconds)")));
-    let background_motion_reversal_duration = gtk::Scale::with_range(
-        gtk::Orientation::Horizontal,
-        BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS as f64,
-        BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS as f64,
-        BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS as f64,
+        gtk::Label::new(Some(&gettext("Direction change interval (s)")));
+    let background_motion_reversal_duration =
+        gtk::Scale::new(gtk::Orientation::Horizontal, None::<&gtk::Adjustment>);
+    super::settings_scale::configure_background_motion_reversal_duration_scale(
+        &background_motion_reversal_duration,
     );
-    background_motion_reversal_duration
-        .set_value(BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS as f64);
-    background_motion_reversal_duration.set_digits(0);
-    background_motion_reversal_duration.set_draw_value(true);
     background_motion_reversal_duration.set_width_request(190);
+    let background_motion_details = dependent_revealer();
     let album_cover_size = gtk::Scale::with_range(
         gtk::Orientation::Horizontal,
         AlbumCoverSize::MIN_SCALE_VALUE,
@@ -228,6 +243,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     let cinema_artwork_framing = CinemaArtworkFramingControls::new();
     let cinema_crop_focus_label = gtk::Label::new(Some(&gettext("Crop focus")));
     let cinema_crop_focus = CinemaCropFocusControls::new();
+    let cinema_crop_focus_details = dependent_revealer();
     let always_display_last_recognized_song = gtk::Switch::new();
     let transition_labels: Vec<_> = TransitionEffect::ALL
         .into_iter()
@@ -236,15 +252,12 @@ pub(super) fn build_controls() -> NowPlayingControls {
     let transition_label_references: Vec<_> =
         transition_labels.iter().map(String::as_str).collect();
     let transition_menu = gtk::DropDown::from_strings(&transition_label_references);
-    let transition_duration = gtk::Scale::with_range(
-        gtk::Orientation::Horizontal,
-        TRANSITION_DURATION_MIN_MS as f64,
-        TRANSITION_DURATION_MAX_MS as f64,
-        TRANSITION_DURATION_STEP_MS,
-    );
+    let transition_duration =
+        gtk::Scale::new(gtk::Orientation::Horizontal, None::<&gtk::Adjustment>);
     super::transition::configure_transition_duration_scale(&transition_duration);
     transition_duration.set_hexpand(true);
     transition_duration.set_width_request(190);
+    let transition_duration_details = dependent_revealer();
     let fullscreen_button_content = adw::ButtonContent::new();
     let fullscreen_button = gtk::Button::builder()
         .halign(gtk::Align::Fill)
@@ -254,6 +267,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     let background_style_gradient = gtk::ToggleButton::with_label(&gettext("Gradient"));
     let background_style_solid = gtk::ToggleButton::with_label(&gettext("Solid"));
     background_style_solid.set_group(Some(&background_style_gradient));
+    let track_info_alignment_label = gtk::Label::new(Some(&gettext("Track info alignment")));
     let track_info_alignment_left = gtk::ToggleButton::with_label(&gettext("Left"));
     let track_info_alignment_center = gtk::ToggleButton::with_label(&gettext("Center"));
     let track_info_alignment_right = gtk::ToggleButton::with_label(&gettext("Right"));
@@ -261,7 +275,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     track_info_alignment_right.set_group(Some(&track_info_alignment_left));
 
     NowPlayingControls {
-        display_mode_menu,
+        display_mode,
         keep_screen_awake,
         classic_settings,
         cinema_settings,
@@ -271,6 +285,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         hide_track_info,
         text_size_label,
         text_size,
+        text_size_details,
         immersive_background_source_album_cover,
         immersive_background_source_artist,
         backdrop_intensity_soft,
@@ -282,8 +297,10 @@ pub(super) fn build_controls() -> NowPlayingControls {
         background_motion_zoom,
         background_motion_reversal_duration_label,
         background_motion_reversal_duration,
+        background_motion_details,
         background_style_gradient,
         background_style_solid,
+        track_info_alignment_label,
         track_info_alignment_left,
         track_info_alignment_center,
         track_info_alignment_right,
@@ -291,9 +308,11 @@ pub(super) fn build_controls() -> NowPlayingControls {
         cinema_artwork_framing,
         cinema_crop_focus_label,
         cinema_crop_focus,
+        cinema_crop_focus_details,
         always_display_last_recognized_song,
         transition_menu,
         transition_duration,
+        transition_duration_details,
         fullscreen_button,
         fullscreen_button_content,
     }
@@ -302,6 +321,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
 impl NowPlayingWindow {
     /// Builds and installs the right-click context menu for the Now Playing window.
     pub(super) fn setup_context_menu(&self, settings: NowPlayingSettings) {
+        let control_state = NowPlayingControlState::from_settings(settings);
         let popover = gtk::Popover::new();
         popover.set_has_arrow(false);
         let menu_box = gtk::Box::builder()
@@ -334,7 +354,7 @@ impl NowPlayingWindow {
         let shared_grid = menu_grid();
         self.add_display_mode_menu_row(
             &shared_grid,
-            &self.controls.display_mode_menu,
+            &self.controls.display_mode,
             settings.display_mode,
         );
         self.add_switch_menu_row(
@@ -353,24 +373,16 @@ impl NowPlayingWindow {
             settings.shared.hide_track_info,
             true,
         );
-        let show_hide_track_info = settings.display_mode.supports_hiding_track_info();
-        self.controls
-            .hide_track_info_label
-            .set_visible(show_hide_track_info);
-        self.controls
-            .hide_track_info
-            .set_visible(show_hide_track_info);
+        let text_size_grid = menu_grid();
         self.add_scale_menu_row_with_label(
-            &shared_grid,
-            3,
+            &text_size_grid,
+            0,
             &self.controls.text_size_label,
             &self.controls.text_size,
             settings.shared.text_size.scale_value(),
         );
-        self.update_text_size_control_visibility(
-            settings.display_mode,
-            settings.shared.hide_track_info,
-        );
+        set_dependent_rows(&self.controls.text_size_details, &text_size_grid);
+        shared_grid.attach(&self.controls.text_size_details, 0, 3, 2, 1);
         self.add_switch_menu_row(
             &shared_grid,
             4,
@@ -385,13 +397,19 @@ impl NowPlayingWindow {
             &self.controls.transition_menu,
             settings.shared.transition,
         );
+        let transition_duration_grid = menu_grid();
         self.add_transition_duration_menu_row(
-            &shared_grid,
-            6,
+            &transition_duration_grid,
+            0,
             &self.controls.transition_duration,
             settings.shared.transition_duration_ms,
-            !matches!(settings.shared.transition, TransitionEffect::None),
+            true,
         );
+        set_dependent_rows(
+            &self.controls.transition_duration_details,
+            &transition_duration_grid,
+        );
+        shared_grid.attach(&self.controls.transition_duration_details, 0, 6, 2, 1);
         menu_box.append(&shared_grid);
 
         let classic_heading = section_heading(&gettext("Classic settings"));
@@ -409,7 +427,7 @@ impl NowPlayingWindow {
             &classic_grid,
             1,
             settings.classic.track_info_alignment,
-            !settings.shared.hide_track_info,
+            control_state.track_info_alignment_sensitive,
         );
         self.add_album_cover_size_menu_row(
             &classic_grid,
@@ -419,21 +437,20 @@ impl NowPlayingWindow {
         );
         self.add_background_style_menu_row(&classic_grid, 3, settings.classic.background_style);
         self.controls.classic_settings.append(&classic_grid);
-        self.controls
-            .classic_settings
-            .set_visible(settings.display_mode.shows_classic_settings());
         menu_box.append(&self.controls.classic_settings);
 
         let cinema_heading = section_heading(&gettext("Cinema settings"));
         self.controls.cinema_settings.append(&cinema_heading);
         let cinema_grid = menu_grid();
         self.add_cinema_artwork_framing_menu_row(&cinema_grid, 0, settings.cinema.artwork_framing);
-        self.add_cinema_crop_focus_menu_row(&cinema_grid, 1, settings.cinema.crop_focus);
-        self.controls.cinema_settings.append(&cinema_grid);
-        self.update_cinema_control_visibility(
-            settings.display_mode,
-            settings.cinema.artwork_framing,
+        let cinema_crop_focus_grid = menu_grid();
+        self.add_cinema_crop_focus_menu_row(&cinema_crop_focus_grid, 0, settings.cinema.crop_focus);
+        set_dependent_rows(
+            &self.controls.cinema_crop_focus_details,
+            &cinema_crop_focus_grid,
         );
+        cinema_grid.attach(&self.controls.cinema_crop_focus_details, 0, 1, 2, 1);
+        self.controls.cinema_settings.append(&cinema_grid);
         menu_box.append(&self.controls.cinema_settings);
 
         let immersive_heading = section_heading(&gettext("Cinema and Ambient settings"));
@@ -457,26 +474,30 @@ impl NowPlayingWindow {
             settings.shared.background_motion_enabled,
             true,
         );
+        let background_motion_grid = menu_grid();
         self.add_scale_menu_row_with_label(
-            &immersive_grid,
-            3,
+            &background_motion_grid,
+            0,
             &self.controls.background_motion_zoom_label,
             &self.controls.background_motion_zoom,
             f64::from(settings.shared.background_motion_zoom_percent),
         );
         self.add_scale_menu_row_with_label(
-            &immersive_grid,
-            4,
+            &background_motion_grid,
+            1,
             &self.controls.background_motion_reversal_duration_label,
             &self.controls.background_motion_reversal_duration,
             settings.shared.background_motion_reversal_duration_secs as f64,
         );
-        self.controls.immersive_settings.append(&immersive_grid);
-        self.update_immersive_control_visibility(
-            settings.display_mode,
-            settings.shared.background_motion_enabled,
+        set_dependent_rows(
+            &self.controls.background_motion_details,
+            &background_motion_grid,
         );
+        immersive_grid.attach(&self.controls.background_motion_details, 0, 3, 2, 1);
+        self.controls.immersive_settings.append(&immersive_grid);
         menu_box.append(&self.controls.immersive_settings);
+
+        self.apply_control_state(control_state);
 
         let menu_scroll = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
@@ -679,7 +700,7 @@ impl NowPlayingWindow {
     fn add_display_mode_menu_row(
         &self,
         menu_grid: &gtk::Grid,
-        dropdown: &gtk::DropDown,
+        controls: &DisplayModeControls,
         display_mode: DisplayMode,
     ) {
         let label = gtk::Label::new(Some(&gettext("Display mode")));
@@ -687,11 +708,11 @@ impl NowPlayingWindow {
         label.set_valign(gtk::Align::Center);
         label.set_hexpand(true);
         menu_grid.attach(&label, 0, 0, 1, 1);
-        dropdown.set_selected(display_mode.index());
-        dropdown.set_halign(gtk::Align::End);
-        dropdown.set_valign(gtk::Align::Center);
-        label_control(&label, dropdown);
-        menu_grid.attach(dropdown, 1, 0, 1, 1);
+        controls.set_value(display_mode);
+        controls.widget().set_halign(gtk::Align::End);
+        controls.widget().set_valign(gtk::Align::Center);
+        label_control(&label, controls.widget());
+        menu_grid.attach(controls.widget(), 1, 0, 1, 1);
     }
 
     /// Adds a label-and-switch row to the context menu.
@@ -751,53 +772,48 @@ impl NowPlayingWindow {
         menu_grid.attach(scale, 1, row, 1, 1);
     }
 
-    pub(super) fn update_text_size_control_visibility(
-        &self,
-        display_mode: DisplayMode,
-        hide_track_info: bool,
-    ) {
-        let visible = display_mode.shows_track_info(hide_track_info);
-        self.controls.text_size_label.set_visible(visible);
-        self.controls.text_size.set_visible(visible);
-    }
-
-    pub(super) fn update_cinema_control_visibility(
-        &self,
-        display_mode: DisplayMode,
-        framing: CinemaArtworkFraming,
-    ) {
-        let shows_cinema = display_mode.shows_cinema_settings();
-        self.controls.cinema_settings.set_visible(shows_cinema);
-        let shows_crop_focus = display_mode.shows_cinema_crop_focus(framing);
+    /// Applies the dependency policy shared by the context menu and the main
+    /// preferences page without duplicating mode-specific conditions here.
+    pub(super) fn apply_control_state(&self, state: NowPlayingControlState) {
         self.controls
-            .cinema_crop_focus_label
-            .set_visible(shows_crop_focus);
+            .classic_settings
+            .set_visible(state.show_classic_settings);
         self.controls
-            .cinema_crop_focus
-            .widget()
-            .set_visible(shows_crop_focus);
-    }
-
-    pub(super) fn update_immersive_control_visibility(
-        &self,
-        display_mode: DisplayMode,
-        enabled: bool,
-    ) {
-        let supported = display_mode.supports_background_motion();
-        self.controls.immersive_settings.set_visible(supported);
-        let show_details = supported && enabled;
+            .cinema_settings
+            .set_visible(state.show_cinema_settings);
         self.controls
-            .background_motion_zoom_label
-            .set_visible(show_details);
+            .immersive_settings
+            .set_visible(state.show_immersive_settings);
         self.controls
-            .background_motion_zoom
-            .set_visible(show_details);
+            .hide_track_info_label
+            .set_sensitive(state.hide_track_info_sensitive);
         self.controls
-            .background_motion_reversal_duration_label
-            .set_visible(show_details);
+            .hide_track_info
+            .set_sensitive(state.hide_track_info_sensitive);
         self.controls
-            .background_motion_reversal_duration
-            .set_visible(show_details);
+            .text_size_details
+            .set_reveal_child(state.show_text_size);
+        self.controls
+            .cinema_crop_focus_details
+            .set_reveal_child(state.show_crop_focus);
+        self.controls
+            .background_motion_details
+            .set_reveal_child(state.show_motion_details);
+        self.controls
+            .transition_duration_details
+            .set_reveal_child(state.show_transition_duration);
+        self.controls
+            .track_info_alignment_label
+            .set_sensitive(state.track_info_alignment_sensitive);
+        self.controls
+            .track_info_alignment_left
+            .set_sensitive(state.track_info_alignment_sensitive);
+        self.controls
+            .track_info_alignment_center
+            .set_sensitive(state.track_info_alignment_sensitive);
+        self.controls
+            .track_info_alignment_right
+            .set_sensitive(state.track_info_alignment_sensitive);
     }
 
     /// Adds Cinema's framing selector without changing its responsive outer layout.
@@ -807,7 +823,7 @@ impl NowPlayingWindow {
         row: i32,
         framing: CinemaArtworkFraming,
     ) {
-        let label = gtk::Label::new(Some(&gettext("Artwork framing")));
+        let label = gtk::Label::new(Some(&gettext("Album cover framing")));
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
         label.set_hexpand(true);
@@ -871,14 +887,14 @@ impl NowPlayingWindow {
         menu_grid.attach(&buttons, 1, row, 1, 1);
     }
 
-    /// Adds the shared Cinema/Ambient backdrop-intensity segmented control.
+    /// Adds the shared Cinema/Ambient background-intensity segmented control.
     fn add_backdrop_intensity_menu_row(
         &self,
         menu_grid: &gtk::Grid,
         row: i32,
         intensity: BackdropIntensity,
     ) {
-        let label = gtk::Label::new(Some(&gettext("Backdrop intensity")));
+        let label = gtk::Label::new(Some(&gettext("Background intensity")));
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
         label.set_hexpand(true);
@@ -986,11 +1002,11 @@ impl NowPlayingWindow {
         alignment: TrackInfoAlignment,
         sensitive: bool,
     ) {
-        let label = gtk::Label::new(Some(&gettext("Track info alignment")));
+        let label = &self.controls.track_info_alignment_label;
         label.set_halign(gtk::Align::Start);
         label.set_valign(gtk::Align::Center);
         label.set_hexpand(true);
-        menu_grid.attach(&label, 0, row, 1, 1);
+        menu_grid.attach(label, 0, row, 1, 1);
         let buttons = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(0)
@@ -1020,7 +1036,7 @@ impl NowPlayingWindow {
             }
             TrackInfoAlignment::Right => self.controls.track_info_alignment_right.set_active(true),
         }
-        label_control(&label, &buttons);
+        label_control(label, &buttons);
         menu_grid.attach(&buttons, 1, row, 1, 1);
     }
 
@@ -1089,12 +1105,10 @@ impl NowPlayingWindow {
         let applying = self.state.applying_settings.clone();
         let controller = self.controller.clone();
         self.controls
-            .display_mode_menu
-            .connect_selected_notify(move |dropdown| {
+            .display_mode
+            .connect_changed(move |display_mode| {
                 if !applying.get() {
-                    controller.update(NowPlayingPreferenceChange::DisplayMode(
-                        DisplayMode::from_index(dropdown.selected()),
-                    ));
+                    controller.update(NowPlayingPreferenceChange::DisplayMode(display_mode));
                 }
             });
         let applying = self.state.applying_settings.clone();
@@ -1264,6 +1278,19 @@ mod tests {
             &controls.text_size,
             gtk::AccessibleRelation::LabelledBy,
         ));
+
+        controls.background_motion_zoom.set_value(102.0);
+        assert_eq!(controls.background_motion_zoom.value(), 100.0);
+        controls.background_motion_zoom.set_value(103.0);
+        assert_eq!(controls.background_motion_zoom.value(), 105.0);
+        controls.background_motion_reversal_duration.set_value(7.0);
+        assert_eq!(controls.background_motion_reversal_duration.value(), 5.0);
+        controls.background_motion_reversal_duration.set_value(8.0);
+        assert_eq!(controls.background_motion_reversal_duration.value(), 10.0);
+        controls.transition_duration.set_value(749.0);
+        assert_eq!(controls.transition_duration.value(), 500.0);
+        controls.transition_duration.set_value(750.0);
+        assert_eq!(controls.transition_duration.value(), 1_000.0);
 
         let text_size = controls.text_size.downgrade();
         let album_cover_size = controls.album_cover_size.downgrade();

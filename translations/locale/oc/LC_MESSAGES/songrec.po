@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-15 13:26+0200\n"
+"POT-Creation-Date: 2026-09-16 14:19+0200\n"
 "PO-Revision-Date: 2026-04-19 16:15+0000\n"
 "Last-Translator: Mejans <farga@mejans.fr>\n"
 "Language-Team: Occitan <https://weblate.fossplant.re/projects/songrec/"
@@ -170,17 +170,17 @@ msgstr ""
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:1112 src/gui/main_window.rs:350
-#: src/gui/interface.blp:129 src/gui/interface.blp:833
-#: src/gui/interface.blp:883
+#: src/core/preferences.rs:1123 src/gui/main_window.rs:350
+#: src/gui/interface.blp:129 src/gui/interface.blp:867
+#: src/gui/interface.blp:917
 msgid "Search on YouTube"
 msgstr ""
 
-#: src/core/preferences.rs:1151
+#: src/core/preferences.rs:1162
 msgid "When parsing the preferences file:"
 msgstr ""
 
-#: src/core/preferences.rs:1231
+#: src/core/preferences.rs:1242
 msgid "When saving the preferences file:"
 msgstr ""
 
@@ -284,17 +284,17 @@ msgid "Top right"
 msgstr ""
 
 #: src/gui/now_playing_window/cinema_framing.rs:160
-#: src/gui/now_playing_window/menu.rs:257 src/gui/interface.blp:535
+#: src/gui/now_playing_window/menu.rs:271 src/gui/interface.blp:550
 msgid "Left"
 msgstr ""
 
 #: src/gui/now_playing_window/cinema_framing.rs:161
-#: src/gui/now_playing_window/menu.rs:258 src/gui/interface.blp:541
+#: src/gui/now_playing_window/menu.rs:272 src/gui/interface.blp:556
 msgid "Center"
 msgstr ""
 
 #: src/gui/now_playing_window/cinema_framing.rs:162
-#: src/gui/now_playing_window/menu.rs:259 src/gui/interface.blp:546
+#: src/gui/now_playing_window/menu.rs:273 src/gui/interface.blp:561
 msgid "Right"
 msgstr ""
 
@@ -310,144 +310,147 @@ msgstr ""
 msgid "Bottom right"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:45
+#: src/gui/now_playing_window/display_mode.rs:135
 msgid "Classic"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:46
+#: src/gui/now_playing_window/display_mode.rs:136
 msgid "Cinema"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:47
+#: src/gui/now_playing_window/display_mode.rs:137
 msgid "Ambient"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:48
+#: src/gui/now_playing_window/display_mode.rs:138
 msgid "Lights Off"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:170 src/gui/interface.blp:474
+#: src/gui/now_playing_window/menu.rs:194 src/gui/interface.blp:474
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:172 src/gui/interface.blp:479
+#: src/gui/now_playing_window/menu.rs:196 src/gui/interface.blp:479
 msgid "Text size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:184 src/gui/interface.blp:620
+#: src/gui/now_playing_window/menu.rs:209 src/gui/interface.blp:665
 msgid "Album cover"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:185 src/gui/interface.blp:625
+#: src/gui/now_playing_window/menu.rs:210 src/gui/interface.blp:670
 msgid "Artist"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:187 src/gui/interface.blp:641
+#: src/gui/now_playing_window/menu.rs:212 src/gui/interface.blp:687
 msgid "Soft"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:188 src/gui/interface.blp:647
+#: src/gui/now_playing_window/menu.rs:213 src/gui/interface.blp:693
 msgid "Balanced"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:189 src/gui/interface.blp:652
+#: src/gui/now_playing_window/menu.rs:214 src/gui/interface.blp:698
 msgid "Bold"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:192 src/gui/interface.blp:659
+#: src/gui/now_playing_window/menu.rs:217 src/gui/interface.blp:705
 msgid "Background motion"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:194 src/gui/interface.blp:664
+#: src/gui/now_playing_window/menu.rs:219 src/gui/interface.blp:711
 msgid "Zoom level (%)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:206 src/gui/interface.blp:686
-msgid "Direction change interval (seconds)"
+#: src/gui/now_playing_window/menu.rs:225 src/gui/interface.blp:727
+msgid "Direction change interval (s)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:229 src/gui/interface.blp:599
+#: src/gui/now_playing_window/menu.rs:244 src/gui/interface.blp:629
 msgid "Crop focus"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:254 src/gui/interface.blp:577
+#: src/gui/now_playing_window/menu.rs:267 src/gui/interface.blp:592
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:255 src/gui/interface.blp:582
+#: src/gui/now_playing_window/menu.rs:268 src/gui/interface.blp:597
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:324 src/gui/interface.blp:459
-msgid "Reset"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:343 src/gui/interface.blp:469
-msgid "Keep screen awake"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:377 src/gui/interface.blp:493
-msgid "Always display last recognized song"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:397 src/gui/interface.blp:517
-msgid "Classic settings"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:403 src/gui/interface.blp:521
-msgid "Round corners of album cover"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:427 src/gui/interface.blp:589
-msgid "Cinema settings"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:439 src/gui/interface.blp:605
-msgid "Cinema and Ambient settings"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:650
-#: src/gui/now_playing_window/regression_tests.rs:590
-msgid "Exit full screen"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:653
-msgid "Enter full screen"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:685 src/gui/interface.blp:464
-msgid "Display mode"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:810 src/gui/interface.blp:594
-msgid "Artwork framing"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:844 src/gui/interface.blp:610
-msgid "Background"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:881 src/gui/interface.blp:632
-msgid "Backdrop intensity"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:922 src/gui/interface.blp:498
-msgid "Transition effect"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:944 src/gui/interface.blp:503
-msgid "Transition duration (ms)"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:966 src/gui/interface.blp:553
-msgid "Album cover size"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:989 src/gui/interface.blp:526
+#: src/gui/now_playing_window/menu.rs:270 src/gui/interface.blp:541
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1034 src/gui/interface.blp:567
+#: src/gui/now_playing_window/menu.rs:344 src/gui/interface.blp:459
+msgid "Reset"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:363 src/gui/interface.blp:469
+msgid "Keep screen awake"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:389 src/gui/interface.blp:493
+msgid "Always display last recognized song"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:415 src/gui/interface.blp:519
+#: src/gui/interface.blp:525
+msgid "Classic settings"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:421 src/gui/interface.blp:536
+msgid "Round corners of album cover"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:442 src/gui/interface.blp:605
+#: src/gui/interface.blp:612
+msgid "Cinema settings"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:456 src/gui/interface.blp:636
+#: src/gui/interface.blp:643
+msgid "Cinema and Ambient settings"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:671
+#: src/gui/now_playing_window/regression_tests.rs:771
+msgid "Exit full screen"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:674
+msgid "Enter full screen"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:706 src/gui/interface.blp:464
+msgid "Display mode"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:826 src/gui/interface.blp:623
+msgid "Album cover framing"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:860 src/gui/interface.blp:654
+msgid "Background"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:897 src/gui/interface.blp:677
+msgid "Background intensity"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:938 src/gui/interface.blp:498
+msgid "Transition effect"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:960 src/gui/interface.blp:503
+msgid "Transition duration (ms)"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:982 src/gui/interface.blp:568
+msgid "Album cover size"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:1050 src/gui/interface.blp:582
 msgid "Background style"
 msgstr ""
 
@@ -459,43 +462,43 @@ msgstr ""
 msgid "Listening..."
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:47
+#: src/gui/now_playing_window/transition.rs:45
 msgid "None"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:48
+#: src/gui/now_playing_window/transition.rs:46
 msgid "Crossfade"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:49
+#: src/gui/now_playing_window/transition.rs:47
 msgid "Slide right"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:50
+#: src/gui/now_playing_window/transition.rs:48
 msgid "Slide left"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:51
+#: src/gui/now_playing_window/transition.rs:49
 msgid "Slide up"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:52
+#: src/gui/now_playing_window/transition.rs:50
 msgid "Slide down"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:53
+#: src/gui/now_playing_window/transition.rs:51
 msgid "Swing right"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:54
+#: src/gui/now_playing_window/transition.rs:52
 msgid "Swing left"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:55
+#: src/gui/now_playing_window/transition.rs:53
 msgid "Swing up"
 msgstr ""
 
-#: src/gui/now_playing_window/transition.rs:56
+#: src/gui/now_playing_window/transition.rs:54
 msgid "Swing down"
 msgstr ""
 
@@ -607,7 +610,7 @@ msgstr ""
 msgid "Application menu"
 msgstr ""
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:785
+#: src/gui/interface.blp:369 src/gui/interface.blp:819
 msgid "Export to CSV"
 msgstr ""
 
@@ -623,7 +626,7 @@ msgstr ""
 msgid "Notify when a new song is recognized or network error is encountered"
 msgstr ""
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:740
+#: src/gui/interface.blp:388 src/gui/interface.blp:774
 msgid "Show notifications"
 msgstr ""
 
@@ -697,7 +700,7 @@ msgid ""
 msgstr ""
 
 #: src/gui/interface.blp:473
-msgid "Hide song details in every display mode"
+msgid "Hide song details in modes that support it"
 msgstr ""
 
 #: src/gui/interface.blp:478
@@ -713,102 +716,102 @@ msgid "Choose the effect used when the recognized track changes"
 msgstr ""
 
 #: src/gui/interface.blp:502
-msgid "Duration of the selected transition effect (500–5000 ms)"
+msgid "Set how long the selected transition effect lasts"
 msgstr ""
 
-#: src/gui/interface.blp:520
+#: src/gui/interface.blp:535
 msgid "Round the corners of the album artwork"
 msgstr ""
 
-#: src/gui/interface.blp:525
+#: src/gui/interface.blp:540
 msgid "Choose how the track information is positioned"
 msgstr ""
 
-#: src/gui/interface.blp:552
+#: src/gui/interface.blp:567
 msgid "Choose an album artwork size or use one of the marked presets"
 msgstr ""
 
-#: src/gui/interface.blp:566
+#: src/gui/interface.blp:581
 msgid "Choose how the window's background is rendered"
 msgstr ""
 
-#: src/gui/interface.blp:593
+#: src/gui/interface.blp:622
 msgid "Choose whether the whole cover is shown or cropped to fill its frame"
 msgstr ""
 
-#: src/gui/interface.blp:598
+#: src/gui/interface.blp:628
 msgid "Choose which part of the cover stays visible when Fill crops it"
 msgstr ""
 
-#: src/gui/interface.blp:609
+#: src/gui/interface.blp:653
 msgid "Choose the image used for the blurred background"
 msgstr ""
 
-#: src/gui/interface.blp:631
+#: src/gui/interface.blp:676
 msgid "Control how blurred, dark, and colorful the background appears"
 msgstr ""
 
-#: src/gui/interface.blp:658
+#: src/gui/interface.blp:704
 msgid "Gently drift the blurred background while keeping the cover still"
 msgstr ""
 
-#: src/gui/interface.blp:663
+#: src/gui/interface.blp:710
 msgid "Set how far the background zooms in"
 msgstr ""
 
-#: src/gui/interface.blp:685
+#: src/gui/interface.blp:726
 msgid "Set how often the background changes direction"
 msgstr ""
 
-#: src/gui/interface.blp:715
+#: src/gui/interface.blp:749
 msgid "Settings"
 msgstr ""
 
-#: src/gui/interface.blp:745
+#: src/gui/interface.blp:779
 msgid "_Preferences..."
 msgstr ""
 
-#: src/gui/interface.blp:752
+#: src/gui/interface.blp:786
 msgid "_Keyboard Shortcuts"
 msgstr ""
 
-#: src/gui/interface.blp:757
+#: src/gui/interface.blp:791
 msgid "About..."
 msgstr ""
 
-#: src/gui/interface.blp:790
+#: src/gui/interface.blp:824
 msgid "Delete history"
 msgstr ""
 
-#: src/gui/interface.blp:795
+#: src/gui/interface.blp:829
 msgid "Select a file to recognize"
 msgstr ""
 
-#: src/gui/interface.blp:807 src/gui/interface.blp:857
+#: src/gui/interface.blp:841 src/gui/interface.blp:891
 msgid "Copy artist and track"
 msgstr ""
 
-#: src/gui/interface.blp:813 src/gui/interface.blp:863
+#: src/gui/interface.blp:847 src/gui/interface.blp:897
 msgid "Copy artist"
 msgstr ""
 
-#: src/gui/interface.blp:819 src/gui/interface.blp:869
+#: src/gui/interface.blp:853 src/gui/interface.blp:903
 msgid "Copy track name"
 msgstr ""
 
-#: src/gui/interface.blp:825 src/gui/interface.blp:875
+#: src/gui/interface.blp:859 src/gui/interface.blp:909
 msgid "Copy album"
 msgstr ""
 
-#: src/gui/interface.blp:841
+#: src/gui/interface.blp:875
 msgid "Delete from History"
 msgstr ""
 
-#: src/gui/interface.blp:847
+#: src/gui/interface.blp:881
 msgid "Add to Favorites"
 msgstr ""
 
-#: src/gui/interface.blp:891
+#: src/gui/interface.blp:925
 msgid "Remove from Favorites"
 msgstr ""
 

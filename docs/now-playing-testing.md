@@ -38,12 +38,13 @@ The pure pointer-action test therefore does not replace this check. Repeat on th
 supported native backends (Wayland and X11), windowed and fullscreen:
 
 1. Open Now Playing and right-click the canvas.
-2. Click the Display mode dropdown to open its nested popup.
-3. Click the same dropdown again to close it without selecting a different mode.
+2. Click the Transition effect dropdown to open its nested popup.
+3. Click the same dropdown again to close it without selecting a different effect.
 4. Right-click the canvas outside the outer context menu. The menu must close,
    and the same click must not reopen it.
-5. Repeat with a left-click outside, with a selected different mode, and with the
-   transition-effect dropdown.
+5. Repeat with a left-click outside and after selecting a different effect. Also
+   change Display mode with the segmented control, then verify either outside
+   mouse button still dismisses the menu.
 6. Open the menu with Menu or Shift+F10. Navigate controls with Tab, operate them
    with the keyboard, and close with Escape.
 7. Verify each setting changed in either interface is reflected in the other;
@@ -58,9 +59,9 @@ and the exact dropdown open/close sequence with any failure report.
 
 ### Automated private-desktop check
 
-`real_pointer_dismisses_menu_after_using_nested_dropdowns` sends actual pointer
+`real_pointer_dismisses_menu_after_using_transition_dropdown` sends actual pointer
 and keyboard events through a private Mutter compositor. It covers both mouse
-buttons, both dropdowns, selecting an item and toggling the dropdown closed,
+buttons, selecting an item and toggling the remaining dropdown closed,
 non-fullscreen/fullscreen, and Menu/Shift+F10, Tab, slider keys, and Escape.
 It also checks canvas double-click fullscreen entry/exit in all four display
 modes, menu-action labels, excluded clicks, and F11 after using the gesture.
@@ -74,7 +75,7 @@ env GIO_USE_VFS=local GDK_DEBUG=no-portals GTK_A11Y=none \
   dbus-run-session -- mutter --headless --wayland \
   --virtual-monitor=1280x1024 --wayland-display=songrec-regression -- \
   env SONGREC_TEST_HEADLESS=1 GDK_BACKEND=x11 GSK_RENDERER=cairo \
-  "$SONGREC_TEST_BINARY" real_pointer_dismisses_menu_after_using_nested_dropdowns \
+  "$SONGREC_TEST_BINARY" real_pointer_dismisses_menu_after_using_transition_dropdown \
   --ignored --nocapture --test-threads=1
 ```
 

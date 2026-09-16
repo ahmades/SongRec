@@ -459,7 +459,7 @@ Adw.ApplicationWindow main_window {
               label: _("Reset");
             };
 
-            Adw.ComboRow display_mode_setting {
+            Adw.ActionRow display_mode_setting {
               subtitle: _("Choose how the recognized song is presented");
               title: _("Display mode");
             }
@@ -470,7 +470,7 @@ Adw.ApplicationWindow main_window {
             }
 
             Adw.SwitchRow hide_track_info_setting {
-              subtitle: _("Hide song details in every display mode");
+              subtitle: _("Hide song details in modes that support it");
               title: _("Hide track info");
             }
 
@@ -499,7 +499,7 @@ Adw.ApplicationWindow main_window {
             }
 
             Adw.ActionRow transition_duration_setting {
-              subtitle: _("Duration of the selected transition effect (500–5000 ms)");
+              subtitle: _("Set how long the selected transition effect lasts");
               title: _("Transition duration (ms)");
 
               [suffix]
@@ -513,10 +513,25 @@ Adw.ApplicationWindow main_window {
               }
             }
 
-            Adw.PreferencesGroup classic_now_playing_preferences {
+            Adw.PreferencesRow classic_now_playing_preferences {
+              activatable: false;
+              selectable: false;
               title: _("Classic settings");
 
-              Adw.SwitchRow round_corners_setting {
+              Label {
+                css-classes: [
+                  "heading",
+                ];
+                label: _("Classic settings");
+                margin-bottom: 8;
+                margin-end: 14;
+                margin-start: 14;
+                margin-top: 8;
+                xalign: 0;
+              }
+            }
+
+            Adw.SwitchRow round_corners_setting {
                 subtitle: _("Round the corners of the album artwork");
                 title: _("Round corners of album cover");
               }
@@ -583,15 +598,30 @@ Adw.ApplicationWindow main_window {
                   }
                 }
               }
-            }
 
-            Adw.PreferencesGroup cinema_now_playing_preferences {
+            Adw.PreferencesRow cinema_now_playing_preferences {
+              activatable: false;
+              selectable: false;
               title: _("Cinema settings");
               visible: false;
 
-              Adw.ActionRow cinema_artwork_framing_setting {
+              Label {
+                css-classes: [
+                  "heading",
+                ];
+                label: _("Cinema settings");
+                margin-bottom: 8;
+                margin-end: 14;
+                margin-start: 14;
+                margin-top: 8;
+                xalign: 0;
+              }
+            }
+
+            Adw.ActionRow cinema_artwork_framing_setting {
                 subtitle: _("Choose whether the whole cover is shown or cropped to fill its frame");
-                title: _("Artwork framing");
+                title: _("Album cover framing");
+                visible: false;
               }
 
               Adw.ActionRow cinema_crop_focus_setting {
@@ -599,15 +629,30 @@ Adw.ApplicationWindow main_window {
                 title: _("Crop focus");
                 visible: false;
               }
-            }
 
-            Adw.PreferencesGroup immersive_now_playing_preferences {
+            Adw.PreferencesRow immersive_now_playing_preferences {
+              activatable: false;
+              selectable: false;
               title: _("Cinema and Ambient settings");
               visible: false;
 
-              Adw.ActionRow immersive_background_source_setting {
+              Label {
+                css-classes: [
+                  "heading",
+                ];
+                label: _("Cinema and Ambient settings");
+                margin-bottom: 8;
+                margin-end: 14;
+                margin-start: 14;
+                margin-top: 8;
+                xalign: 0;
+              }
+            }
+
+            Adw.ActionRow immersive_background_source_setting {
                 subtitle: _("Choose the image used for the blurred background");
                 title: _("Background");
+                visible: false;
 
                 Box {
                   spacing: 0;
@@ -629,7 +674,8 @@ Adw.ApplicationWindow main_window {
 
               Adw.ActionRow backdrop_intensity_setting {
                 subtitle: _("Control how blurred, dark, and colorful the background appears");
-                title: _("Backdrop intensity");
+                title: _("Background intensity");
+                visible: false;
 
                 Box {
                   spacing: 0;
@@ -657,6 +703,7 @@ Adw.ApplicationWindow main_window {
               Adw.SwitchRow background_motion_enabled_setting {
                 subtitle: _("Gently drift the blurred background while keeping the cover still");
                 title: _("Background motion");
+                visible: false;
               }
 
               Adw.ActionRow background_motion_zoom_setting {
@@ -671,19 +718,13 @@ Adw.ApplicationWindow main_window {
                   hexpand: true;
                   draw-value: true;
                   digits: 0;
-                  adjustment: Adjustment {
-                    lower: 105;
-                    upper: 120;
-                    step-increment: 1;
-                    page-increment: 1;
-                    value: 110;
-                  };
+                  adjustment: Adjustment {};
                 }
               }
 
               Adw.ActionRow background_motion_reversal_duration_setting {
                 subtitle: _("Set how often the background changes direction");
-                title: _("Direction change interval (seconds)");
+                title: _("Direction change interval (s)");
                 visible: false;
 
                 [suffix]
@@ -693,16 +734,9 @@ Adw.ApplicationWindow main_window {
                   hexpand: true;
                   draw-value: true;
                   digits: 0;
-                  adjustment: Adjustment {
-                    lower: 20;
-                    upper: 60;
-                    step-increment: 5;
-                    page-increment: 5;
-                    value: 30;
-                  };
+                  adjustment: Adjustment {};
                 }
               }
-            }
           }
 
         };

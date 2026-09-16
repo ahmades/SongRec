@@ -1,5 +1,6 @@
 //! Applying persisted Now Playing preferences to the active window.
 
+use super::display_mode::NowPlayingControlState;
 use super::track::TrackPresentation;
 use super::ui::apply_classic_track_info_alignment;
 use super::{
@@ -95,6 +96,7 @@ impl NowPlayingWindow {
             if changed!(classic.background_style) {
                 self.set_background_style(settings.classic.background_style);
             }
+            self.apply_control_state(NowPlayingControlState::from_settings(settings));
         });
     }
 
@@ -108,31 +110,7 @@ impl NowPlayingWindow {
     /// Selects the overall presentation while retaining every mode's stored settings.
     pub(super) fn set_display_mode(&self, display_mode: DisplayMode) {
         self.with_preference_updates_suspended(|| {
-            let selected = display_mode.index();
-            if self.controls.display_mode_menu.selected() != selected {
-                self.controls.display_mode_menu.set_selected(selected);
-            }
-            self.controls
-                .classic_settings
-                .set_visible(display_mode.shows_classic_settings());
-            self.update_cinema_control_visibility(
-                display_mode,
-                self.state.settings.get().cinema.artwork_framing,
-            );
-            self.controls
-                .hide_track_info_label
-                .set_visible(display_mode.supports_hiding_track_info());
-            self.controls
-                .hide_track_info
-                .set_visible(display_mode.supports_hiding_track_info());
-            self.update_text_size_control_visibility(
-                display_mode,
-                self.controls.hide_track_info.is_active(),
-            );
-            self.update_immersive_control_visibility(
-                display_mode,
-                self.controls.background_motion_enabled.is_active(),
-            );
+            self.controls.display_mode.set_value(display_mode);
         });
         self.refresh_track_for_visual_change();
         self.reconcile_pending_transition();
@@ -149,7 +127,6 @@ impl NowPlayingWindow {
         self.with_preference_updates_suspended(|| {
             self.controls.cinema_artwork_framing.set_value(framing);
             self.controls.cinema_crop_focus.set_value(crop_focus);
-            self.update_cinema_control_visibility(self.state.settings.get().display_mode, framing);
         });
         self.ui.cinema_artwork.set_artwork_framing(framing);
         self.ui.cinema_artwork.set_crop_focus(crop_focus);
@@ -246,10 +223,6 @@ impl NowPlayingWindow {
                     .background_motion_reversal_duration
                     .set_value(reversal_duration_secs as f64);
             }
-            self.update_immersive_control_visibility(
-                self.state.settings.get().display_mode,
-                enabled,
-            );
         });
         TrackPresentation::from_window(self).refresh_mode();
     }
@@ -260,9 +233,6 @@ impl NowPlayingWindow {
             if self.controls.transition_menu.selected() != effect.index() {
                 self.controls.transition_menu.set_selected(effect.index());
             }
-            self.controls
-                .transition_duration
-                .set_sensitive(!matches!(effect, TransitionEffect::None));
         });
         self.reconcile_pending_transition();
     }
@@ -366,15 +336,6 @@ impl NowPlayingWindow {
                 self.controls.hide_track_info.set_active(hide_track_info);
             }
             self.ui.classic_info_layout.set_visible(show);
-            self.controls.track_info_alignment_left.set_sensitive(show);
-            self.controls
-                .track_info_alignment_center
-                .set_sensitive(show);
-            self.controls.track_info_alignment_right.set_sensitive(show);
-            self.update_text_size_control_visibility(
-                self.state.settings.get().display_mode,
-                hide_track_info,
-            );
         });
         TrackPresentation::from_window(self).refresh_mode();
     }

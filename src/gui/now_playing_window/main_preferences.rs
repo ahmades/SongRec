@@ -1,32 +1,54 @@
 //! Bindings for the Now Playing section of the main preferences page.
 
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
+use super::display_mode::{DisplayModeControls, NowPlayingControlState};
 use super::{
-    AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
-    BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
-    BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS, BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
-    BACKGROUND_MOTION_ZOOM_MAX_PERCENT, BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
-    BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackgroundStyle, NowPlayingSettings, SettingsController,
-    TextSize, TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
+    AlbumCoverSize, BackgroundStyle, NowPlayingSettings, SettingsController, TextSize,
+    TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
 };
 use crate::core::preferences::{
-    BackdropIntensity, DisplayMode, ImmersiveBackgroundSource, NowPlayingPreferenceChange,
+    BackdropIntensity, ImmersiveBackgroundSource, NowPlayingPreferenceChange,
 };
 use adw::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
 
 #[derive(Clone)]
+struct PreferenceSection {
+    widgets: Vec<gtk::Widget>,
+}
+
+impl PreferenceSection {
+    fn from_builder(builder: &gtk::Builder, names: &[&str]) -> Self {
+        let widgets = names
+            .iter()
+            .map(|name| {
+                builder
+                    .object::<gtk::Widget>(*name)
+                    .unwrap_or_else(|| panic!("missing Now Playing preference row: {name}"))
+            })
+            .collect();
+        Self { widgets }
+    }
+
+    fn set_visible(&self, visible: bool) {
+        for widget in &self.widgets {
+            widget.set_visible(visible);
+        }
+    }
+}
+
+#[derive(Clone)]
 struct PreferencesWidgets {
     reset: gtk::Button,
-    display_mode: adw::ComboRow,
+    display_mode: DisplayModeControls,
     keep_screen_awake: adw::SwitchRow,
-    classic_settings: adw::PreferencesGroup,
-    cinema_settings: adw::PreferencesGroup,
+    classic_settings: PreferenceSection,
+    cinema_settings: PreferenceSection,
     cinema_artwork_framing: CinemaArtworkFramingControls,
     cinema_crop_focus_row: adw::ActionRow,
     cinema_crop_focus: CinemaCropFocusControls,
-    immersive_settings: adw::PreferencesGroup,
+    immersive_settings: PreferenceSection,
     round_corners: adw::SwitchRow,
     hide_track_info: adw::SwitchRow,
     text_size_row: adw::ActionRow,
@@ -50,6 +72,7 @@ struct PreferencesWidgets {
     background_style_solid: gtk::ToggleButton,
     always_display_last_recognized_song: adw::SwitchRow,
     transition: adw::ComboRow,
+    transition_duration_row: adw::ActionRow,
     transition_duration: gtk::Scale,
 }
 
@@ -62,6 +85,15 @@ pub(crate) struct NowPlayingPreferencesView {
 
 impl NowPlayingPreferencesView {
     pub(crate) fn new(builder: &gtk::Builder, controller: SettingsController) -> Self {
+        let display_mode = DisplayModeControls::new();
+        let display_mode_row: adw::ActionRow = builder.object("display_mode_setting").unwrap();
+        display_mode_row.add_suffix(display_mode.widget());
+        display_mode
+            .widget()
+            .update_property(&[gtk::accessible::Property::Label(
+                display_mode_row.title().as_str(),
+            )]);
+
         let cinema_artwork_framing = CinemaArtworkFramingControls::new();
         let cinema_artwork_framing_row: adw::ActionRow =
             builder.object("cinema_artwork_framing_setting").unwrap();
@@ -76,14 +108,37 @@ impl NowPlayingPreferencesView {
             reset: builder
                 .object("reset_now_playing_preferences_button")
                 .unwrap(),
-            display_mode: builder.object("display_mode_setting").unwrap(),
+            display_mode,
             keep_screen_awake: builder.object("keep_screen_awake_setting").unwrap(),
-            classic_settings: builder.object("classic_now_playing_preferences").unwrap(),
-            cinema_settings: builder.object("cinema_now_playing_preferences").unwrap(),
+            classic_settings: PreferenceSection::from_builder(
+                builder,
+                &[
+                    "classic_now_playing_preferences",
+                    "round_corners_setting",
+                    "track_info_alignment_setting",
+                    "album_cover_size_setting",
+                    "background_style_setting",
+                ],
+            ),
+            cinema_settings: PreferenceSection::from_builder(
+                builder,
+                &[
+                    "cinema_now_playing_preferences",
+                    "cinema_artwork_framing_setting",
+                ],
+            ),
             cinema_artwork_framing,
             cinema_crop_focus_row,
             cinema_crop_focus,
-            immersive_settings: builder.object("immersive_now_playing_preferences").unwrap(),
+            immersive_settings: PreferenceSection::from_builder(
+                builder,
+                &[
+                    "immersive_now_playing_preferences",
+                    "immersive_background_source_setting",
+                    "backdrop_intensity_setting",
+                    "background_motion_enabled_setting",
+                ],
+            ),
             round_corners: builder.object("round_corners_setting").unwrap(),
             hide_track_info: builder.object("hide_track_info_setting").unwrap(),
             text_size_row: builder.object("text_size_setting").unwrap(),
@@ -119,6 +174,7 @@ impl NowPlayingPreferencesView {
                 .object("always_display_last_recognized_song_setting")
                 .unwrap(),
             transition: builder.object("transition_setting").unwrap(),
+            transition_duration_row: builder.object("transition_duration_setting").unwrap(),
             transition_duration: builder.object("transition_duration_setting_scale").unwrap(),
         };
 
@@ -127,20 +183,22 @@ impl NowPlayingPreferencesView {
         TextSize::configure_scale(&widgets.text_size);
         TextSize::install_slider_snap(&widgets.text_size);
         super::transition::configure_transition_duration_scale(&widgets.transition_duration);
-        configure_integer_scale(
+        super::settings_scale::configure_background_motion_zoom_scale(
             &widgets.background_motion_zoom,
-            f64::from(BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT),
-            f64::from(BACKGROUND_MOTION_ZOOM_MIN_PERCENT),
-            f64::from(BACKGROUND_MOTION_ZOOM_MAX_PERCENT),
-            f64::from(BACKGROUND_MOTION_ZOOM_STEP_PERCENT),
         );
-        configure_integer_scale(
+        super::settings_scale::configure_background_motion_reversal_duration_scale(
             &widgets.background_motion_reversal_duration,
-            BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS as f64,
-            BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS as f64,
-            BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS as f64,
-            BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS as f64,
         );
+
+        for row in [
+            &widgets.text_size_row,
+            &widgets.transition_duration_row,
+            &widgets.cinema_crop_focus_row,
+            &widgets.background_motion_zoom_row,
+            &widgets.background_motion_reversal_duration_row,
+        ] {
+            mark_dependent_row(row);
+        }
 
         for (scale, row_name) in [
             (&widgets.text_size, "text_size_setting"),
@@ -158,18 +216,6 @@ impl NowPlayingPreferencesView {
             let row: adw::ActionRow = builder.object(row_name).unwrap();
             scale.update_property(&[gtk::accessible::Property::Label(row.title().as_str())]);
         }
-
-        let display_mode_labels = DisplayMode::ALL
-            .into_iter()
-            .map(DisplayMode::translated_label)
-            .collect::<Vec<_>>();
-        let display_mode_label_references = display_mode_labels
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>();
-        widgets
-            .display_mode
-            .set_model(Some(&gtk::StringList::new(&display_mode_label_references)));
 
         let transition_labels = TransitionEffect::ALL
             .into_iter()
@@ -200,15 +246,10 @@ impl NowPlayingPreferencesView {
         }
         let was_applying = self.applying.replace(true);
 
-        self.widgets
-            .display_mode
-            .set_selected(settings.display_mode.index());
+        self.widgets.display_mode.set_value(settings.display_mode);
         self.widgets
             .keep_screen_awake
             .set_active(settings.shared.keep_screen_awake);
-        self.widgets
-            .classic_settings
-            .set_visible(settings.display_mode.shows_classic_settings());
         self.widgets
             .cinema_artwork_framing
             .set_value(settings.cinema.artwork_framing);
@@ -299,42 +340,35 @@ impl NowPlayingPreferencesView {
     }
 
     fn apply_control_state(&self, settings: NowPlayingSettings) {
+        let state = NowPlayingControlState::from_settings(settings);
         self.widgets
             .hide_track_info
-            .set_visible(settings.display_mode.supports_hiding_track_info());
-        self.widgets.text_size_row.set_visible(
-            settings
-                .display_mode
-                .shows_track_info(settings.shared.hide_track_info),
-        );
-        let shows_immersive_settings = settings.display_mode.uses_immersive_artwork();
+            .set_sensitive(state.hide_track_info_sensitive);
+        self.widgets.text_size_row.set_visible(state.show_text_size);
         self.widgets
             .immersive_settings
-            .set_visible(shows_immersive_settings);
-        let shows_cinema_settings = settings.display_mode.shows_cinema_settings();
+            .set_visible(state.show_immersive_settings);
         self.widgets
             .cinema_settings
-            .set_visible(shows_cinema_settings);
-        self.widgets.cinema_crop_focus_row.set_visible(
-            settings
-                .display_mode
-                .shows_cinema_crop_focus(settings.cinema.artwork_framing),
-        );
-        let show_motion_controls = settings.display_mode.supports_background_motion()
-            && settings.shared.background_motion_enabled;
+            .set_visible(state.show_cinema_settings);
+        self.widgets
+            .classic_settings
+            .set_visible(state.show_classic_settings);
+        self.widgets
+            .cinema_crop_focus_row
+            .set_visible(state.show_cinema_settings && state.show_crop_focus);
         self.widgets
             .background_motion_zoom_row
-            .set_visible(show_motion_controls);
+            .set_visible(state.show_immersive_settings && state.show_motion_details);
         self.widgets
             .background_motion_reversal_duration_row
-            .set_visible(show_motion_controls);
+            .set_visible(state.show_immersive_settings && state.show_motion_details);
         self.widgets
             .track_info_alignment
-            .set_sensitive(!settings.shared.hide_track_info);
-        self.widgets.transition_duration.set_sensitive(!matches!(
-            settings.shared.transition,
-            TransitionEffect::None
-        ));
+            .set_sensitive(state.track_info_alignment_sensitive);
+        self.widgets
+            .transition_duration_row
+            .set_visible(state.show_transition_duration);
     }
 
     fn connect_handlers(&self, controller: SettingsController) {
@@ -378,11 +412,10 @@ impl NowPlayingPreferencesView {
         let controller_for_mode = controller.clone();
         self.widgets
             .display_mode
-            .connect_selected_notify(move |combo| {
+            .connect_changed(move |display_mode| {
                 if !applying.get() {
-                    controller_for_mode.update(NowPlayingPreferenceChange::DisplayMode(
-                        DisplayMode::from_index(combo.selected()),
-                    ));
+                    controller_for_mode
+                        .update(NowPlayingPreferenceChange::DisplayMode(display_mode));
                 }
             });
         let applying = self.applying.clone();
@@ -503,11 +536,16 @@ impl NowPlayingPreferencesView {
     }
 }
 
-/// Keeps the declarative widgets aligned with the persisted model's tuning limits.
-fn configure_integer_scale(scale: &gtk::Scale, value: f64, lower: f64, upper: f64, step: f64) {
-    scale
-        .adjustment()
-        .configure(value, lower, upper, step, step, 0.0);
-    scale.set_digits(0);
-    scale.set_round_digits(0);
+/// Marks rows that are conditionally revealed by the immediately preceding row.
+fn mark_dependent_row(row: &adw::ActionRow) {
+    let guide = gtk::Separator::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .accessible_role(gtk::AccessibleRole::None)
+        .build();
+    guide.set_margin_top(8);
+    guide.set_margin_bottom(8);
+    guide.set_margin_start(4);
+    guide.set_margin_end(4);
+    guide.add_css_class("dim-label");
+    row.add_prefix(&guide);
 }

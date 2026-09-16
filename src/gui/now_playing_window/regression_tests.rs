@@ -227,6 +227,20 @@ fn find_label(widget: &impl IsA<gtk::Widget>, text: &str) -> Option<gtk::Label> 
     None
 }
 
+fn find_toggle_group(widget: &impl IsA<gtk::Widget>) -> Option<adw::ToggleGroup> {
+    if let Some(group) = widget.as_ref().downcast_ref::<adw::ToggleGroup>() {
+        return Some(group.clone());
+    }
+    let mut child = widget.as_ref().first_child();
+    while let Some(current) = child {
+        if let Some(group) = find_toggle_group(&current) {
+            return Some(group);
+        }
+        child = current.next_sibling();
+    }
+    None
+}
+
 pub(super) struct TestWindow(pub(super) NowPlayingWindow);
 
 impl Drop for TestWindow {
@@ -234,7 +248,8 @@ impl Drop for TestWindow {
         if let Some(popover) = self
             .0
             .controls
-            .display_mode_menu
+            .display_mode
+            .widget()
             .ancestor(gtk::Popover::static_type())
         {
             popover.unparent();
@@ -300,7 +315,8 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
     let album: gtk::Scale = builder.object("album_cover_size_setting_scale").unwrap();
     let hide: adw::SwitchRow = builder.object("hide_track_info_setting").unwrap();
     let keep_screen_awake: adw::SwitchRow = builder.object("keep_screen_awake_setting").unwrap();
-    let mode: adw::ComboRow = builder.object("display_mode_setting").unwrap();
+    let mode_row: adw::ActionRow = builder.object("display_mode_setting").unwrap();
+    let mode = find_toggle_group(&mode_row).expect("display-mode segmented control");
     let artist_background: gtk::ToggleButton = builder
         .object("immersive_background_source_artist")
         .unwrap();
@@ -310,10 +326,43 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
     let backdrop_soft: gtk::ToggleButton = builder.object("backdrop_intensity_soft").unwrap();
     let backdrop_bold: gtk::ToggleButton = builder.object("backdrop_intensity_bold").unwrap();
     let text_row: adw::ActionRow = builder.object("text_size_setting").unwrap();
-    let cinema_group: adw::PreferencesGroup =
+    let classic_heading: adw::PreferencesRow =
+        builder.object("classic_now_playing_preferences").unwrap();
+    let classic_row: adw::SwitchRow = builder.object("round_corners_setting").unwrap();
+    let cinema_heading: adw::PreferencesRow =
         builder.object("cinema_now_playing_preferences").unwrap();
+    let cinema_row: adw::ActionRow = builder.object("cinema_artwork_framing_setting").unwrap();
     let cinema_crop_focus_row: adw::ActionRow =
         builder.object("cinema_crop_focus_setting").unwrap();
+    let immersive_heading: adw::PreferencesRow =
+        builder.object("immersive_now_playing_preferences").unwrap();
+    let immersive_row: adw::ActionRow = builder
+        .object("immersive_background_source_setting")
+        .unwrap();
+    let motion: adw::SwitchRow = builder.object("background_motion_enabled_setting").unwrap();
+    let motion_zoom_row: adw::ActionRow = builder.object("background_motion_zoom_setting").unwrap();
+    let motion_zoom: gtk::Scale = builder
+        .object("background_motion_zoom_setting_scale")
+        .unwrap();
+    let motion_reversal_duration: gtk::Scale = builder
+        .object("background_motion_reversal_duration_setting_scale")
+        .unwrap();
+    let transition: adw::ComboRow = builder.object("transition_setting").unwrap();
+    let transition_duration_row: adw::ActionRow =
+        builder.object("transition_duration_setting").unwrap();
+    let transition_duration: gtk::Scale =
+        builder.object("transition_duration_setting_scale").unwrap();
+    let now_playing_card = mode_row.parent().expect("Now Playing boxed list");
+    for row in [
+        classic_heading.upcast_ref::<gtk::Widget>(),
+        classic_row.upcast_ref(),
+        cinema_heading.upcast_ref(),
+        cinema_row.upcast_ref(),
+        immersive_heading.upcast_ref(),
+        immersive_row.upcast_ref(),
+    ] {
+        assert_eq!(row.parent().as_ref(), Some(&now_playing_card));
+    }
     let expected = Rc::new(Cell::new(controller.settings()));
     let saved_expected = expected.clone();
     let preferences_for_activate = preferences.clone();
@@ -341,6 +390,8 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
         dispatch();
         assert!(hide.is_active());
         assert!(!text_row.get_visible());
+        assert!(!window.0.controls.text_size_details.reveals_child());
+        assert!(!window.0.controls.track_info_alignment_label.is_sensitive());
         window.0.controls.keep_screen_awake.set_active(true);
         dispatch();
         assert!(keep_screen_awake.is_active());
@@ -349,16 +400,39 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
         assert!(!window.0.controls.keep_screen_awake.is_active());
         keep_screen_awake.set_active(true);
         dispatch();
-        mode.set_selected(super::DisplayMode::LightsOff.index());
+        mode.set_active_name(Some(super::DisplayMode::LightsOff.as_preference_value()));
         dispatch();
-        assert!(!window.0.controls.hide_track_info.get_visible());
-        mode.set_selected(super::DisplayMode::Classic.index());
+        assert!(!classic_heading.get_visible());
+        assert!(!classic_row.get_visible());
+        assert!(!cinema_heading.get_visible());
+        assert!(!cinema_row.get_visible());
+        assert!(!immersive_heading.get_visible());
+        assert!(!immersive_row.get_visible());
+        assert!(window.0.controls.hide_track_info.get_visible());
+        assert!(!window.0.controls.hide_track_info.is_sensitive());
+        assert!(text_row.get_visible());
+        assert!(window.0.controls.text_size_details.reveals_child());
+        mode.set_active_name(Some(super::DisplayMode::Classic.as_preference_value()));
         dispatch();
+        assert!(classic_heading.get_visible());
+        assert!(classic_row.get_visible());
+        assert!(!cinema_heading.get_visible());
+        assert!(!cinema_row.get_visible());
+        assert!(!immersive_heading.get_visible());
+        assert!(!immersive_row.get_visible());
+        assert!(window.0.controls.hide_track_info.is_sensitive());
         hide.set_active(false);
         dispatch();
-        mode.set_selected(super::DisplayMode::Cinema.index());
+        assert!(window.0.controls.text_size_details.reveals_child());
+        assert!(window.0.controls.track_info_alignment_label.is_sensitive());
+        mode.set_active_name(Some(super::DisplayMode::Cinema.as_preference_value()));
         dispatch();
-        assert!(cinema_group.get_visible());
+        assert!(!classic_heading.get_visible());
+        assert!(!classic_row.get_visible());
+        assert!(cinema_heading.get_visible());
+        assert!(cinema_row.get_visible());
+        assert!(immersive_heading.get_visible());
+        assert!(immersive_row.get_visible());
         assert!(!cinema_crop_focus_row.get_visible());
         window
             .0
@@ -367,6 +441,7 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
             .set_value(CinemaArtworkFraming::Fill);
         dispatch();
         assert!(cinema_crop_focus_row.get_visible());
+        assert!(window.0.controls.cinema_crop_focus_details.reveals_child());
         window
             .0
             .controls
@@ -377,16 +452,127 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
             controller.settings().cinema.crop_focus,
             CinemaCropFocus::BottomRight
         );
-        mode.set_selected(super::DisplayMode::Ambient.index());
+        mode.set_active_name(Some(super::DisplayMode::Ambient.as_preference_value()));
         dispatch();
-        assert!(!cinema_group.get_visible());
+        assert!(!cinema_heading.get_visible());
+        assert!(!cinema_row.get_visible());
+        assert!(immersive_heading.get_visible());
+        assert!(immersive_row.get_visible());
+        assert!(!window.0.controls.cinema_crop_focus_details.reveals_child());
         assert_eq!(
             controller.settings().cinema.artwork_framing,
             CinemaArtworkFraming::Fill
         );
-        mode.set_selected(super::DisplayMode::Cinema.index());
+        mode.set_active_name(Some(super::DisplayMode::Cinema.as_preference_value()));
         dispatch();
         assert!(cinema_crop_focus_row.get_visible());
+        assert!(window.0.controls.cinema_crop_focus_details.reveals_child());
+        window
+            .0
+            .controls
+            .display_mode
+            .set_value(super::DisplayMode::Ambient);
+        dispatch();
+        assert_eq!(
+            mode.active_name().as_deref(),
+            Some(super::DisplayMode::Ambient.as_preference_value())
+        );
+        assert_eq!(
+            controller.settings().display_mode,
+            super::DisplayMode::Ambient
+        );
+        window
+            .0
+            .controls
+            .display_mode
+            .set_value(super::DisplayMode::Cinema);
+        dispatch();
+        assert_eq!(
+            mode.active_name().as_deref(),
+            Some(super::DisplayMode::Cinema.as_preference_value())
+        );
+
+        window.0.controls.background_motion_enabled.set_active(true);
+        dispatch();
+        assert!(motion.is_active());
+        assert!(motion_zoom_row.get_visible());
+        assert!(window.0.controls.background_motion_details.reveals_child());
+        motion.set_active(false);
+        dispatch();
+        assert!(!motion_zoom_row.get_visible());
+        assert!(!window.0.controls.background_motion_details.reveals_child());
+
+        motion_zoom.set_value(118.0);
+        assert_eq!(motion_zoom.value(), 120.0);
+        dispatch();
+        assert_eq!(window.0.controls.background_motion_zoom.value(), 120.0);
+        window.0.controls.background_motion_zoom.set_value(117.0);
+        assert_eq!(window.0.controls.background_motion_zoom.value(), 115.0);
+        dispatch();
+        assert_eq!(motion_zoom.value(), 115.0);
+        motion_reversal_duration.set_value(7.0);
+        assert_eq!(motion_reversal_duration.value(), 5.0);
+        dispatch();
+        assert_eq!(
+            window
+                .0
+                .controls
+                .background_motion_reversal_duration
+                .value(),
+            5.0
+        );
+        window
+            .0
+            .controls
+            .background_motion_reversal_duration
+            .set_value(58.0);
+        assert_eq!(
+            window
+                .0
+                .controls
+                .background_motion_reversal_duration
+                .value(),
+            60.0
+        );
+        dispatch();
+        assert_eq!(motion_reversal_duration.value(), 60.0);
+
+        window
+            .0
+            .controls
+            .transition_menu
+            .set_selected(super::TransitionEffect::Crossfade.index());
+        dispatch();
+        assert_eq!(
+            transition.selected(),
+            super::TransitionEffect::Crossfade.index()
+        );
+        assert!(transition_duration_row.get_visible());
+        assert!(
+            window
+                .0
+                .controls
+                .transition_duration_details
+                .reveals_child()
+        );
+        transition_duration.set_value(749.0);
+        assert_eq!(transition_duration.value(), 500.0);
+        dispatch();
+        assert_eq!(window.0.controls.transition_duration.value(), 500.0);
+        window.0.controls.transition_duration.set_value(750.0);
+        assert_eq!(window.0.controls.transition_duration.value(), 1_000.0);
+        dispatch();
+        assert_eq!(transition_duration.value(), 1_000.0);
+        transition.set_selected(super::TransitionEffect::None.index());
+        dispatch();
+        assert!(!transition_duration_row.get_visible());
+        assert!(
+            !window
+                .0
+                .controls
+                .transition_duration_details
+                .reveals_child()
+        );
         window
             .0
             .controls
@@ -417,7 +603,7 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
             controller.settings().shared.backdrop_intensity,
             BackdropIntensity::Soft
         );
-        mode.set_selected(super::DisplayMode::Classic.index());
+        mode.set_active_name(Some(super::DisplayMode::Classic.as_preference_value()));
         dispatch();
         // Test the controls' own visibility, not that of the closed outer menu
         // or the unpresented preferences page.
@@ -448,7 +634,7 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
 
 #[test]
 #[ignore = "requires private headless Mutter and xdotool; see docs/now-playing-testing.md"]
-fn real_pointer_dismisses_menu_after_using_nested_dropdowns() {
+fn real_pointer_dismisses_menu_after_using_transition_dropdown() {
     let _ = fern::Dispatch::new()
         .level(log::LevelFilter::Debug)
         .chain(std::io::stderr())
@@ -474,7 +660,8 @@ fn real_pointer_dismisses_menu_after_using_nested_dropdowns() {
     let menu = window
         .0
         .controls
-        .display_mode_menu
+        .display_mode
+        .widget()
         .ancestor(gtk::Popover::static_type())
         .unwrap()
         .downcast::<gtk::Popover>()
@@ -500,10 +687,7 @@ fn real_pointer_dismisses_menu_after_using_nested_dropdowns() {
                 wait_until("fullscreen", || window.0.ui.window.is_fullscreen()).await;
                 settle().await;
             }
-            for (name, dropdown) in [
-                ("display mode", &window.0.controls.display_mode_menu),
-                ("transition", &window.0.controls.transition_menu),
-            ] {
+            for (name, dropdown) in [("transition", &window.0.controls.transition_menu)] {
                 for select in [false, true] {
                     for outside_button in [1, 3] {
                         eprintln!("pointer case: fullscreen={fullscreen}, dropdown={name}, select={select}, button={outside_button}");
@@ -521,11 +705,8 @@ fn real_pointer_dismisses_menu_after_using_nested_dropdowns() {
                             let selected = dropdown.selected();
                             let index = if selected == 0 { 1 } else { 0 };
                             if x11 {
-                                let label = if name == "display mode" {
-                                    super::DisplayMode::from_index(index).translated_label()
-                                } else {
-                                    super::TransitionEffect::from_index(index).translated_label()
-                                };
+                                let label =
+                                    super::TransitionEffect::from_index(index).translated_label();
                                 let item = find_label(&nested, &label).expect("visible dropdown option");
                                 let (item_x, item_y) = widget_center(&item, &window.0.ui.window);
                                 input.click(id, &window.0.ui.window, item_x, item_y, 1).await;

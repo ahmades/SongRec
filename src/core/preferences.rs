@@ -12,54 +12,65 @@ pub(crate) const TRANSITION_DURATION_DEFAULT_MS: u64 = 2_000;
 pub(crate) const TRANSITION_DURATION_MIN_MS: u64 = 500;
 /// The longest transition duration exposed by the UI.
 pub(crate) const TRANSITION_DURATION_MAX_MS: u64 = 5_000;
+/// Increment used by the transition-duration controls.
+pub(crate) const TRANSITION_DURATION_STEP_MS: u64 = 500;
 
 /// Default maximum zoom reached by the moving Now Playing background.
 pub(crate) const BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT: u16 = 110;
 /// Smallest background-motion zoom exposed by the UI.
-pub(crate) const BACKGROUND_MOTION_ZOOM_MIN_PERCENT: u16 = 105;
+pub(crate) const BACKGROUND_MOTION_ZOOM_MIN_PERCENT: u16 = 100;
 /// Largest background-motion zoom exposed by the UI.
-pub(crate) const BACKGROUND_MOTION_ZOOM_MAX_PERCENT: u16 = 120;
+pub(crate) const BACKGROUND_MOTION_ZOOM_MAX_PERCENT: u16 = 150;
 /// Increment used by the background-motion zoom controls.
-pub(crate) const BACKGROUND_MOTION_ZOOM_STEP_PERCENT: u16 = 1;
+pub(crate) const BACKGROUND_MOTION_ZOOM_STEP_PERCENT: u16 = 5;
 
 /// Default time taken before the moving background reverses direction.
 pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS: u64 = 30;
 /// Shortest background-motion direction-reversal duration exposed by the UI.
-pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS: u64 = 20;
+pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS: u64 = 5;
 /// Longest background-motion direction-reversal duration exposed by the UI.
 pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS: u64 = 60;
 /// Increment used by the direction-reversal duration controls.
 pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS: u64 = 5;
 
-/// Clamps a transition duration to the range supported by Now Playing.
+/// Clamps a transition duration and rounds it to the nearest supported increment.
 pub(crate) fn clamp_transition_duration_ms(duration_ms: u64) -> u64 {
-    duration_ms.clamp(TRANSITION_DURATION_MIN_MS, TRANSITION_DURATION_MAX_MS)
+    normalize_to_step(
+        duration_ms,
+        TRANSITION_DURATION_MIN_MS,
+        TRANSITION_DURATION_MAX_MS,
+        TRANSITION_DURATION_STEP_MS,
+    )
 }
 
-/// Clamps a background-motion zoom to the range supported by Now Playing.
+/// Clamps a background-motion zoom and rounds it to the nearest supported increment.
 pub(crate) fn clamp_background_motion_zoom_percent(zoom_percent: u16) -> u16 {
-    let zoom_percent = zoom_percent.clamp(
-        BACKGROUND_MOTION_ZOOM_MIN_PERCENT,
-        BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
-    );
-    let offset = zoom_percent - BACKGROUND_MOTION_ZOOM_MIN_PERCENT;
-
-    BACKGROUND_MOTION_ZOOM_MIN_PERCENT
-        + offset / BACKGROUND_MOTION_ZOOM_STEP_PERCENT * BACKGROUND_MOTION_ZOOM_STEP_PERCENT
+    normalize_to_step(
+        u64::from(zoom_percent),
+        u64::from(BACKGROUND_MOTION_ZOOM_MIN_PERCENT),
+        u64::from(BACKGROUND_MOTION_ZOOM_MAX_PERCENT),
+        u64::from(BACKGROUND_MOTION_ZOOM_STEP_PERCENT),
+    ) as u16
 }
 
 /// Normalizes a reversal duration to a supported five-second increment.
 pub(crate) fn normalize_background_motion_reversal_duration_secs(duration_secs: u64) -> u64 {
-    let duration_secs = duration_secs.clamp(
+    normalize_to_step(
+        duration_secs,
         BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
         BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS,
-    );
-    let offset = duration_secs - BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS;
-    let rounded_steps = (offset + BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS / 2)
-        / BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS;
+        BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS,
+    )
+}
 
-    BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS
-        + rounded_steps * BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS
+/// Clamps a value and rounds it to the nearest step relative to the lower bound.
+fn normalize_to_step(value: u64, minimum: u64, maximum: u64, step: u64) -> u64 {
+    debug_assert!(minimum <= maximum);
+    debug_assert!(step > 0);
+
+    let offset = value.clamp(minimum, maximum) - minimum;
+    let rounded_steps = (offset + step / 2) / step;
+    (minimum + rounded_steps * step).min(maximum)
 }
 
 /// Controls the relative size of the album artwork within its reserved layout area.
@@ -1247,13 +1258,14 @@ mod tests {
         AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
         BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
         BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
-        BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BackdropIntensity, BackgroundStyle,
-        CinemaArtworkFraming, CinemaCropFocus, CinemaNowPlayingPreferences,
+        BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackdropIntensity,
+        BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, CinemaNowPlayingPreferences,
         ClassicNowPlayingPreferences, DisplayMode, ImmersiveBackgroundSource,
         NowPlayingPreferenceChange, NowPlayingPreferences, Preferences, PreferencesInterface,
         PreferencesPatch, SharedNowPlayingPreferences, TRANSITION_DURATION_DEFAULT_MS,
-        TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TextSize, TrackInfoAlignment,
-        TransitionEffect,
+        TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TRANSITION_DURATION_STEP_MS,
+        TextSize, TrackInfoAlignment, TransitionEffect, clamp_background_motion_zoom_percent,
+        clamp_transition_duration_ms,
     };
 
     #[test]
@@ -1321,6 +1333,31 @@ mod tests {
             TRANSITION_DURATION_DEFAULT_MS
         );
         assert_eq!(Preferences::default().now_playing, defaults);
+    }
+
+    #[test]
+    fn transition_duration_is_clamped_and_snaps_to_nearest_half_second() {
+        assert_eq!(TRANSITION_DURATION_STEP_MS, 500);
+        assert_eq!(clamp_transition_duration_ms(0), TRANSITION_DURATION_MIN_MS);
+        assert_eq!(clamp_transition_duration_ms(749), 500);
+        assert_eq!(clamp_transition_duration_ms(750), 1_000);
+        assert_eq!(clamp_transition_duration_ms(2_249), 2_000);
+        assert_eq!(clamp_transition_duration_ms(2_250), 2_500);
+        assert_eq!(
+            clamp_transition_duration_ms(u64::MAX),
+            TRANSITION_DURATION_MAX_MS
+        );
+    }
+
+    #[test]
+    fn background_motion_zoom_is_clamped_and_snaps_to_nearest_five_percent() {
+        assert_eq!(BACKGROUND_MOTION_ZOOM_STEP_PERCENT, 5);
+        assert_eq!(clamp_background_motion_zoom_percent(0), 100);
+        assert_eq!(clamp_background_motion_zoom_percent(102), 100);
+        assert_eq!(clamp_background_motion_zoom_percent(103), 105);
+        assert_eq!(clamp_background_motion_zoom_percent(117), 115);
+        assert_eq!(clamp_background_motion_zoom_percent(118), 120);
+        assert_eq!(clamp_background_motion_zoom_percent(u16::MAX), 150);
     }
 
     #[test]
@@ -1608,7 +1645,7 @@ now_playing_display_mode = "full-bleed"
         let preferences: Preferences = toml::from_str(
             r#"
 now_playing_background_motion_enabled = true
-now_playing_background_motion_zoom_percent = 104
+now_playing_background_motion_zoom_percent = 99
 now_playing_background_motion_reversal_duration_secs = 23
 "#,
         )
@@ -1652,7 +1689,7 @@ now_playing_background_motion_reversal_duration_secs = 23
                         immersive_background_source: ImmersiveBackgroundSource::Artist,
                         backdrop_intensity: BackdropIntensity::Bold,
                         background_motion_enabled: true,
-                        background_motion_zoom_percent: 117,
+                        background_motion_zoom_percent: 115,
                         background_motion_reversal_duration_secs: 45,
                         ..SharedNowPlayingPreferences::default()
                     },
@@ -1801,7 +1838,7 @@ now_playing_background_motion_reversal_duration_secs = 23
         interface.update_now_playing(NowPlayingPreferenceChange::BackgroundMotionEnabled(true));
         interface.update_now_playing(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(1));
         interface.update_now_playing(
-            NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(21),
+            NowPlayingPreferenceChange::BackgroundMotionReversalDurationSecs(1),
         );
         assert!(
             interface
