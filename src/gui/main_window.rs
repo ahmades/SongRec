@@ -153,8 +153,11 @@ impl App {
 
         let preferences_interface: PreferencesInterface = PreferencesInterface::new();
         let old_preferences: Preferences = preferences_interface.preferences.clone();
-        let now_playing_controller =
-            SettingsController::new(old_preferences.now_playing, Some(gui_tx.clone()));
+        let now_playing_controller = SettingsController::new_with_presets(
+            old_preferences.now_playing,
+            old_preferences.now_playing_presets.clone(),
+            Some(gui_tx.clone()),
+        );
         let preferences_interface = Arc::new(Mutex::new(preferences_interface));
 
         Self::setup_callbacks(
@@ -1038,6 +1041,15 @@ impl App {
                                     }
                                 }
                             }
+                        }
+                        NowPlayingPresetCatalogChanged { presets } => {
+                            // Preset maintenance does not alter the active
+                            // settings, so it must not refresh the renderer or
+                            // restart artwork/background preparation.
+                            preferences_interface_ptr
+                                .lock()
+                                .unwrap()
+                                .set_now_playing_presets(presets, true);
                         }
                         ErrorMessage(string) => {
                             error!("Displaying error: {}", string);

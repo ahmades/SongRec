@@ -2,6 +2,7 @@
 
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::display_mode::{DisplayModeControls, NowPlayingControlState};
+use super::presets::PresetManagerDialog;
 use super::ui::toggle_fullscreen;
 use super::{
     AlbumCoverSize, BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
@@ -340,6 +341,13 @@ impl NowPlayingWindow {
         menu_box.append(&self.controls.fullscreen_button);
         menu_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
 
+        let presets_button = gtk::Button::builder()
+            .label(gettext("Presets…"))
+            .halign(gtk::Align::Fill)
+            .hexpand(true)
+            .build();
+        menu_box.append(&presets_button);
+
         let reset_button = gtk::Button::builder()
             .label(gettext("Reset"))
             .halign(gtk::Align::Fill)
@@ -349,6 +357,26 @@ impl NowPlayingWindow {
         let controller_for_reset = self.controller.clone();
         reset_button.connect_clicked(move |_| {
             controller_for_reset.reset();
+        });
+
+        let window_for_presets = self.ui.window.downgrade();
+        let popover_for_presets = popover.downgrade();
+        let controller_for_presets = self.controller.clone();
+        presets_button.connect_clicked(move |_| {
+            if let Some(popover) = popover_for_presets.upgrade() {
+                popover.popdown();
+            }
+
+            // Let the nonmodal context menu release its popup state before a
+            // dialog is presented. This avoids nesting another interactive
+            // surface inside the menu's manually managed dismissal path.
+            let window_for_presets = window_for_presets.clone();
+            let controller_for_presets = controller_for_presets.clone();
+            glib::idle_add_local_once(move || {
+                if let Some(window) = window_for_presets.upgrade() {
+                    PresetManagerDialog::new(controller_for_presets).present(&window);
+                }
+            });
         });
 
         let shared_grid = menu_grid();

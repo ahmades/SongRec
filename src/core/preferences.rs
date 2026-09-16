@@ -1,6 +1,7 @@
 use gettextrs::gettext;
 use log::{debug, error};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashSet;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -1078,6 +1079,278 @@ pub enum NowPlayingPreferenceChange {
     TransitionDurationMs(u64),
 }
 
+/// Stable identifier for a saved Now Playing preset.
+pub type NowPlayingPresetId = u64;
+
+// TOML integers are signed 64-bit values. Keeping the allocator inside that
+// range guarantees every ID and `next_id` it produces can be persisted.
+const MAX_PERSISTED_PRESET_ID: NowPlayingPresetId = i64::MAX as NowPlayingPresetId;
+
+/// Long enough for descriptive preset names without allowing accidental essays.
+pub const NOW_PLAYING_PRESET_NAME_MAX_CHARS: usize = 64;
+
+/// A named, immutable-at-rest snapshot of all Now Playing settings.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NowPlayingPreset {
+    #[serde(default)]
+    pub id: NowPlayingPresetId,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub settings: NowPlayingPreferences,
+}
+
+/// Failures produced by explicit preset catalog operations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PresetError {
+    EmptyName,
+    NameTooLong { max_chars: usize },
+    DuplicateName,
+    NotFound,
+    IdExhausted,
+}
+
+impl std::fmt::Display for PresetError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyName => formatter.write_str("preset name cannot be empty"),
+            Self::NameTooLong { max_chars } => {
+                write!(
+                    formatter,
+                    "preset name cannot exceed {max_chars} characters"
+                )
+            }
+            Self::DuplicateName => formatter.write_str("preset name is already in use"),
+            Self::NotFound => formatter.write_str("preset was not found"),
+            Self::IdExhausted => formatter.write_str("no preset identifiers remain"),
+        }
+    }
+}
+
+impl Error for PresetError {}
+
+/// Saved Now Playing snapshots stored in the normal preferences file.
+///
+/// The catalog has no item-count limit. Its stable IDs are independent of
+/// list position and preset name, so sorting, renaming, and deletion are safe.
+///
+/// Fields stay private so new entries can only be produced through the
+/// validating operations below. Deserialization is deliberately more
+/// forgiving: it preserves every manually edited or older entry, repairing
+/// only identifiers that would make entries impossible to address reliably.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct NowPlayingPresetCatalog {
+    next_id: NowPlayingPresetId,
+    items: Vec<NowPlayingPreset>,
+}
+
+impl Default for NowPlayingPresetCatalog {
+    fn default() -> Self {
+        Self {
+            next_id: 1,
+            items: Vec::new(),
+        }
+    }
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct NowPlayingPresetCatalogWire {
+    next_id: NowPlayingPresetId,
+    items: Vec<NowPlayingPreset>,
+}
+
+impl<'de> Deserialize<'de> for NowPlayingPresetCatalog {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = NowPlayingPresetCatalogWire::deserialize(deserializer)?;
+        Ok(Self::repair(wire.next_id, wire.items))
+    }
+}
+
+impl NowPlayingPresetCatalog {
+    pub fn items(&self) -> &[NowPlayingPreset] {
+        &self.items
+    }
+
+    pub fn get(&self, id: NowPlayingPresetId) -> Option<&NowPlayingPreset> {
+        self.items.iter().find(|preset| preset.id == id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    fn is_pristine(&self) -> bool {
+        self.items.is_empty() && self.next_id == 1
+    }
+
+    pub fn create(
+        &mut self,
+        name: &str,
+        mut settings: NowPlayingPreferences,
+    ) -> Result<NowPlayingPresetId, PresetError> {
+        let name = self.validate_name(name, None)?;
+        let id = self.allocate_id()?;
+        settings.normalize();
+        self.items.push(NowPlayingPreset { id, name, settings });
+        Ok(id)
+    }
+
+    pub fn update(
+        &mut self,
+        id: NowPlayingPresetId,
+        mut settings: NowPlayingPreferences,
+    ) -> Result<(), PresetError> {
+        let preset = self
+            .items
+            .iter_mut()
+            .find(|preset| preset.id == id)
+            .ok_or(PresetError::NotFound)?;
+        settings.normalize();
+        preset.settings = settings;
+        Ok(())
+    }
+
+    pub fn rename(&mut self, id: NowPlayingPresetId, name: &str) -> Result<(), PresetError> {
+        if self.get(id).is_none() {
+            return Err(PresetError::NotFound);
+        }
+        let name = self.validate_name(name, Some(id))?;
+        self.items
+            .iter_mut()
+            .find(|preset| preset.id == id)
+            .expect("the preset was checked above")
+            .name = name;
+        Ok(())
+    }
+
+    pub fn delete(&mut self, id: NowPlayingPresetId) -> Result<NowPlayingPreset, PresetError> {
+        let index = self
+            .items
+            .iter()
+            .position(|preset| preset.id == id)
+            .ok_or(PresetError::NotFound)?;
+        Ok(self.items.remove(index))
+    }
+
+    fn validate_name(
+        &self,
+        name: &str,
+        renamed_id: Option<NowPlayingPresetId>,
+    ) -> Result<String, PresetError> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(PresetError::EmptyName);
+        }
+        if name.chars().count() > NOW_PLAYING_PRESET_NAME_MAX_CHARS {
+            return Err(PresetError::NameTooLong {
+                max_chars: NOW_PLAYING_PRESET_NAME_MAX_CHARS,
+            });
+        }
+
+        let folded_name = name.to_lowercase();
+        if self.items.iter().any(|preset| {
+            Some(preset.id) != renamed_id && preset.name.trim().to_lowercase() == folded_name
+        }) {
+            return Err(PresetError::DuplicateName);
+        }
+        Ok(name.to_owned())
+    }
+
+    fn allocate_id(&mut self) -> Result<NowPlayingPresetId, PresetError> {
+        let id = self.next_id.max(1);
+        if id > MAX_PERSISTED_PRESET_ID || self.items.iter().any(|preset| preset.id == id) {
+            return Err(PresetError::IdExhausted);
+        }
+        self.next_id = if id == MAX_PERSISTED_PRESET_ID {
+            id
+        } else {
+            id + 1
+        };
+        Ok(id)
+    }
+
+    fn repair(stored_next_id: NowPlayingPresetId, mut items: Vec<NowPlayingPreset>) -> Self {
+        for preset in &mut items {
+            preset.settings.normalize();
+        }
+
+        // Reserve every valid identifier before repairs so a duplicate early
+        // in the file cannot steal a unique identifier from a later entry.
+        let mut reserved = items
+            .iter()
+            .filter_map(|preset| {
+                (preset.id != 0 && preset.id <= MAX_PERSISTED_PRESET_ID).then_some(preset.id)
+            })
+            .collect::<HashSet<_>>();
+        let maximum_original_id = reserved.iter().copied().max().unwrap_or(0);
+        let mut repair_candidate = if maximum_original_id == MAX_PERSISTED_PRESET_ID {
+            1
+        } else {
+            maximum_original_id + 1
+        };
+        let mut seen = HashSet::new();
+
+        for preset in &mut items {
+            if preset.id != 0 && preset.id <= MAX_PERSISTED_PRESET_ID && seen.insert(preset.id) {
+                continue;
+            }
+
+            let repaired_id = next_available_id(repair_candidate, &reserved)
+                .expect("a Vec cannot occupy the complete u64 identifier space");
+            preset.id = repaired_id;
+            seen.insert(repaired_id);
+            reserved.insert(repaired_id);
+            repair_candidate = if repaired_id == MAX_PERSISTED_PRESET_ID {
+                1
+            } else {
+                repaired_id + 1
+            };
+        }
+
+        let maximum_id = items.iter().map(|preset| preset.id).max().unwrap_or(0);
+        let next_after_maximum = if maximum_id == MAX_PERSISTED_PRESET_ID {
+            MAX_PERSISTED_PRESET_ID
+        } else {
+            maximum_id + 1
+        };
+        Self {
+            next_id: stored_next_id
+                .clamp(1, MAX_PERSISTED_PRESET_ID)
+                .max(next_after_maximum),
+            items,
+        }
+    }
+}
+
+fn next_available_id(
+    start: NowPlayingPresetId,
+    reserved: &HashSet<NowPlayingPresetId>,
+) -> Option<NowPlayingPresetId> {
+    let start = start.clamp(1, MAX_PERSISTED_PRESET_ID);
+    let mut candidate = start;
+    loop {
+        if !reserved.contains(&candidate) {
+            return Some(candidate);
+        }
+        candidate = if candidate == MAX_PERSISTED_PRESET_ID {
+            1
+        } else {
+            candidate + 1
+        };
+        if candidate == start {
+            return None;
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(default)]
 pub struct Preferences {
@@ -1093,6 +1366,8 @@ pub struct Preferences {
     pub current_device_name: Option<String>,
     pub website_search_url: Option<String>,
     pub website_search_text: Option<String>,
+    #[serde(default, skip_serializing_if = "NowPlayingPresetCatalog::is_pristine")]
+    pub now_playing_presets: NowPlayingPresetCatalog,
     #[serde(flatten)]
     pub now_playing: NowPlayingPreferences,
 }
@@ -1121,6 +1396,7 @@ impl Default for Preferences {
             current_device_name: None,
             website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
             website_search_text: Some(gettext("Search on YouTube".to_string())),
+            now_playing_presets: NowPlayingPresetCatalog::default(),
             now_playing: NowPlayingPreferences::default(),
         }
     }
@@ -1237,6 +1513,15 @@ impl PreferencesInterface {
         }
     }
 
+    /// Replaces the in-memory preset catalog and optionally persists the
+    /// complete preferences document in one write.
+    pub fn set_now_playing_presets(&mut self, presets: NowPlayingPresetCatalog, persist: bool) {
+        self.preferences.now_playing_presets = presets;
+        if persist {
+            self.write_after_update();
+        }
+    }
+
     fn write_after_update(&self) {
         if let Err(error) = self.write() {
             error!("{} {}", gettext("When saving the preferences file:"), error);
@@ -1261,8 +1546,9 @@ mod tests {
         BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackdropIntensity,
         BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, CinemaNowPlayingPreferences,
         ClassicNowPlayingPreferences, DisplayMode, ImmersiveBackgroundSource,
-        NowPlayingPreferenceChange, NowPlayingPreferences, Preferences, PreferencesInterface,
-        PreferencesPatch, SharedNowPlayingPreferences, TRANSITION_DURATION_DEFAULT_MS,
+        MAX_PERSISTED_PRESET_ID, NOW_PLAYING_PRESET_NAME_MAX_CHARS, NowPlayingPreferenceChange,
+        NowPlayingPreferences, NowPlayingPresetCatalog, Preferences, PreferencesInterface,
+        PreferencesPatch, PresetError, SharedNowPlayingPreferences, TRANSITION_DURATION_DEFAULT_MS,
         TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TRANSITION_DURATION_STEP_MS,
         TextSize, TrackInfoAlignment, TransitionEffect, clamp_background_motion_zoom_percent,
         clamp_transition_duration_ms,
@@ -1284,6 +1570,264 @@ mod tests {
         interface.set_now_playing(snapshot, true);
         let saved: Preferences = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         assert_eq!(saved.now_playing, snapshot);
+    }
+
+    #[test]
+    fn preset_catalog_crud_validates_names_and_never_reuses_ids() {
+        let mut catalog = NowPlayingPresetCatalog::default();
+        let first_settings = NowPlayingPreferences {
+            display_mode: DisplayMode::Cinema,
+            ..NowPlayingPreferences::default()
+        };
+        let first = catalog.create("  Cinema night  ", first_settings).unwrap();
+        let second = catalog
+            .create("Ambient", NowPlayingPreferences::default())
+            .unwrap();
+
+        assert_eq!(first, 1);
+        assert_eq!(second, 2);
+        assert_eq!(catalog.len(), 2);
+        assert_eq!(catalog.items()[0].name, "Cinema night");
+        assert_eq!(catalog.get(first).unwrap().settings, first_settings);
+        assert_eq!(
+            catalog.create("  ", first_settings),
+            Err(PresetError::EmptyName)
+        );
+        assert_eq!(
+            catalog.create("cinema NIGHT", first_settings),
+            Err(PresetError::DuplicateName)
+        );
+        assert_eq!(
+            catalog.create(
+                &"x".repeat(NOW_PLAYING_PRESET_NAME_MAX_CHARS + 1),
+                first_settings,
+            ),
+            Err(PresetError::NameTooLong {
+                max_chars: NOW_PLAYING_PRESET_NAME_MAX_CHARS,
+            })
+        );
+
+        catalog.rename(second, "  Quiet  ").unwrap();
+        assert_eq!(catalog.get(second).unwrap().name, "Quiet");
+        assert_eq!(
+            catalog.rename(second, "CINEMA NIGHT"),
+            Err(PresetError::DuplicateName)
+        );
+
+        let mut updated = NowPlayingPreferences::default();
+        updated.shared.transition_duration_ms = 749;
+        updated.shared.background_motion_zoom_percent = 118;
+        catalog.update(second, updated).unwrap();
+        assert_eq!(
+            catalog
+                .get(second)
+                .unwrap()
+                .settings
+                .shared
+                .transition_duration_ms,
+            500
+        );
+        assert_eq!(
+            catalog
+                .get(second)
+                .unwrap()
+                .settings
+                .shared
+                .background_motion_zoom_percent,
+            120
+        );
+
+        let removed = catalog.delete(first).unwrap();
+        assert_eq!(removed.id, first);
+        let third = catalog
+            .create("Replacement", NowPlayingPreferences::default())
+            .unwrap();
+        assert_eq!(third, 3, "deleted identifiers must not be reused");
+        assert_eq!(catalog.get(first), None);
+        assert_eq!(catalog.update(999, updated), Err(PresetError::NotFound));
+        assert_eq!(catalog.rename(999, "Missing"), Err(PresetError::NotFound));
+        assert_eq!(catalog.delete(999), Err(PresetError::NotFound));
+    }
+
+    #[test]
+    fn more_than_ten_presets_round_trip_in_the_existing_preferences_file() {
+        let mut preferences = Preferences::default();
+        for index in 0..25 {
+            let mut settings = NowPlayingPreferences::default();
+            settings.display_mode = DisplayMode::ALL[index % DisplayMode::ALL.len()];
+            preferences
+                .now_playing_presets
+                .create(&format!("Preset {}", index + 1), settings)
+                .unwrap();
+        }
+
+        let serialized = toml::to_string(&preferences).unwrap();
+        let deserialized: Preferences = toml::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.now_playing_presets.len(), 25);
+        assert_eq!(
+            deserialized.now_playing_presets,
+            preferences.now_playing_presets
+        );
+        assert_eq!(
+            deserialized.now_playing_presets.items()[24].id,
+            25,
+            "all identifiers must survive the round trip"
+        );
+    }
+
+    #[test]
+    fn deleting_every_preset_does_not_make_identifiers_reusable_after_restart() {
+        let mut preferences = Preferences::default();
+        let first = preferences
+            .now_playing_presets
+            .create("Temporary", NowPlayingPreferences::default())
+            .unwrap();
+        preferences.now_playing_presets.delete(first).unwrap();
+        assert!(preferences.now_playing_presets.is_empty());
+
+        let serialized = toml::to_string(&preferences).unwrap();
+        assert!(serialized.contains("now_playing_presets"));
+        let mut restored: Preferences = toml::from_str(&serialized).unwrap();
+        let next = restored
+            .now_playing_presets
+            .create("After restart", NowPlayingPreferences::default())
+            .unwrap();
+
+        assert_eq!(next, first + 1);
+    }
+
+    #[test]
+    fn preset_identifier_exhaustion_remains_toml_serializable() {
+        let mut catalog = NowPlayingPresetCatalog {
+            next_id: MAX_PERSISTED_PRESET_ID,
+            items: Vec::new(),
+        };
+        let last = catalog
+            .create("Last possible preset", NowPlayingPreferences::default())
+            .unwrap();
+        assert_eq!(last, MAX_PERSISTED_PRESET_ID);
+        assert_eq!(
+            catalog.create("One too many", NowPlayingPreferences::default()),
+            Err(PresetError::IdExhausted)
+        );
+
+        let preferences = Preferences {
+            now_playing_presets: catalog,
+            ..Preferences::default()
+        };
+        let serialized = toml::to_string(&preferences).unwrap();
+        let restored: Preferences = toml::from_str(&serialized).unwrap();
+        assert_eq!(
+            restored.now_playing_presets.items()[0].id,
+            MAX_PERSISTED_PRESET_ID
+        );
+    }
+
+    #[test]
+    fn preset_deserialization_is_lossless_and_repairs_only_ids() {
+        let preferences: Preferences = toml::from_str(
+            r#"
+[now_playing_presets]
+next_id = 2
+
+[[now_playing_presets.items]]
+id = 1
+name = "Duplicate"
+[now_playing_presets.items.settings]
+now_playing_background_motion_zoom_percent = 117
+
+[[now_playing_presets.items]]
+id = 1
+name = "duplicate"
+[now_playing_presets.items.settings]
+now_playing_transition_duration_ms = 749
+
+[[now_playing_presets.items]]
+name = "  manually padded  "
+[now_playing_presets.items.settings]
+now_playing_background_motion_reversal_duration_secs = 23
+"#,
+        )
+        .unwrap();
+
+        let catalog = &preferences.now_playing_presets;
+        assert_eq!(catalog.len(), 3);
+        assert_eq!(catalog.items()[0].id, 1);
+        assert_eq!(catalog.items()[1].id, 2);
+        assert_eq!(catalog.items()[2].id, 3);
+        assert_eq!(catalog.items()[0].name, "Duplicate");
+        assert_eq!(catalog.items()[1].name, "duplicate");
+        assert_eq!(catalog.items()[2].name, "  manually padded  ");
+        assert_eq!(
+            catalog.items()[0]
+                .settings
+                .shared
+                .background_motion_zoom_percent,
+            115
+        );
+        assert_eq!(
+            catalog.items()[1].settings.shared.transition_duration_ms,
+            500
+        );
+        assert_eq!(
+            catalog.items()[2]
+                .settings
+                .shared
+                .background_motion_reversal_duration_secs,
+            25
+        );
+
+        let mut catalog = catalog.clone();
+        assert_eq!(
+            catalog
+                .create("New after repair", NowPlayingPreferences::default())
+                .unwrap(),
+            4
+        );
+    }
+
+    #[test]
+    fn legacy_preferences_default_to_an_empty_preset_catalog() {
+        let preferences: Preferences = toml::from_str("hide_now_playing_info = false").unwrap();
+        assert!(preferences.now_playing_presets.is_empty());
+
+        let serialized = toml::to_string(&Preferences::default()).unwrap();
+        assert!(!serialized.contains("now_playing_presets"));
+    }
+
+    #[test]
+    fn preset_catalog_persistence_and_current_settings_reset_are_independent() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("preferences.toml");
+        let mut interface = PreferencesInterface {
+            preferences_file_path: Some(path.clone()),
+            preferences: Preferences::default(),
+        };
+        let mut catalog = NowPlayingPresetCatalog::default();
+        let preset_id = catalog
+            .create("Saved", NowPlayingPreferences::default())
+            .unwrap();
+
+        interface.set_now_playing_presets(catalog.clone(), false);
+        assert_eq!(interface.preferences.now_playing_presets, catalog);
+        assert!(!path.exists());
+
+        interface.preferences.now_playing.display_mode = DisplayMode::LightsOff;
+        interface.update_now_playing(NowPlayingPreferenceChange::Reset);
+        assert_eq!(interface.preferences.now_playing_presets, catalog);
+        assert_eq!(
+            interface.preferences.now_playing,
+            NowPlayingPreferences::default()
+        );
+
+        interface.set_now_playing_presets(catalog.clone(), true);
+        let saved: Preferences = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(saved.now_playing_presets, catalog);
+        assert_eq!(
+            saved.now_playing_presets.get(preset_id).unwrap().name,
+            "Saved"
+        );
     }
 
     #[test]
@@ -1706,7 +2250,12 @@ now_playing_background_motion_reversal_duration_secs = 23
 
     #[test]
     fn general_patch_preserves_now_playing_preferences() {
+        let mut presets = NowPlayingPresetCatalog::default();
+        presets
+            .create("Saved", NowPlayingPreferences::default())
+            .unwrap();
         let preferences = Preferences {
+            now_playing_presets: presets.clone(),
             now_playing: NowPlayingPreferences {
                 classic: ClassicNowPlayingPreferences {
                     background_style: BackgroundStyle::Solid,
@@ -1728,6 +2277,7 @@ now_playing_background_motion_reversal_duration_secs = 23
 
         assert_eq!(interface.preferences.enable_notifications, Some(false));
         assert_eq!(interface.preferences.now_playing, expected_now_playing);
+        assert_eq!(interface.preferences.now_playing_presets, presets);
     }
 
     #[test]

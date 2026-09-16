@@ -1,7 +1,9 @@
 //! Shared Now Playing settings state and debounced snapshot persistence.
 
 use super::NowPlayingSettings;
-use crate::core::preferences::NowPlayingPreferenceChange;
+use crate::core::preferences::{
+    NowPlayingPreferenceChange, NowPlayingPresetCatalog, NowPlayingPresetId, PresetError,
+};
 use crate::core::thread_messages::GUIMessage;
 use gio::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -14,17 +16,30 @@ const PERSISTENCE_DEBOUNCE_MS: u64 = 150;
 #[derive(Clone)]
 pub(crate) struct NowPlayingSettingsController {
     settings: Rc<Cell<NowPlayingSettings>>,
+    presets: Rc<RefCell<NowPlayingPresetCatalog>>,
+    selected_preset_id: Rc<Cell<Option<NowPlayingPresetId>>>,
     gui_tx: Option<async_channel::Sender<GUIMessage>>,
     pending_save: Rc<RefCell<Option<glib::SourceId>>>,
 }
 
 impl NowPlayingSettingsController {
+    #[cfg(test)]
     pub(crate) fn new(
         settings: NowPlayingSettings,
         gui_tx: Option<async_channel::Sender<GUIMessage>>,
     ) -> Self {
+        Self::new_with_presets(settings, NowPlayingPresetCatalog::default(), gui_tx)
+    }
+
+    pub(crate) fn new_with_presets(
+        settings: NowPlayingSettings,
+        presets: NowPlayingPresetCatalog,
+        gui_tx: Option<async_channel::Sender<GUIMessage>>,
+    ) -> Self {
         Self {
             settings: Rc::new(Cell::new(settings)),
+            presets: Rc::new(RefCell::new(presets)),
+            selected_preset_id: Rc::new(Cell::new(None)),
             gui_tx,
             pending_save: Rc::new(RefCell::new(None)),
         }
@@ -36,6 +51,77 @@ impl NowPlayingSettingsController {
 
     pub(crate) fn settings_cell(&self) -> Rc<Cell<NowPlayingSettings>> {
         self.settings.clone()
+    }
+
+    pub(crate) fn presets(&self) -> NowPlayingPresetCatalog {
+        self.presets.borrow().clone()
+    }
+
+    pub(crate) fn selected_preset_id(&self) -> Option<NowPlayingPresetId> {
+        self.selected_preset_id.get()
+    }
+
+    /// Whether the active settings have diverged from the selected snapshot.
+    /// This is derived instead of stored so every ordinary settings mutation
+    /// automatically keeps the state accurate.
+    pub(crate) fn selected_preset_is_modified(&self) -> bool {
+        let Some(id) = self.selected_preset_id() else {
+            return false;
+        };
+        self.presets
+            .borrow()
+            .get(id)
+            .is_none_or(|preset| preset.settings != self.settings())
+    }
+
+    pub(crate) fn create_preset(&self, name: &str) -> Result<NowPlayingPresetId, PresetError> {
+        let id = self.presets.borrow_mut().create(name, self.settings())?;
+        self.selected_preset_id.set(Some(id));
+        self.send_presets();
+        Ok(id)
+    }
+
+    /// Replaces the complete active settings snapshot in one update. Any
+    /// pending slider save is cancelled so it cannot later overwrite the
+    /// loaded preset with stale settings.
+    pub(crate) fn load_preset(&self, id: NowPlayingPresetId) -> Result<(), PresetError> {
+        let settings = self
+            .presets
+            .borrow()
+            .get(id)
+            .map(|preset| preset.settings)
+            .ok_or(PresetError::NotFound)?;
+        self.cancel_all();
+        self.settings.set(settings);
+        self.selected_preset_id.set(Some(id));
+        self.send(true);
+        Ok(())
+    }
+
+    pub(crate) fn update_preset(&self, id: NowPlayingPresetId) -> Result<(), PresetError> {
+        self.presets.borrow_mut().update(id, self.settings())?;
+        self.selected_preset_id.set(Some(id));
+        self.send_presets();
+        Ok(())
+    }
+
+    pub(crate) fn rename_preset(
+        &self,
+        id: NowPlayingPresetId,
+        name: &str,
+    ) -> Result<(), PresetError> {
+        self.presets.borrow_mut().rename(id, name)?;
+        self.send_presets();
+        Ok(())
+    }
+
+    pub(crate) fn delete_preset(&self, id: NowPlayingPresetId) -> Result<(), PresetError> {
+        self.presets.borrow_mut().delete(id)?;
+        if self.selected_preset_id() == Some(id) {
+            self.selected_preset_id.set(None);
+        }
+        self.send_presets();
+        Ok(())
     }
 
     pub(crate) fn update(&self, change: NowPlayingPreferenceChange) {
@@ -90,10 +176,9 @@ impl NowPlayingSettingsController {
         let controller = self.clone();
         application.connect_shutdown(move |_| {
             controller.cancel_all();
-            preferences
-                .lock()
-                .unwrap()
-                .set_now_playing(controller.settings(), true);
+            let mut preferences = preferences.lock().unwrap();
+            preferences.set_now_playing(controller.settings(), false);
+            preferences.set_now_playing_presets(controller.presets(), true);
         });
     }
 
@@ -113,6 +198,16 @@ impl NowPlayingSettingsController {
             log::error!("Failed to update Now Playing preference: {error}");
         }
     }
+
+    fn send_presets(&self) {
+        if let Some(sender) = self.gui_tx.as_ref()
+            && let Err(error) = sender.try_send(GUIMessage::NowPlayingPresetCatalogChanged {
+                presets: self.presets(),
+            })
+        {
+            log::error!("Failed to update Now Playing presets: {error}");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -121,8 +216,9 @@ mod tests {
     use crate::core::preferences::{
         BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
         CinemaArtworkFraming, CinemaCropFocus, DisplayMode, NowPlayingPreferenceChange,
-        NowPlayingPreferences, TextSize,
+        NowPlayingPreferences, NowPlayingPresetCatalog, TextSize,
     };
+    use crate::core::thread_messages::GUIMessage;
 
     #[test]
     fn immediate_updates_and_reset_share_one_normalized_model() {
@@ -187,7 +283,6 @@ mod tests {
     #[test]
     fn sliders_share_one_save_and_reset_cancels_stale_snapshots() {
         let _serial = crate::MAIN_CONTEXT_TEST_LOCK.lock().unwrap();
-        use crate::core::thread_messages::GUIMessage;
         use std::time::Duration;
 
         let context = glib::MainContext::default();
@@ -229,6 +324,93 @@ mod tests {
         // The shutdown owner can save the current value before cancelling the timer.
         assert_eq!(controller.settings().shared.text_size, TextSize::LARGE);
         controller.cancel_all();
+        context.block_on(glib::timeout_future(Duration::from_millis(190)));
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn catalog_operations_do_not_emit_active_settings_updates() {
+        let (sender, receiver) = async_channel::unbounded();
+        let controller =
+            NowPlayingSettingsController::new(NowPlayingPreferences::default(), Some(sender));
+
+        let id = controller.create_preset("  Living room  ").unwrap();
+        let catalog = match receiver.try_recv().unwrap() {
+            GUIMessage::NowPlayingPresetCatalogChanged { presets } => presets,
+            message => panic!("unexpected GUI message: {message:?}"),
+        };
+        assert_eq!(catalog.items()[0].name, "Living room");
+        assert_eq!(controller.selected_preset_id(), Some(id));
+        assert!(!controller.selected_preset_is_modified());
+
+        controller.update(NowPlayingPreferenceChange::KeepScreenAwake(true));
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            GUIMessage::NowPlayingPreferenceChanged { .. }
+        ));
+        assert_eq!(controller.selected_preset_id(), Some(id));
+        assert!(controller.selected_preset_is_modified());
+
+        controller.update_preset(id).unwrap();
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            GUIMessage::NowPlayingPresetCatalogChanged { .. }
+        ));
+        assert!(!controller.selected_preset_is_modified());
+
+        controller.rename_preset(id, "Projector").unwrap();
+        let catalog = match receiver.try_recv().unwrap() {
+            GUIMessage::NowPlayingPresetCatalogChanged { presets } => presets,
+            message => panic!("unexpected GUI message: {message:?}"),
+        };
+        assert_eq!(catalog.get(id).unwrap().name, "Projector");
+
+        controller.delete_preset(id).unwrap();
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            GUIMessage::NowPlayingPresetCatalogChanged { .. }
+        ));
+        assert_eq!(controller.selected_preset_id(), None);
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn loading_a_preset_cancels_debounce_and_emits_one_atomic_snapshot() {
+        let _serial = crate::MAIN_CONTEXT_TEST_LOCK.lock().unwrap();
+        use std::time::Duration;
+
+        let context = glib::MainContext::default();
+        let _guard = context.acquire().unwrap();
+        let mut saved = NowPlayingPreferences::default();
+        saved.shared.text_size = TextSize::LARGE;
+        let mut presets = NowPlayingPresetCatalog::default();
+        let id = presets.create("Large", saved).unwrap();
+        let (sender, receiver) = async_channel::unbounded();
+        let controller = NowPlayingSettingsController::new_with_presets(
+            NowPlayingPreferences::default(),
+            presets,
+            Some(sender),
+        );
+
+        controller.update_debounced(NowPlayingPreferenceChange::KeepScreenAwake(true));
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            GUIMessage::NowPlayingPreferenceChanged { persist: false, .. }
+        ));
+
+        controller.load_preset(id).unwrap();
+        match receiver.try_recv().unwrap() {
+            GUIMessage::NowPlayingPreferenceChanged { settings, persist } => {
+                assert!(persist);
+                assert_eq!(settings, saved);
+            }
+            message => panic!("unexpected GUI message: {message:?}"),
+        }
+        assert_eq!(controller.settings(), saved);
+        assert_eq!(controller.selected_preset_id(), Some(id));
+        assert!(!controller.selected_preset_is_modified());
+        assert!(controller.pending_save.borrow().is_none());
+
         context.block_on(glib::timeout_future(Duration::from_millis(190)));
         assert!(receiver.try_recv().is_err());
     }

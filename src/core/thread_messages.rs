@@ -3,7 +3,7 @@
 use crate::core::artwork::{Artwork, ArtworkStatus};
 use crate::core::fingerprinting::signature_format::DecodedSignature;
 #[cfg(feature = "gui")]
-use crate::core::preferences::{NowPlayingPreferences, PreferencesPatch};
+use crate::core::preferences::{NowPlayingPreferences, NowPlayingPresetCatalog, PreferencesPatch};
 
 use std::sync::Arc;
 use std::thread;
@@ -198,6 +198,13 @@ pub enum GUIMessage {
     NowPlayingPreferenceChanged {
         settings: NowPlayingPreferences,
         persist: bool,
+    },
+    /// The named Now Playing snapshots changed without changing the active
+    /// presentation. Keeping this separate prevents catalog maintenance from
+    /// needlessly rebuilding artwork or refreshing the Now Playing window.
+    #[cfg(feature = "gui")]
+    NowPlayingPresetCatalogChanged {
+        presets: NowPlayingPresetCatalog,
     },
     NetworkStatus(bool),  // Is the network reachable?
     RateLimitState(bool), // Are we rate-limited?

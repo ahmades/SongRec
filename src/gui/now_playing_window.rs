@@ -17,6 +17,7 @@ mod palette;
 #[cfg(test)]
 mod performance_tests;
 mod preferences;
+mod presets;
 #[cfg(test)]
 mod regression_tests;
 mod screen_awake;

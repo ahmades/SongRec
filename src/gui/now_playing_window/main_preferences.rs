@@ -2,6 +2,7 @@
 
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::display_mode::{DisplayModeControls, NowPlayingControlState};
+use super::presets::PresetManagerDialog;
 use super::{
     AlbumCoverSize, BackgroundStyle, NowPlayingSettings, SettingsController, TextSize,
     TrackInfoAlignment, TransitionEffect, transition_duration_from_scale,
@@ -40,7 +41,9 @@ impl PreferenceSection {
 
 #[derive(Clone)]
 struct PreferencesWidgets {
+    window: adw::ApplicationWindow,
     reset: gtk::Button,
+    presets: gtk::Button,
     display_mode: DisplayModeControls,
     keep_screen_awake: adw::SwitchRow,
     classic_settings: PreferenceSection,
@@ -105,9 +108,11 @@ impl NowPlayingPreferencesView {
         cinema_crop_focus_row.add_suffix(cinema_crop_focus.widget());
 
         let widgets = PreferencesWidgets {
+            window: builder.object("main_window").unwrap(),
             reset: builder
                 .object("reset_now_playing_preferences_button")
                 .unwrap(),
+            presets: builder.object("now_playing_presets_button").unwrap(),
             display_mode,
             keep_screen_awake: builder.object("keep_screen_awake_setting").unwrap(),
             classic_settings: PreferenceSection::from_builder(
@@ -372,6 +377,14 @@ impl NowPlayingPreferencesView {
     }
 
     fn connect_handlers(&self, controller: SettingsController) {
+        let controller_for_presets = controller.clone();
+        let preferences_window = self.widgets.window.downgrade();
+        self.widgets.presets.connect_clicked(move |_| {
+            if let Some(window) = preferences_window.upgrade() {
+                PresetManagerDialog::new(controller_for_presets.clone()).present(&window);
+            }
+        });
+
         let controller_for_reset = controller.clone();
         self.widgets.reset.connect_clicked(move |_| {
             controller_for_reset.reset();

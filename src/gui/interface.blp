@@ -459,6 +459,17 @@ Adw.ApplicationWindow main_window {
               label: _("Reset");
             };
 
+            Adw.ActionRow now_playing_presets_setting {
+              subtitle: _("Save and restore complete Now Playing setups");
+              title: _("Presets");
+
+              [suffix]
+              Button now_playing_presets_button {
+                label: _("Manage…");
+                valign: center;
+              }
+            }
+
             Adw.ActionRow display_mode_setting {
               subtitle: _("Choose how the recognized song is presented");
               title: _("Display mode");
