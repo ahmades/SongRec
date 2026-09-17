@@ -341,13 +341,13 @@ impl PresetManagerDialog {
         content.append(&content_stack);
         toolbar.set_content(Some(&content));
 
-        let save_new = gtk::Button::with_label(&gettext("Save current as new"));
+        let save_new = gtk::Button::with_label(&gettext("Save current settings as…"));
         let delete = gtk::Button::builder()
-            .icon_name("edit-delete-symbolic")
+            .label(gettext("Delete"))
             .tooltip_text(gettext("Delete preset"))
             .build();
         let rename = gtk::Button::builder()
-            .icon_name("document-edit-symbolic")
+            .label(gettext("Rename"))
             .tooltip_text(gettext("Rename preset"))
             .build();
         let update = gtk::Button::with_label(&gettext("Update"));
@@ -384,6 +384,19 @@ impl PresetManagerDialog {
             .content_height(DIALOG_CONTENT_HEIGHT)
             .child(&toolbar)
             .build();
+        let dialog_for_escape = dialog.downgrade();
+        let escape = gtk::EventControllerKey::new();
+        escape.set_propagation_phase(gtk::PropagationPhase::Capture);
+        escape.connect_key_pressed(move |_, key, _, _| {
+            if key != gdk::Key::Escape {
+                return glib::Propagation::Proceed;
+            }
+            if let Some(dialog) = dialog_for_escape.upgrade() {
+                let _ = dialog.close();
+            }
+            glib::Propagation::Stop
+        });
+        dialog.add_controller(escape);
 
         let handles = ManagerHandles {
             dialog: dialog.downgrade(),

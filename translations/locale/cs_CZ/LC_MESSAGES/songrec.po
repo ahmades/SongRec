@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-16 23:42+0200\n"
+"POT-Creation-Date: 2026-09-17 23:30+0200\n"
 "PO-Revision-Date: 2026-07-09 20:02+0000\n"
 "Last-Translator: Fjuro <fjuro@users.noreply.weblate.fossplant.re>\n"
 "Language-Team: Czech <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -248,9 +248,9 @@ msgstr "Opravdu chcete vymazat historii?"
 msgid "_Yes"
 msgstr "_Ano"
 
-#: src/gui/main_window.rs:1339 src/gui/now_playing_window/presets.rs:543
-#: src/gui/now_playing_window/presets.rs:657
-#: src/gui/now_playing_window/presets.rs:689
+#: src/gui/main_window.rs:1339 src/gui/now_playing_window/presets.rs:556
+#: src/gui/now_playing_window/presets.rs:670
+#: src/gui/now_playing_window/presets.rs:702
 msgid "_Cancel"
 msgstr "_Zrušit"
 
@@ -534,15 +534,23 @@ msgid "Saved Now Playing presets"
 msgstr ""
 
 #: src/gui/now_playing_window/presets.rs:344
-msgid "Save current as new"
+msgid "Save current settings as…"
+msgstr ""
+
+#: src/gui/now_playing_window/presets.rs:346
+msgid "Delete"
 msgstr ""
 
 #: src/gui/now_playing_window/presets.rs:347
 msgid "Delete preset"
 msgstr ""
 
+#: src/gui/now_playing_window/presets.rs:350
+msgid "Rename"
+msgstr ""
+
 #: src/gui/now_playing_window/presets.rs:351
-#: src/gui/now_playing_window/presets.rs:505
+#: src/gui/now_playing_window/presets.rs:518
 msgid "Rename preset"
 msgstr ""
 
@@ -562,83 +570,83 @@ msgstr ""
 msgid "Rename selected preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:500
+#: src/gui/now_playing_window/presets.rs:513
 msgid "Save Now Playing preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:501
+#: src/gui/now_playing_window/presets.rs:514
 msgid "_Save"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:506
+#: src/gui/now_playing_window/presets.rs:519
 msgid "_Rename"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:514
-#: src/gui/now_playing_window/presets.rs:517
+#: src/gui/now_playing_window/presets.rs:527
+#: src/gui/now_playing_window/presets.rs:530
 msgid "Preset name"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:583
+#: src/gui/now_playing_window/presets.rs:596
 msgid "Could not save preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:590
+#: src/gui/now_playing_window/presets.rs:603
 msgid "Could not rename preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:620
-#: src/gui/now_playing_window/presets.rs:719
+#: src/gui/now_playing_window/presets.rs:633
+#: src/gui/now_playing_window/presets.rs:732
 msgid "Enter a preset name."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:624
-#: src/gui/now_playing_window/presets.rs:721
+#: src/gui/now_playing_window/presets.rs:637
+#: src/gui/now_playing_window/presets.rs:734
 msgid "Preset names can contain at most {max} characters."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:637
-#: src/gui/now_playing_window/presets.rs:724
+#: src/gui/now_playing_window/presets.rs:650
+#: src/gui/now_playing_window/presets.rs:737
 msgid "A preset with this name already exists."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:648
+#: src/gui/now_playing_window/presets.rs:661
 msgid "Update preset?"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:650
+#: src/gui/now_playing_window/presets.rs:663
 msgid "Replace “{name}” with the current Now Playing settings?"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:658
+#: src/gui/now_playing_window/presets.rs:671
 msgid "_Update"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:669
+#: src/gui/now_playing_window/presets.rs:682
 msgid "Could not update preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:683
+#: src/gui/now_playing_window/presets.rs:696
 msgid "Delete preset?"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:684
+#: src/gui/now_playing_window/presets.rs:697
 msgid "Delete “{name}”? This cannot be undone."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:690
+#: src/gui/now_playing_window/presets.rs:703
 msgid "_Delete"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:702
+#: src/gui/now_playing_window/presets.rs:715
 msgid "Could not delete preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:725
+#: src/gui/now_playing_window/presets.rs:738
 msgid "The selected preset no longer exists."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:726
+#: src/gui/now_playing_window/presets.rs:739
 msgid "A new preset could not be assigned an identifier."
 msgstr ""
 
