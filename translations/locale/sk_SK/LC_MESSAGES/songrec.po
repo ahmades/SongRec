@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SongRec v0.6.2\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-17 23:30+0200\n"
+"POT-Creation-Date: 2026-09-18 13:50+0200\n"
 "PO-Revision-Date: 2026-06-28 00:30+0000\n"
 "Last-Translator: Jozef Gaal <preklady@mayday.sk>\n"
 "Language-Team: Slovak <https://weblate.fossplant.re/projects/songrec/songrec/"
@@ -194,17 +194,17 @@ msgstr "Chyba zvuku:"
 msgid "Audio error: No input device available"
 msgstr "Chyba zvuku: Nie je k dispozícii žiadne vstupné zariadenie"
 
-#: src/core/preferences.rs:1398 src/gui/main_window.rs:353
-#: src/gui/interface.blp:129 src/gui/interface.blp:878
-#: src/gui/interface.blp:928
+#: src/core/preferences.rs:1443 src/gui/main_window.rs:353
+#: src/gui/interface.blp:129 src/gui/interface.blp:901
+#: src/gui/interface.blp:951
 msgid "Search on YouTube"
 msgstr "Vyhľadať na YouTube"
 
-#: src/core/preferences.rs:1438
+#: src/core/preferences.rs:1483
 msgid "When parsing the preferences file:"
 msgstr "Pri spracovaní súboru predvolieb:"
 
-#: src/core/preferences.rs:1527
+#: src/core/preferences.rs:1572
 msgid "When saving the preferences file:"
 msgstr "Pri ukladaná súboru predvolieb:"
 
@@ -311,17 +311,17 @@ msgid "Top right"
 msgstr ""
 
 #: src/gui/now_playing_window/cinema_framing.rs:160
-#: src/gui/now_playing_window/menu.rs:272 src/gui/interface.blp:561
+#: src/gui/now_playing_window/menu.rs:289 src/gui/interface.blp:584
 msgid "Left"
 msgstr ""
 
 #: src/gui/now_playing_window/cinema_framing.rs:161
-#: src/gui/now_playing_window/menu.rs:273 src/gui/interface.blp:567
+#: src/gui/now_playing_window/menu.rs:290 src/gui/interface.blp:590
 msgid "Center"
 msgstr ""
 
 #: src/gui/now_playing_window/cinema_framing.rs:162
-#: src/gui/now_playing_window/menu.rs:274 src/gui/interface.blp:572
+#: src/gui/now_playing_window/menu.rs:291 src/gui/interface.blp:595
 msgid "Right"
 msgstr ""
 
@@ -337,151 +337,159 @@ msgstr ""
 msgid "Bottom right"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:135
+#: src/gui/now_playing_window/display_mode.rs:137
 msgid "Classic"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:136
+#: src/gui/now_playing_window/display_mode.rs:138
 msgid "Cinema"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:137
+#: src/gui/now_playing_window/display_mode.rs:139
 msgid "Ambient"
 msgstr ""
 
-#: src/gui/now_playing_window/display_mode.rs:138
+#: src/gui/now_playing_window/display_mode.rs:140
 msgid "Lights Off"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:195 src/gui/interface.blp:485
+#: src/gui/now_playing_window/menu.rs:187 src/gui/interface.blp:502
+msgid "Dim after (min)"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:212 src/gui/interface.blp:508
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:197 src/gui/interface.blp:490
+#: src/gui/now_playing_window/menu.rs:214 src/gui/interface.blp:513
 msgid "Text size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:210 src/gui/interface.blp:676
+#: src/gui/now_playing_window/menu.rs:227 src/gui/interface.blp:699
 msgid "Album cover"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:211 src/gui/interface.blp:681
+#: src/gui/now_playing_window/menu.rs:228 src/gui/interface.blp:704
 msgid "Artist"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:213 src/gui/interface.blp:698
+#: src/gui/now_playing_window/menu.rs:230 src/gui/interface.blp:721
 msgid "Soft"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:214 src/gui/interface.blp:704
+#: src/gui/now_playing_window/menu.rs:231 src/gui/interface.blp:727
 msgid "Balanced"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:215 src/gui/interface.blp:709
+#: src/gui/now_playing_window/menu.rs:232 src/gui/interface.blp:732
 msgid "Bold"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:218 src/gui/interface.blp:716
+#: src/gui/now_playing_window/menu.rs:235 src/gui/interface.blp:739
 msgid "Background motion"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:220 src/gui/interface.blp:722
+#: src/gui/now_playing_window/menu.rs:237 src/gui/interface.blp:745
 msgid "Zoom level (%)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:226 src/gui/interface.blp:738
+#: src/gui/now_playing_window/menu.rs:243 src/gui/interface.blp:761
 msgid "Direction change interval (s)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:245 src/gui/interface.blp:640
+#: src/gui/now_playing_window/menu.rs:262 src/gui/interface.blp:663
 msgid "Crop focus"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:268 src/gui/interface.blp:603
+#: src/gui/now_playing_window/menu.rs:285 src/gui/interface.blp:626
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:269 src/gui/interface.blp:608
+#: src/gui/now_playing_window/menu.rs:286 src/gui/interface.blp:631
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:271 src/gui/interface.blp:552
+#: src/gui/now_playing_window/menu.rs:288 src/gui/interface.blp:575
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:345
+#: src/gui/now_playing_window/menu.rs:366
 msgid "Presets…"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:352 src/gui/interface.blp:459
+#: src/gui/now_playing_window/menu.rs:373 src/gui/interface.blp:459
 msgid "Reset"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:391 src/gui/interface.blp:480
+#: src/gui/now_playing_window/menu.rs:412 src/gui/interface.blp:480
 msgid "Keep screen awake"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:417 src/gui/interface.blp:504
+#: src/gui/now_playing_window/menu.rs:420 src/gui/interface.blp:485
+msgid "Burn-in protection"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:456 src/gui/interface.blp:527
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:443 src/gui/interface.blp:530
-#: src/gui/interface.blp:536
+#: src/gui/now_playing_window/menu.rs:482 src/gui/interface.blp:553
+#: src/gui/interface.blp:559
 msgid "Classic settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:449 src/gui/interface.blp:547
+#: src/gui/now_playing_window/menu.rs:488 src/gui/interface.blp:570
 msgid "Round corners of album cover"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:470 src/gui/interface.blp:616
-#: src/gui/interface.blp:623
+#: src/gui/now_playing_window/menu.rs:509 src/gui/interface.blp:639
+#: src/gui/interface.blp:646
 msgid "Cinema settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:484 src/gui/interface.blp:647
-#: src/gui/interface.blp:654
+#: src/gui/now_playing_window/menu.rs:523 src/gui/interface.blp:670
+#: src/gui/interface.blp:677
 msgid "Cinema and Ambient settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:699
-#: src/gui/now_playing_window/regression_tests.rs:771
+#: src/gui/now_playing_window/menu.rs:738
+#: src/gui/now_playing_window/regression_tests.rs:796
 msgid "Exit full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:702
+#: src/gui/now_playing_window/menu.rs:741
 msgid "Enter full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:734 src/gui/interface.blp:475
+#: src/gui/now_playing_window/menu.rs:773 src/gui/interface.blp:475
 msgid "Display mode"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:854 src/gui/interface.blp:634
+#: src/gui/now_playing_window/menu.rs:916 src/gui/interface.blp:657
 msgid "Album cover framing"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:888 src/gui/interface.blp:665
+#: src/gui/now_playing_window/menu.rs:950 src/gui/interface.blp:688
 msgid "Background"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:925 src/gui/interface.blp:688
+#: src/gui/now_playing_window/menu.rs:987 src/gui/interface.blp:711
 msgid "Background intensity"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:966 src/gui/interface.blp:509
+#: src/gui/now_playing_window/menu.rs:1028 src/gui/interface.blp:532
 msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:988 src/gui/interface.blp:514
+#: src/gui/now_playing_window/menu.rs:1050 src/gui/interface.blp:537
 msgid "Transition duration (ms)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1010 src/gui/interface.blp:579
+#: src/gui/now_playing_window/menu.rs:1072 src/gui/interface.blp:602
 msgid "Album cover size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1078 src/gui/interface.blp:593
+#: src/gui/now_playing_window/menu.rs:1140 src/gui/interface.blp:616
 msgid "Background style"
 msgstr ""
 
@@ -659,7 +667,7 @@ msgstr ""
 msgid "Now Playing window is visible"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:374 src/gui/now_playing_window/ui.rs:835
+#: src/gui/now_playing_window/track.rs:389 src/gui/now_playing_window/ui.rs:837
 msgid "Listening..."
 msgstr ""
 
@@ -703,7 +711,7 @@ msgstr ""
 msgid "Swing down"
 msgstr ""
 
-#: src/gui/now_playing_window/ui.rs:803
+#: src/gui/now_playing_window/ui.rs:805
 msgid "Now playing"
 msgstr ""
 
@@ -812,7 +820,7 @@ msgstr "Zobraziť obľúbené"
 msgid "Application menu"
 msgstr "Ponuka aplikácie"
 
-#: src/gui/interface.blp:369 src/gui/interface.blp:830
+#: src/gui/interface.blp:369 src/gui/interface.blp:853
 msgid "Export to CSV"
 msgstr "Exportovať do CSV"
 
@@ -829,7 +837,7 @@ msgid "Notify when a new song is recognized or network error is encountered"
 msgstr ""
 "Upozorniť, keď je rozpoznaná nová skladba alebo sa vyskytne sieťová chyba"
 
-#: src/gui/interface.blp:388 src/gui/interface.blp:785
+#: src/gui/interface.blp:388 src/gui/interface.blp:808
 msgid "Show notifications"
 msgstr "Zobrazovať oznámenia"
 
@@ -923,118 +931,126 @@ msgid ""
 msgstr ""
 
 #: src/gui/interface.blp:484
+msgid "Dim the Now Playing display after a period of inactivity"
+msgstr ""
+
+#: src/gui/interface.blp:501
+msgid "Time without interaction or a new song before the display is dimmed"
+msgstr ""
+
+#: src/gui/interface.blp:507
 msgid "Hide song details in modes that support it"
 msgstr ""
 
-#: src/gui/interface.blp:489
+#: src/gui/interface.blp:512
 msgid "Choose a text size or use one of the marked presets"
 msgstr ""
 
-#: src/gui/interface.blp:503
+#: src/gui/interface.blp:526
 msgid "Keep showing the last recognized song when there is no current match"
 msgstr ""
 
-#: src/gui/interface.blp:508
+#: src/gui/interface.blp:531
 msgid "Choose the effect used when the recognized track changes"
 msgstr ""
 
-#: src/gui/interface.blp:513
+#: src/gui/interface.blp:536
 msgid "Set how long the selected transition effect lasts"
 msgstr ""
 
-#: src/gui/interface.blp:546
+#: src/gui/interface.blp:569
 msgid "Round the corners of the album artwork"
 msgstr ""
 
-#: src/gui/interface.blp:551
+#: src/gui/interface.blp:574
 msgid "Choose how the track information is positioned"
 msgstr ""
 
-#: src/gui/interface.blp:578
+#: src/gui/interface.blp:601
 msgid "Choose an album artwork size or use one of the marked presets"
 msgstr ""
 
-#: src/gui/interface.blp:592
+#: src/gui/interface.blp:615
 msgid "Choose how the window's background is rendered"
 msgstr ""
 
-#: src/gui/interface.blp:633
+#: src/gui/interface.blp:656
 msgid "Choose whether the whole cover is shown or cropped to fill its frame"
 msgstr ""
 
-#: src/gui/interface.blp:639
+#: src/gui/interface.blp:662
 msgid "Choose which part of the cover stays visible when Fill crops it"
 msgstr ""
 
-#: src/gui/interface.blp:664
+#: src/gui/interface.blp:687
 msgid "Choose the image used for the blurred background"
 msgstr ""
 
-#: src/gui/interface.blp:687
+#: src/gui/interface.blp:710
 msgid "Control how blurred, dark, and colorful the background appears"
 msgstr ""
 
-#: src/gui/interface.blp:715
+#: src/gui/interface.blp:738
 msgid "Gently drift the blurred background while keeping the cover still"
 msgstr ""
 
-#: src/gui/interface.blp:721
+#: src/gui/interface.blp:744
 msgid "Set how far the background zooms in"
 msgstr ""
 
-#: src/gui/interface.blp:737
+#: src/gui/interface.blp:760
 msgid "Set how often the background changes direction"
 msgstr ""
 
-#: src/gui/interface.blp:760
+#: src/gui/interface.blp:783
 msgid "Settings"
 msgstr "Nastavenia"
 
-#: src/gui/interface.blp:790
+#: src/gui/interface.blp:813
 msgid "_Preferences..."
 msgstr "_Predvoľby..."
 
-#: src/gui/interface.blp:797
+#: src/gui/interface.blp:820
 msgid "_Keyboard Shortcuts"
 msgstr "_Klávesové skratky"
 
-#: src/gui/interface.blp:802
+#: src/gui/interface.blp:825
 msgid "About..."
 msgstr "O aplikácii..."
 
-#: src/gui/interface.blp:835
+#: src/gui/interface.blp:858
 msgid "Delete history"
 msgstr "Vymazať históriu"
 
-#: src/gui/interface.blp:840
+#: src/gui/interface.blp:863
 msgid "Select a file to recognize"
 msgstr "Vyberte súbor na rozpoznanie"
 
-#: src/gui/interface.blp:852 src/gui/interface.blp:902
+#: src/gui/interface.blp:875 src/gui/interface.blp:925
 msgid "Copy artist and track"
 msgstr "Kopírovať interpreta a názov skladby"
 
-#: src/gui/interface.blp:858 src/gui/interface.blp:908
+#: src/gui/interface.blp:881 src/gui/interface.blp:931
 msgid "Copy artist"
 msgstr "Kopírovať interpreta"
 
-#: src/gui/interface.blp:864 src/gui/interface.blp:914
+#: src/gui/interface.blp:887 src/gui/interface.blp:937
 msgid "Copy track name"
 msgstr "Kopírovať názov skladby"
 
-#: src/gui/interface.blp:870 src/gui/interface.blp:920
+#: src/gui/interface.blp:893 src/gui/interface.blp:943
 msgid "Copy album"
 msgstr "Kopírovať album"
 
-#: src/gui/interface.blp:886
+#: src/gui/interface.blp:909
 msgid "Delete from History"
 msgstr "Vymazať z histórie"
 
-#: src/gui/interface.blp:892
+#: src/gui/interface.blp:915
 msgid "Add to Favorites"
 msgstr "Pridať medzi obľúbené"
 
-#: src/gui/interface.blp:936
+#: src/gui/interface.blp:959
 msgid "Remove from Favorites"
 msgstr "Odstrániť z obľúbených"
 

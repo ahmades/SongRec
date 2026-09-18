@@ -34,6 +34,15 @@ pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS: u64 = 60;
 /// Increment used by the direction-reversal duration controls.
 pub(crate) const BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS: u64 = 5;
 
+/// Default time without activity before burn-in protection dims Now Playing.
+pub(crate) const BURN_IN_INACTIVITY_DEFAULT_MINUTES: u16 = 5;
+/// Shortest burn-in inactivity period exposed by the UI.
+pub(crate) const BURN_IN_INACTIVITY_MIN_MINUTES: u16 = 1;
+/// Longest burn-in inactivity period exposed by the UI.
+pub(crate) const BURN_IN_INACTIVITY_MAX_MINUTES: u16 = 120;
+/// Increment used by the burn-in inactivity controls.
+pub(crate) const BURN_IN_INACTIVITY_STEP_MINUTES: u16 = 1;
+
 /// Clamps a transition duration and rounds it to the nearest supported increment.
 pub(crate) fn clamp_transition_duration_ms(duration_ms: u64) -> u64 {
     normalize_to_step(
@@ -62,6 +71,16 @@ pub(crate) fn normalize_background_motion_reversal_duration_secs(duration_secs: 
         BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS,
         BACKGROUND_MOTION_REVERSAL_DURATION_STEP_SECS,
     )
+}
+
+/// Clamps the burn-in inactivity period to the range and increment exposed by the UI.
+pub(crate) fn normalize_burn_in_inactivity_minutes(minutes: u16) -> u16 {
+    normalize_to_step(
+        u64::from(minutes),
+        u64::from(BURN_IN_INACTIVITY_MIN_MINUTES),
+        u64::from(BURN_IN_INACTIVITY_MAX_MINUTES),
+        u64::from(BURN_IN_INACTIVITY_STEP_MINUTES),
+    ) as u16
 }
 
 /// Clamps a value and rounds it to the nearest step relative to the lower bound.
@@ -809,6 +828,10 @@ pub struct CinemaNowPlayingPreferences {
 pub struct SharedNowPlayingPreferences {
     #[serde(rename = "now_playing_keep_screen_awake")]
     pub keep_screen_awake: bool,
+    #[serde(rename = "now_playing_burn_in_protection_enabled")]
+    pub burn_in_protection_enabled: bool,
+    #[serde(rename = "now_playing_burn_in_inactivity_minutes")]
+    pub burn_in_inactivity_minutes: u16,
     #[serde(rename = "hide_now_playing_info")]
     pub hide_track_info: bool,
     #[serde(rename = "now_playing_text_size_percent")]
@@ -834,6 +857,8 @@ impl Default for SharedNowPlayingPreferences {
     fn default() -> Self {
         Self {
             keep_screen_awake: false,
+            burn_in_protection_enabled: false,
+            burn_in_inactivity_minutes: BURN_IN_INACTIVITY_DEFAULT_MINUTES,
             hide_track_info: false,
             text_size: TextSize::default(),
             immersive_background_source: ImmersiveBackgroundSource::default(),
@@ -882,6 +907,10 @@ struct NowPlayingPreferencesWire {
     display_mode: Option<DisplayMode>,
     #[serde(rename = "now_playing_keep_screen_awake")]
     keep_screen_awake: Option<bool>,
+    #[serde(rename = "now_playing_burn_in_protection_enabled")]
+    burn_in_protection_enabled: Option<bool>,
+    #[serde(rename = "now_playing_burn_in_inactivity_minutes")]
+    burn_in_inactivity_minutes: Option<u16>,
     #[serde(rename = "now_playing_round_corners")]
     round_corners: Option<bool>,
     #[serde(rename = "hide_now_playing_info")]
@@ -954,6 +983,12 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
                 keep_screen_awake: wire
                     .keep_screen_awake
                     .unwrap_or(defaults.shared.keep_screen_awake),
+                burn_in_protection_enabled: wire
+                    .burn_in_protection_enabled
+                    .unwrap_or(defaults.shared.burn_in_protection_enabled),
+                burn_in_inactivity_minutes: wire
+                    .burn_in_inactivity_minutes
+                    .unwrap_or(defaults.shared.burn_in_inactivity_minutes),
                 hide_track_info: wire
                     .hide_track_info
                     .unwrap_or(defaults.shared.hide_track_info),
@@ -989,6 +1024,8 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
 
 impl NowPlayingPreferences {
     fn normalize(&mut self) {
+        self.shared.burn_in_inactivity_minutes =
+            normalize_burn_in_inactivity_minutes(self.shared.burn_in_inactivity_minutes);
         self.shared.transition_duration_ms =
             clamp_transition_duration_ms(self.shared.transition_duration_ms);
         self.shared.background_motion_zoom_percent =
@@ -1005,6 +1042,12 @@ impl NowPlayingPreferences {
             NowPlayingPreferenceChange::DisplayMode(value) => self.display_mode = value,
             NowPlayingPreferenceChange::KeepScreenAwake(value) => {
                 self.shared.keep_screen_awake = value;
+            }
+            NowPlayingPreferenceChange::BurnInProtectionEnabled(value) => {
+                self.shared.burn_in_protection_enabled = value;
+            }
+            NowPlayingPreferenceChange::BurnInInactivityMinutes(value) => {
+                self.shared.burn_in_inactivity_minutes = value;
             }
             NowPlayingPreferenceChange::RoundCorners(value) => self.classic.round_corners = value,
             NowPlayingPreferenceChange::CinemaArtworkFraming(value) => {
@@ -1061,6 +1104,8 @@ pub enum NowPlayingPreferenceChange {
     Reset,
     DisplayMode(DisplayMode),
     KeepScreenAwake(bool),
+    BurnInProtectionEnabled(bool),
+    BurnInInactivityMinutes(u16),
     RoundCorners(bool),
     CinemaArtworkFraming(CinemaArtworkFraming),
     CinemaCropFocus(CinemaCropFocus),
@@ -1543,7 +1588,9 @@ mod tests {
         AlbumCoverSize, BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS,
         BACKGROUND_MOTION_REVERSAL_DURATION_MAX_SECS, BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS,
         BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
-        BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BACKGROUND_MOTION_ZOOM_STEP_PERCENT, BackdropIntensity,
+        BACKGROUND_MOTION_ZOOM_MIN_PERCENT, BACKGROUND_MOTION_ZOOM_STEP_PERCENT,
+        BURN_IN_INACTIVITY_DEFAULT_MINUTES, BURN_IN_INACTIVITY_MAX_MINUTES,
+        BURN_IN_INACTIVITY_MIN_MINUTES, BURN_IN_INACTIVITY_STEP_MINUTES, BackdropIntensity,
         BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, CinemaNowPlayingPreferences,
         ClassicNowPlayingPreferences, DisplayMode, ImmersiveBackgroundSource,
         MAX_PERSISTED_PRESET_ID, NOW_PLAYING_PRESET_NAME_MAX_CHARS, NowPlayingPreferenceChange,
@@ -1551,7 +1598,7 @@ mod tests {
         PreferencesPatch, PresetError, SharedNowPlayingPreferences, TRANSITION_DURATION_DEFAULT_MS,
         TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TRANSITION_DURATION_STEP_MS,
         TextSize, TrackInfoAlignment, TransitionEffect, clamp_background_motion_zoom_percent,
-        clamp_transition_duration_ms,
+        clamp_transition_duration_ms, normalize_burn_in_inactivity_minutes,
     };
 
     #[test]
@@ -1851,6 +1898,11 @@ now_playing_background_motion_reversal_duration_secs = 23
         );
         assert_eq!(defaults.cinema.crop_focus, CinemaCropFocus::Center);
         assert!(!defaults.shared.keep_screen_awake);
+        assert!(!defaults.shared.burn_in_protection_enabled);
+        assert_eq!(
+            defaults.shared.burn_in_inactivity_minutes,
+            BURN_IN_INACTIVITY_DEFAULT_MINUTES
+        );
         assert!(!defaults.shared.hide_track_info);
         assert_eq!(defaults.shared.text_size, TextSize::MEDIUM);
         assert_eq!(
@@ -1905,6 +1957,17 @@ now_playing_background_motion_reversal_duration_secs = 23
     }
 
     #[test]
+    fn burn_in_inactivity_minutes_are_clamped_to_the_supported_range() {
+        assert_eq!(BURN_IN_INACTIVITY_STEP_MINUTES, 1);
+        assert_eq!(normalize_burn_in_inactivity_minutes(0), 1);
+        assert_eq!(normalize_burn_in_inactivity_minutes(47), 47);
+        assert_eq!(
+            normalize_burn_in_inactivity_minutes(u16::MAX),
+            BURN_IN_INACTIVITY_MAX_MINUTES
+        );
+    }
+
+    #[test]
     fn now_playing_preferences_keep_the_existing_flat_toml_schema() {
         let serialized = toml::to_string(&Preferences::default()).unwrap();
         let table = serialized.parse::<toml::Table>().unwrap();
@@ -1914,6 +1977,14 @@ now_playing_background_motion_reversal_duration_secs = 23
         assert_eq!(
             table["now_playing_keep_screen_awake"].as_bool(),
             Some(false)
+        );
+        assert_eq!(
+            table["now_playing_burn_in_protection_enabled"].as_bool(),
+            Some(false)
+        );
+        assert_eq!(
+            table["now_playing_burn_in_inactivity_minutes"].as_integer(),
+            Some(5)
         );
         assert_eq!(table["now_playing_round_corners"].as_bool(), Some(true));
         assert_eq!(table["hide_now_playing_info"].as_bool(), Some(false));
@@ -1999,6 +2070,8 @@ lights_off_enabled = false
                 cinema: CinemaNowPlayingPreferences::default(),
                 shared: SharedNowPlayingPreferences {
                     keep_screen_awake: false,
+                    burn_in_protection_enabled: false,
+                    burn_in_inactivity_minutes: BURN_IN_INACTIVITY_DEFAULT_MINUTES,
                     hide_track_info: true,
                     text_size: TextSize::MEDIUM,
                     immersive_background_source: ImmersiveBackgroundSource::AlbumCover,
@@ -2120,6 +2193,33 @@ now_playing_cinema_crop_focus = "top-right"
     }
 
     #[test]
+    fn burn_in_preferences_are_backward_compatible_normalized_and_round_trip() {
+        let missing: Preferences = toml::from_str("hide_now_playing_info = false").unwrap();
+        assert!(!missing.now_playing.shared.burn_in_protection_enabled);
+        assert_eq!(
+            missing.now_playing.shared.burn_in_inactivity_minutes,
+            BURN_IN_INACTIVITY_DEFAULT_MINUTES
+        );
+
+        let configured: Preferences = toml::from_str(
+            r#"
+now_playing_burn_in_protection_enabled = true
+now_playing_burn_in_inactivity_minutes = 0
+"#,
+        )
+        .unwrap();
+        assert!(configured.now_playing.shared.burn_in_protection_enabled);
+        assert_eq!(
+            configured.now_playing.shared.burn_in_inactivity_minutes,
+            BURN_IN_INACTIVITY_MIN_MINUTES
+        );
+
+        let serialized = toml::to_string(&configured).unwrap();
+        let deserialized: Preferences = toml::from_str(&serialized).unwrap();
+        assert_eq!(deserialized.now_playing, configured.now_playing);
+    }
+
+    #[test]
     fn legacy_lights_off_is_migrated_without_discarding_classic_settings() {
         let preferences: Preferences = toml::from_str(
             r#"
@@ -2228,6 +2328,8 @@ now_playing_background_motion_reversal_duration_secs = 23
                         crop_focus: CinemaCropFocus::BottomLeft,
                     },
                     shared: SharedNowPlayingPreferences {
+                        burn_in_protection_enabled: true,
+                        burn_in_inactivity_minutes: 47,
                         hide_track_info: true,
                         text_size: TextSize::from_scale_value(113.0),
                         immersive_background_source: ImmersiveBackgroundSource::Artist,
@@ -2297,6 +2399,8 @@ now_playing_background_motion_reversal_duration_secs = 23
                 },
                 shared: SharedNowPlayingPreferences {
                     keep_screen_awake: true,
+                    burn_in_protection_enabled: true,
+                    burn_in_inactivity_minutes: BURN_IN_INACTIVITY_MAX_MINUTES,
                     hide_track_info: true,
                     text_size: TextSize::LARGE,
                     background_motion_enabled: true,
@@ -2332,6 +2436,8 @@ now_playing_background_motion_reversal_duration_secs = 23
 
         interface.update_now_playing(NowPlayingPreferenceChange::HideTrackInfo(true));
         interface.update_now_playing(NowPlayingPreferenceChange::KeepScreenAwake(true));
+        interface.update_now_playing(NowPlayingPreferenceChange::BurnInProtectionEnabled(true));
+        interface.update_now_playing(NowPlayingPreferenceChange::BurnInInactivityMinutes(0));
         interface.update_now_playing(NowPlayingPreferenceChange::TextSize(
             TextSize::from_scale_value(113.0),
         ));
@@ -2359,6 +2465,21 @@ now_playing_background_motion_reversal_duration_secs = 23
         ));
         assert!(interface.preferences.now_playing.shared.hide_track_info);
         assert!(interface.preferences.now_playing.shared.keep_screen_awake);
+        assert!(
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .burn_in_protection_enabled
+        );
+        assert_eq!(
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .burn_in_inactivity_minutes,
+            BURN_IN_INACTIVITY_MIN_MINUTES
+        );
         assert_eq!(
             interface.preferences.now_playing.shared.text_size,
             TextSize::from_scale_value(113.0)

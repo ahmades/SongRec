@@ -7,6 +7,7 @@
 
 mod album_cover_size;
 mod background;
+mod burn_in;
 mod cinema_framing;
 mod controller;
 mod display_mode;
@@ -33,6 +34,7 @@ mod ui;
 
 use crate::core::artwork_service::{ArtworkPolicy, ArtworkService};
 use adw::prelude::*;
+use burn_in::BurnInController;
 use controller::NowPlayingSettingsController;
 use menu::NowPlayingControls;
 use screen_awake::ScreenAwakeController;
@@ -47,7 +49,7 @@ pub(crate) use crate::core::preferences::{
     BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS, BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
     NowPlayingPreferences as NowPlayingSettings, TRANSITION_DURATION_DEFAULT_MS,
     clamp_background_motion_zoom_percent, clamp_transition_duration_ms,
-    normalize_background_motion_reversal_duration_secs,
+    normalize_background_motion_reversal_duration_secs, normalize_burn_in_inactivity_minutes,
 };
 pub(crate) use controller::NowPlayingSettingsController as SettingsController;
 pub(crate) use main_preferences::NowPlayingPreferencesView;
@@ -62,6 +64,7 @@ pub struct NowPlayingWindow {
     text_css: style::TextCss,
     applied_settings: std::cell::Cell<Option<NowPlayingSettings>>,
     screen_awake: ScreenAwakeController,
+    burn_in: BurnInController,
     artwork_timing: Option<timing::ArtworkTimingProbe>,
     artist_background_service: ArtworkService,
 }
@@ -88,6 +91,7 @@ impl NowPlayingWindow {
         let controls = menu::build_controls();
         let state = NowPlayingState::new(controller.settings_cell());
         let screen_awake = ScreenAwakeController::new(application);
+        let burn_in = BurnInController::new(&ui.burn_in_dim_layer);
 
         let mut now_playing = Self {
             ui,
@@ -97,12 +101,14 @@ impl NowPlayingWindow {
             text_css,
             applied_settings: std::cell::Cell::new(None),
             screen_awake,
+            burn_in,
             artwork_timing: None,
             artist_background_service: ArtworkService::new(ArtworkPolicy::Thumbnail),
         };
 
         now_playing.setup_rendering();
         now_playing.screen_awake.bind_window(&now_playing.ui.window);
+        now_playing.burn_in.bind_window(&now_playing.ui.window);
         now_playing.setup_track_transition_handlers();
         now_playing.apply_initial_preferences(settings);
         now_playing.setup_context_menu(settings);
@@ -128,6 +134,7 @@ impl NowPlayingWindow {
     /// Closes the window while keeping its internal state available for reuse.
     pub fn close(&self) {
         self.screen_awake.release();
+        self.burn_in.release();
         self.ui.window.close();
     }
 }

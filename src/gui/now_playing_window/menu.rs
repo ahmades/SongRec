@@ -135,6 +135,10 @@ fn label_control(label: &gtk::Label, control: &impl IsA<gtk::Widget>) {
 pub(super) struct NowPlayingControls {
     pub(super) display_mode: DisplayModeControls,
     pub(super) keep_screen_awake: gtk::Switch,
+    pub(super) burn_in_protection: gtk::Switch,
+    pub(super) burn_in_inactivity_minutes_label: gtk::Label,
+    pub(super) burn_in_inactivity_minutes: gtk::SpinButton,
+    pub(super) burn_in_details: gtk::Revealer,
     pub(super) classic_settings: gtk::Box,
     pub(super) cinema_settings: gtk::Box,
     pub(super) immersive_settings: gtk::Box,
@@ -179,6 +183,19 @@ pub(super) struct NowPlayingControls {
 pub(super) fn build_controls() -> NowPlayingControls {
     let display_mode = DisplayModeControls::new();
     let keep_screen_awake = gtk::Switch::new();
+    let burn_in_protection = gtk::Switch::new();
+    let burn_in_inactivity_minutes_label = gtk::Label::new(Some(&gettext("Dim after (min)")));
+    let burn_in_inactivity_minutes = gtk::SpinButton::with_range(
+        f64::from(crate::core::preferences::BURN_IN_INACTIVITY_MIN_MINUTES),
+        f64::from(crate::core::preferences::BURN_IN_INACTIVITY_MAX_MINUTES),
+        f64::from(crate::core::preferences::BURN_IN_INACTIVITY_STEP_MINUTES),
+    );
+    burn_in_inactivity_minutes.set_numeric(true);
+    burn_in_inactivity_minutes.set_snap_to_ticks(true);
+    burn_in_inactivity_minutes.set_value(f64::from(
+        crate::core::preferences::BURN_IN_INACTIVITY_DEFAULT_MINUTES,
+    ));
+    let burn_in_details = dependent_revealer();
     let classic_settings = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(6)
@@ -278,6 +295,10 @@ pub(super) fn build_controls() -> NowPlayingControls {
     NowPlayingControls {
         display_mode,
         keep_screen_awake,
+        burn_in_protection,
+        burn_in_inactivity_minutes_label,
+        burn_in_inactivity_minutes,
+        burn_in_details,
         classic_settings,
         cinema_settings,
         immersive_settings,
@@ -393,9 +414,27 @@ impl NowPlayingWindow {
             settings.shared.keep_screen_awake,
             true,
         );
-        self.add_switch_menu_row_with_label(
+        self.add_switch_menu_row(
             &shared_grid,
             2,
+            &gettext("Burn-in protection"),
+            &self.controls.burn_in_protection,
+            settings.shared.burn_in_protection_enabled,
+            true,
+        );
+        let burn_in_grid = menu_grid();
+        self.add_spin_menu_row_with_label(
+            &burn_in_grid,
+            0,
+            &self.controls.burn_in_inactivity_minutes_label,
+            &self.controls.burn_in_inactivity_minutes,
+            settings.shared.burn_in_inactivity_minutes,
+        );
+        set_dependent_rows(&self.controls.burn_in_details, &burn_in_grid);
+        shared_grid.attach(&self.controls.burn_in_details, 0, 3, 2, 1);
+        self.add_switch_menu_row_with_label(
+            &shared_grid,
+            4,
             &self.controls.hide_track_info_label,
             &self.controls.hide_track_info,
             settings.shared.hide_track_info,
@@ -410,10 +449,10 @@ impl NowPlayingWindow {
             settings.shared.text_size.scale_value(),
         );
         set_dependent_rows(&self.controls.text_size_details, &text_size_grid);
-        shared_grid.attach(&self.controls.text_size_details, 0, 3, 2, 1);
+        shared_grid.attach(&self.controls.text_size_details, 0, 5, 2, 1);
         self.add_switch_menu_row(
             &shared_grid,
-            4,
+            6,
             &gettext("Always display last recognized song"),
             &self.controls.always_display_last_recognized_song,
             settings.shared.always_display_last_recognized_song,
@@ -421,7 +460,7 @@ impl NowPlayingWindow {
         );
         self.add_transition_menu_row(
             &shared_grid,
-            5,
+            7,
             &self.controls.transition_menu,
             settings.shared.transition,
         );
@@ -437,7 +476,7 @@ impl NowPlayingWindow {
             &self.controls.transition_duration_details,
             &transition_duration_grid,
         );
-        shared_grid.attach(&self.controls.transition_duration_details, 0, 6, 2, 1);
+        shared_grid.attach(&self.controls.transition_duration_details, 0, 8, 2, 1);
         menu_box.append(&shared_grid);
 
         let classic_heading = section_heading(&gettext("Classic settings"));
@@ -800,6 +839,26 @@ impl NowPlayingWindow {
         menu_grid.attach(scale, 1, row, 1, 1);
     }
 
+    /// Adds a compact, exact numeric control to a dependent menu row.
+    fn add_spin_menu_row_with_label(
+        &self,
+        menu_grid: &gtk::Grid,
+        row: i32,
+        label: &gtk::Label,
+        spin: &gtk::SpinButton,
+        value: u16,
+    ) {
+        label.set_halign(gtk::Align::Start);
+        label.set_valign(gtk::Align::Center);
+        label.set_hexpand(true);
+        menu_grid.attach(label, 0, row, 1, 1);
+        spin.set_value(f64::from(value));
+        spin.set_halign(gtk::Align::End);
+        spin.set_valign(gtk::Align::Center);
+        label_control(label, spin);
+        menu_grid.attach(spin, 1, row, 1, 1);
+    }
+
     /// Applies the dependency policy shared by the context menu and the main
     /// preferences page without duplicating mode-specific conditions here.
     pub(super) fn apply_control_state(&self, state: NowPlayingControlState) {
@@ -821,6 +880,9 @@ impl NowPlayingWindow {
         self.controls
             .text_size_details
             .set_reveal_child(state.show_text_size);
+        self.controls
+            .burn_in_details
+            .set_reveal_child(state.show_burn_in_details);
         self.controls
             .cinema_crop_focus_details
             .set_reveal_child(state.show_crop_focus);
@@ -1118,6 +1180,10 @@ impl NowPlayingWindow {
             NowPlayingPreferenceChange::KeepScreenAwake,
         );
         bind_switch(
+            &self.controls.burn_in_protection,
+            NowPlayingPreferenceChange::BurnInProtectionEnabled,
+        );
+        bind_switch(
             &self.controls.hide_track_info,
             NowPlayingPreferenceChange::HideTrackInfo,
         );
@@ -1254,6 +1320,20 @@ impl NowPlayingWindow {
         bind_scale(&self.controls.transition_duration, |value| {
             NowPlayingPreferenceChange::TransitionDurationMs(transition_duration_from_scale(value))
         });
+
+        let applying = self.state.applying_settings.clone();
+        let controller = self.controller.clone();
+        self.controls
+            .burn_in_inactivity_minutes
+            .connect_value_changed(move |spin| {
+                if !applying.get() {
+                    controller.update_debounced(
+                        NowPlayingPreferenceChange::BurnInInactivityMinutes(
+                            spin.value_as_int().max(0) as u16,
+                        ),
+                    );
+                }
+            });
     }
 }
 

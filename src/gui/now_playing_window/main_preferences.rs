@@ -46,6 +46,8 @@ struct PreferencesWidgets {
     presets: gtk::Button,
     display_mode: DisplayModeControls,
     keep_screen_awake: adw::SwitchRow,
+    burn_in_protection_enabled: adw::SwitchRow,
+    burn_in_inactivity_minutes: adw::SpinRow,
     classic_settings: PreferenceSection,
     cinema_settings: PreferenceSection,
     cinema_artwork_framing: CinemaArtworkFramingControls,
@@ -115,6 +117,12 @@ impl NowPlayingPreferencesView {
             presets: builder.object("now_playing_presets_button").unwrap(),
             display_mode,
             keep_screen_awake: builder.object("keep_screen_awake_setting").unwrap(),
+            burn_in_protection_enabled: builder
+                .object("burn_in_protection_enabled_setting")
+                .unwrap(),
+            burn_in_inactivity_minutes: builder
+                .object("burn_in_inactivity_minutes_setting")
+                .unwrap(),
             classic_settings: PreferenceSection::from_builder(
                 builder,
                 &[
@@ -204,6 +212,7 @@ impl NowPlayingPreferencesView {
         ] {
             mark_dependent_row(row);
         }
+        mark_dependent_row(widgets.burn_in_inactivity_minutes.upcast_ref());
 
         for (scale, row_name) in [
             (&widgets.text_size, "text_size_setting"),
@@ -255,6 +264,12 @@ impl NowPlayingPreferencesView {
         self.widgets
             .keep_screen_awake
             .set_active(settings.shared.keep_screen_awake);
+        self.widgets
+            .burn_in_protection_enabled
+            .set_active(settings.shared.burn_in_protection_enabled);
+        self.widgets
+            .burn_in_inactivity_minutes
+            .set_value(f64::from(settings.shared.burn_in_inactivity_minutes));
         self.widgets
             .cinema_artwork_framing
             .set_value(settings.cinema.artwork_framing);
@@ -347,6 +362,9 @@ impl NowPlayingPreferencesView {
     fn apply_control_state(&self, settings: NowPlayingSettings) {
         let state = NowPlayingControlState::from_settings(settings);
         self.widgets
+            .burn_in_inactivity_minutes
+            .set_visible(state.show_burn_in_details);
+        self.widgets
             .hide_track_info
             .set_sensitive(state.hide_track_info_sensitive);
         self.widgets.text_size_row.set_visible(state.show_text_size);
@@ -409,6 +427,10 @@ impl NowPlayingPreferencesView {
             NowPlayingPreferenceChange::KeepScreenAwake,
         );
         bind_switch(
+            &self.widgets.burn_in_protection_enabled,
+            NowPlayingPreferenceChange::BurnInProtectionEnabled,
+        );
+        bind_switch(
             &self.widgets.hide_track_info,
             NowPlayingPreferenceChange::HideTrackInfo,
         );
@@ -420,6 +442,20 @@ impl NowPlayingPreferencesView {
             &self.widgets.always_display_last_recognized_song,
             NowPlayingPreferenceChange::AlwaysDisplayLastRecognizedSong,
         );
+
+        let applying = self.applying.clone();
+        let controller_for_burn_in_inactivity = controller.clone();
+        self.widgets
+            .burn_in_inactivity_minutes
+            .connect_value_notify(move |row| {
+                if !applying.get() {
+                    controller_for_burn_in_inactivity.update(
+                        NowPlayingPreferenceChange::BurnInInactivityMinutes(
+                            row.value().round().max(0.0) as u16,
+                        ),
+                    );
+                }
+            });
 
         let applying = self.applying.clone();
         let controller_for_mode = controller.clone();

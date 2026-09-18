@@ -480,6 +480,29 @@ Adw.ApplicationWindow main_window {
               title: _("Keep screen awake");
             }
 
+            Adw.SwitchRow burn_in_protection_enabled_setting {
+              subtitle: _("Dim the Now Playing display after a period of inactivity");
+              title: _("Burn-in protection");
+            }
+
+            Adw.SpinRow burn_in_inactivity_minutes_setting {
+              adjustment: Adjustment burn_in_inactivity_minutes_value {
+                lower: 1;
+                page-increment: 1;
+                page-size: 0;
+                step-increment: 1;
+                upper: 120;
+                value: 5;
+              };
+
+              climb-rate: 1;
+              numeric: true;
+              snap-to-ticks: true;
+              subtitle: _("Time without interaction or a new song before the display is dimmed");
+              title: _("Dim after (min)");
+              update-policy: if_valid;
+            }
+
             Adw.SwitchRow hide_track_info_setting {
               subtitle: _("Hide song details in modes that support it");
               title: _("Hide track info");

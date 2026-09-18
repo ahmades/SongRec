@@ -776,6 +776,8 @@ pub(super) struct NowPlayingWidgets {
     pub(super) immersive_details_label: gtk::Label,
     pub(super) immersive_info_box: gtk::Box,
     pub(super) background_area: gtk::DrawingArea,
+    /// Black, non-interactive scrim outside the transition snapshot subtree.
+    pub(super) burn_in_dim_layer: gtk::DrawingArea,
     pub(super) content_transition: TrackTransitionLayout,
 }
 
@@ -976,7 +978,21 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
     artwork_placeholder.set_css_classes(&[TITLE_CSS_CLASS]);
     let content_transition =
         TrackTransitionLayout::new(content_revealer, content_reservation, &overlay);
-    window.set_child(Some(&overlay));
+
+    // Keep burn-in dimming outside the scene that TrackTransitionLayout
+    // snapshots. Otherwise a crossfade could bake the scrim into its outgoing
+    // frame and then dim that snapshot a second time.
+    let burn_in_dim_layer = gtk::DrawingArea::builder()
+        .hexpand(true)
+        .vexpand(true)
+        .opacity(0.0)
+        .build();
+    burn_in_dim_layer.set_can_target(false);
+    let window_content = gtk::Overlay::new();
+    window_content.set_child(Some(&overlay));
+    window_content.add_overlay(&burn_in_dim_layer);
+    window_content.set_measure_overlay(&burn_in_dim_layer, false);
+    window.set_child(Some(&window_content));
 
     // Target only the canvas subtree: the titlebar and context-menu popovers
     // keep their own click behavior. GTK supplies the desktop's double-click
@@ -1062,6 +1078,7 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
             immersive_details_label,
             immersive_info_box,
             background_area,
+            burn_in_dim_layer,
             content_transition,
         },
         text_css,

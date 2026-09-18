@@ -1,6 +1,7 @@
 //! Recognition-result presentation and transition handling.
 
 use super::background::{CachedGradient, redraw_background};
+use super::burn_in::BurnInController;
 use super::palette::{
     ArtworkRequirement, ArtworkVisuals, Background, prepare_artwork, prepare_immersive_background,
     visuals_from_artwork,
@@ -69,6 +70,7 @@ pub(super) struct TrackPresentation {
     applied_backdrop_intensity: Rc<Cell<BackdropIntensity>>,
     current_background: Rc<Cell<Background>>,
     track_state: Rc<RefCell<TrackPresentationState>>,
+    burn_in: BurnInController,
 }
 
 /// Cloneable callback context for lazy artist-background preparation.
@@ -97,6 +99,7 @@ impl ArtistBackgroundPreparation {
     fn apply_action(&self, action: PresentationAction) {
         match action {
             PresentationAction::BeginTransition => {
+                self.presentation.presentation_changed();
                 begin_track_transition(&self.transition, self.settings.get());
             }
             PresentationAction::RenderTrack(track) => {
@@ -283,17 +286,29 @@ impl TrackPresentation {
             applied_backdrop_intensity: window.state.applied_backdrop_intensity.clone(),
             current_background: window.state.current_background.clone(),
             track_state: window.state.track_presentation.clone(),
+            burn_in: window.burn_in.clone(),
         }
     }
 
     fn apply_action(&self, action: PresentationAction) {
         match action {
-            PresentationAction::RenderTrack(track) => self.render_track(&track),
-            PresentationAction::RenderListening => self.render_listening(),
+            PresentationAction::RenderTrack(track) => {
+                self.presentation_changed();
+                self.render_track(&track);
+            }
+            PresentationAction::RenderListening => {
+                self.presentation_changed();
+                self.render_listening();
+            }
             PresentationAction::None
             | PresentationAction::BeginTransition
             | PresentationAction::HoldTransition => {}
         }
+    }
+
+    /// Restores full brightness only when the visible scene genuinely changes.
+    fn presentation_changed(&self) {
+        self.burn_in.activity();
     }
 
     /// Renders a recognized track whose artwork has already been decoded.
@@ -556,6 +571,7 @@ impl NowPlayingWindow {
                     presentation_for_completion.refresh_current_track();
                 }
                 if matches!(action, PresentationAction::BeginTransition) {
+                    presentation_for_completion.presentation_changed();
                     return Some((
                         settings.shared.transition,
                         transition_leg_duration_ms(settings.shared.transition_duration_ms),
@@ -634,6 +650,7 @@ impl NowPlayingWindow {
 
         match action {
             PresentationAction::BeginTransition => {
+                self.burn_in.activity();
                 begin_track_transition(&self.ui.content_transition, settings);
             }
             PresentationAction::RenderTrack(track) => {
@@ -673,6 +690,7 @@ impl NowPlayingWindow {
 
         match action {
             PresentationAction::BeginTransition => {
+                self.burn_in.activity();
                 begin_track_transition(&self.ui.content_transition, settings);
             }
             PresentationAction::RenderTrack(track) => {
@@ -714,6 +732,7 @@ impl NowPlayingWindow {
                     .apply_prepared_artwork(&track_key, &artwork, cached, requirement);
                 match action {
                     PresentationAction::BeginTransition => {
+                        self.burn_in.activity();
                         begin_track_transition(
                             &self.ui.content_transition,
                             self.state.settings.get(),
@@ -816,6 +835,7 @@ impl NowPlayingWindow {
                     );
                     match action {
                         PresentationAction::BeginTransition => {
+                            presentation.presentation_changed();
                             begin_track_transition(&transition, settings.get());
                         }
                         PresentationAction::RenderTrack(track) => {

@@ -65,6 +65,7 @@ pub(crate) struct NowPlayingControlState {
     pub(crate) show_cinema_settings: bool,
     pub(crate) show_immersive_settings: bool,
     pub(crate) hide_track_info_sensitive: bool,
+    pub(crate) show_burn_in_details: bool,
     pub(crate) show_text_size: bool,
     pub(crate) show_crop_focus: bool,
     pub(crate) show_motion_details: bool,
@@ -82,6 +83,7 @@ impl NowPlayingControlState {
             show_cinema_settings: display_mode.shows_cinema_settings(),
             show_immersive_settings: display_mode.uses_immersive_artwork(),
             hide_track_info_sensitive: display_mode.supports_hiding_track_info(),
+            show_burn_in_details: settings.shared.burn_in_protection_enabled,
             show_text_size: track_info_visible,
             show_crop_focus: display_mode.shows_cinema_crop_focus(settings.cinema.artwork_framing),
             show_motion_details: display_mode.supports_background_motion()
@@ -307,5 +309,14 @@ mod tests {
 
         settings.shared.transition = TransitionEffect::Crossfade;
         assert!(NowPlayingControlState::from_settings(settings).show_transition_duration);
+    }
+
+    #[test]
+    fn burn_in_timeout_is_visible_only_when_protection_is_enabled() {
+        let mut settings = NowPlayingPreferences::default();
+        assert!(!NowPlayingControlState::from_settings(settings).show_burn_in_details);
+
+        settings.shared.burn_in_protection_enabled = true;
+        assert!(NowPlayingControlState::from_settings(settings).show_burn_in_details);
     }
 }

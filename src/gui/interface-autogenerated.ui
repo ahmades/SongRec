@@ -561,6 +561,32 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           </object>
                         </child>
                         <child>
+                          <object class="AdwSwitchRow" id="burn_in_protection_enabled_setting">
+                            <property name="subtitle" translatable="yes">Dim the Now Playing display after a period of inactivity</property>
+                            <property name="title" translatable="yes">Burn-in protection</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSpinRow" id="burn_in_inactivity_minutes_setting">
+                            <property name="adjustment">
+                              <object class="GtkAdjustment" id="burn_in_inactivity_minutes_value">
+                                <property name="lower">1</property>
+                                <property name="page-increment">1</property>
+                                <property name="page-size">0</property>
+                                <property name="step-increment">1</property>
+                                <property name="upper">120</property>
+                                <property name="value">5</property>
+                              </object>
+                            </property>
+                            <property name="climb-rate">1</property>
+                            <property name="numeric">true</property>
+                            <property name="snap-to-ticks">true</property>
+                            <property name="subtitle" translatable="yes">Time without interaction or a new song before the display is dimmed</property>
+                            <property name="title" translatable="yes">Dim after (min)</property>
+                            <property name="update-policy">1</property>
+                          </object>
+                        </child>
+                        <child>
                           <object class="AdwSwitchRow" id="hide_track_info_setting">
                             <property name="subtitle" translatable="yes">Hide song details in modes that support it</property>
                             <property name="title" translatable="yes">Hide track info</property>

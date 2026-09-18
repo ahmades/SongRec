@@ -315,6 +315,12 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
     let album: gtk::Scale = builder.object("album_cover_size_setting_scale").unwrap();
     let hide: adw::SwitchRow = builder.object("hide_track_info_setting").unwrap();
     let keep_screen_awake: adw::SwitchRow = builder.object("keep_screen_awake_setting").unwrap();
+    let burn_in: adw::SwitchRow = builder
+        .object("burn_in_protection_enabled_setting")
+        .unwrap();
+    let burn_in_minutes: adw::SpinRow = builder
+        .object("burn_in_inactivity_minutes_setting")
+        .unwrap();
     let mode_row: adw::ActionRow = builder.object("display_mode_setting").unwrap();
     let mode = find_toggle_group(&mode_row).expect("display-mode segmented control");
     let artist_background: gtk::ToggleButton = builder
@@ -400,6 +406,25 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
         assert!(!window.0.controls.keep_screen_awake.is_active());
         keep_screen_awake.set_active(true);
         dispatch();
+        window.0.controls.burn_in_protection.set_active(true);
+        dispatch();
+        assert!(burn_in.is_active());
+        assert!(burn_in_minutes.get_visible());
+        assert!(window.0.controls.burn_in_details.reveals_child());
+        burn_in_minutes.set_value(47.0);
+        dispatch();
+        assert_eq!(
+            window.0.controls.burn_in_inactivity_minutes.value_as_int(),
+            47
+        );
+        window.0.controls.burn_in_inactivity_minutes.set_value(23.0);
+        dispatch();
+        assert_eq!(burn_in_minutes.value().round() as i32, 23);
+        burn_in.set_active(false);
+        dispatch();
+        assert!(!window.0.controls.burn_in_protection.is_active());
+        assert!(!burn_in_minutes.get_visible());
+        assert!(!window.0.controls.burn_in_details.reveals_child());
         mode.set_active_name(Some(super::DisplayMode::LightsOff.as_preference_value()));
         dispatch();
         assert!(!classic_heading.get_visible());

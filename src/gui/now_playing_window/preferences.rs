@@ -7,7 +7,7 @@ use super::{
     AlbumCoverSize, BackdropIntensity, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
     ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow, TextSize, TrackInfoAlignment,
     TransitionEffect, clamp_background_motion_zoom_percent, clamp_transition_duration_ms,
-    normalize_background_motion_reversal_duration_secs,
+    normalize_background_motion_reversal_duration_secs, normalize_burn_in_inactivity_minutes,
 };
 use adw::prelude::*;
 
@@ -20,6 +20,9 @@ impl NowPlayingWindow {
 
     /// Reapplies the shared model to every control and renderer.
     pub(crate) fn refresh_from_controller(&self) {
+        // Controller messages originate in an explicit settings interaction,
+        // including loading a preset whose values already match the window.
+        self.burn_in.activity();
         self.apply_settings(self.controller.settings());
     }
 
@@ -44,6 +47,14 @@ impl NowPlayingWindow {
             }
             if changed!(shared.keep_screen_awake) {
                 self.set_keep_screen_awake(settings.shared.keep_screen_awake);
+            }
+            if changed!(shared.burn_in_protection_enabled)
+                || changed!(shared.burn_in_inactivity_minutes)
+            {
+                self.set_burn_in_protection(
+                    settings.shared.burn_in_protection_enabled,
+                    settings.shared.burn_in_inactivity_minutes,
+                );
             }
             if changed!(classic.round_corners) {
                 self.set_round_corners(settings.classic.round_corners);
@@ -140,6 +151,24 @@ impl NowPlayingWindow {
             }
         });
         self.screen_awake.set_enabled(enabled);
+    }
+
+    /// Configures dim-only burn-in protection and mirrors it in the context menu.
+    pub(super) fn set_burn_in_protection(&self, enabled: bool, inactivity_minutes: u16) {
+        let inactivity_minutes = normalize_burn_in_inactivity_minutes(inactivity_minutes);
+        self.with_preference_updates_suspended(|| {
+            if self.controls.burn_in_protection.is_active() != enabled {
+                self.controls.burn_in_protection.set_active(enabled);
+            }
+            if self.controls.burn_in_inactivity_minutes.value_as_int()
+                != i32::from(inactivity_minutes)
+            {
+                self.controls
+                    .burn_in_inactivity_minutes
+                    .set_value(f64::from(inactivity_minutes));
+            }
+        });
+        self.burn_in.configure(enabled, inactivity_minutes);
     }
 
     /// Selects the image that supplies the blurred Cinema/Ambient backdrop.
