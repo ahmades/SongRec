@@ -11,33 +11,91 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
       <object class="AdwShortcutsSection">
         <property name="title" translatable="yes" context="General section in the Shortcuts window">General</property>
         <child>
-          <object class="AdwShortcutsItem">
+          <object class="AdwShortcutsItem" id="close_shortcut">
             <property name="action-name">win.close</property>
+            <property name="accelerator">&lt;Primary&gt;Q &lt;Primary&gt;W</property>
             <property name="title" translatable="yes" context="In the shortcuts window">Close the application</property>
           </object>
         </child>
         <child>
           <object class="AdwShortcutsItem">
             <property name="action-name">win.recognize-file</property>
+            <property name="accelerator">&lt;Primary&gt;O</property>
             <property name="title" translatable="yes" context="In the shortcuts window">Recognize from a file</property>
           </object>
         </child>
         <child>
           <object class="AdwShortcutsItem">
             <property name="action-name">win.show-preferences</property>
+            <property name="accelerator">&lt;Primary&gt;comma &lt;Primary&gt;P</property>
             <property name="title" translatable="yes" context="In the shortcuts window">Show preferences</property>
           </object>
         </child>
         <child>
           <object class="AdwShortcutsItem">
             <property name="action-name">app.shortcuts</property>
+            <property name="accelerator">&lt;Primary&gt;question</property>
             <property name="title" translatable="yes" context="In the shortcuts window">Display shortcuts</property>
           </object>
         </child>
         <child>
           <object class="AdwShortcutsItem">
             <property name="action-name">win.show-menu</property>
+            <property name="accelerator">F10</property>
             <property name="title" translatable="yes" context="In the shortcuts window">Show menu</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="AdwShortcutsSection">
+        <property name="title" translatable="yes" context="Now Playing section in the Shortcuts window">Now Playing window</property>
+        <child>
+          <object class="AdwShortcutsItem">
+            <property name="accelerator">F</property>
+            <property name="title" translatable="yes" context="In the shortcuts window">Toggle fullscreen</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
+            <property name="accelerator">1...4</property>
+            <property name="title" translatable="yes" context="In the shortcuts window">Select display mode</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
+            <property name="accelerator">A</property>
+            <property name="title" translatable="yes" context="In the shortcuts window">Toggle keep screen awake</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
+            <property name="accelerator">B</property>
+            <property name="title" translatable="yes" context="In the shortcuts window">Toggle burn-in protection</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
+            <property name="accelerator">P</property>
+            <property name="title" translatable="yes" context="In the shortcuts window">Open presets</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
+            <property name="accelerator">&lt;Control&gt;1...9 &lt;Control&gt;0</property>
+            <property name="title" translatable="yes" context="In the shortcuts window">Load one of the first ten presets</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
+            <property name="accelerator">I</property>
+            <property name="title" translatable="yes" context="In the shortcuts window">Toggle track information</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
+            <property name="accelerator">M</property>
+            <property name="title" translatable="yes" context="In the shortcuts window">Toggle background motion</property>
           </object>
         </child>
       </object>

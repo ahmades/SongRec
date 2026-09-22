@@ -813,19 +813,19 @@ fn real_pointer_dismisses_menu_after_using_transition_dropdown() {
         assert!(menu.is_visible());
         assert!(!window.0.ui.window.is_fullscreen(), "menu double-click must not toggle fullscreen");
         // Explicit teardown avoids testing backend-dependent popup keyboard
-        // focus a second time; Escape was exercised above. F11 belongs to the
+        // focus a second time; Escape was exercised above. F belongs to the
         // toplevel window and should be checked with no native popup active.
         menu.popdown();
-        wait_until("menu dismissed before F11", || !menu.is_visible()).await;
+        wait_until("menu dismissed before F", || !menu.is_visible()).await;
         if let Some(id) = id {
             xdotool(&["windowactivate", id]).await;
         }
         settle().await;
-        // F11 still uses the same action, including after canvas gestures.
-        input.key(87).await;
-        wait_until("F11 entered fullscreen", || window.0.ui.window.is_fullscreen()).await;
-        input.key(87).await;
-        wait_until("F11 exited fullscreen", || !window.0.ui.window.is_fullscreen()).await;
+        // F still uses the same action, including after canvas gestures.
+        input.key(33).await;
+        wait_until("F entered fullscreen", || window.0.ui.window.is_fullscreen()).await;
+        input.key(33).await;
+        wait_until("F exited fullscreen", || !window.0.ui.window.is_fullscreen()).await;
         input.send("Stop", None).await;
     });
 }

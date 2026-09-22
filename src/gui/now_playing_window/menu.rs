@@ -3,7 +3,6 @@
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::display_mode::{DisplayModeControls, NowPlayingControlState};
 use super::monitor_selection::{MonitorSelector, reapply_fullscreen_target, toggle_fullscreen};
-use super::presets::PresetManagerDialog;
 use super::{
     AlbumCoverSize, BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
     ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow, TextSize, TrackInfoAlignment,
@@ -133,6 +132,7 @@ fn label_control(label: &gtk::Label, control: &impl IsA<gtk::Widget>) {
 
 /// The context-menu controls whose state mirrors the active presentation settings.
 pub(super) struct NowPlayingControls {
+    pub(super) context_menu: gtk::Popover,
     pub(super) display_mode: DisplayModeControls,
     pub(super) keep_screen_awake: gtk::Switch,
     pub(super) burn_in_protection: gtk::Switch,
@@ -182,6 +182,7 @@ pub(super) struct NowPlayingControls {
 
 /// Creates the controls used by the Now Playing context menu.
 pub(super) fn build_controls() -> NowPlayingControls {
+    let context_menu = gtk::Popover::new();
     let display_mode = DisplayModeControls::new();
     let keep_screen_awake = gtk::Switch::new();
     let burn_in_protection = gtk::Switch::new();
@@ -295,6 +296,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     track_info_alignment_right.set_group(Some(&track_info_alignment_left));
 
     NowPlayingControls {
+        context_menu,
         display_mode,
         keep_screen_awake,
         burn_in_protection,
@@ -347,7 +349,7 @@ impl NowPlayingWindow {
     /// Builds and installs the right-click context menu for the Now Playing window.
     pub(super) fn setup_context_menu(&self, settings: NowPlayingSettings) {
         let control_state = NowPlayingControlState::from_settings(settings);
-        let popover = gtk::Popover::new();
+        let popover = self.controls.context_menu.clone();
         popover.set_has_arrow(false);
         let menu_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
@@ -418,7 +420,7 @@ impl NowPlayingWindow {
 
         let window_for_presets = self.ui.window.downgrade();
         let popover_for_presets = popover.downgrade();
-        let controller_for_presets = self.controller.clone();
+        let preset_manager = self.preset_manager.clone();
         presets_button.connect_clicked(move |_| {
             if let Some(popover) = popover_for_presets.upgrade() {
                 popover.popdown();
@@ -428,10 +430,10 @@ impl NowPlayingWindow {
             // dialog is presented. This avoids nesting another interactive
             // surface inside the menu's manually managed dismissal path.
             let window_for_presets = window_for_presets.clone();
-            let controller_for_presets = controller_for_presets.clone();
+            let preset_manager = preset_manager.clone();
             glib::idle_add_local_once(move || {
                 if let Some(window) = window_for_presets.upgrade() {
-                    PresetManagerDialog::new(controller_for_presets).present(&window);
+                    preset_manager.present(&window);
                 }
             });
         });

@@ -5,29 +5,78 @@ Adw.ShortcutsDialog shortcuts_dialog {
   Adw.ShortcutsSection {
     title: C_("General section in the Shortcuts window", "General");
 
-    Adw.ShortcutsItem {
+    Adw.ShortcutsItem close_shortcut {
       action-name: "win.close";
+      accelerator: "<Primary>Q <Primary>W";
       title: C_("In the shortcuts window", "Close the application");
     }
 
     Adw.ShortcutsItem {
       action-name: "win.recognize-file";
+      accelerator: "<Primary>O";
       title: C_("In the shortcuts window", "Recognize from a file");
     }
 
     Adw.ShortcutsItem {
       action-name: "win.show-preferences";
+      accelerator: "<Primary>comma <Primary>P";
       title: C_("In the shortcuts window", "Show preferences");
     }
 
     Adw.ShortcutsItem {
       action-name: "app.shortcuts";
+      accelerator: "<Primary>question";
       title: C_("In the shortcuts window", "Display shortcuts");
     }
 
     Adw.ShortcutsItem {
       action-name: "win.show-menu";
+      accelerator: "F10";
       title: C_("In the shortcuts window", "Show menu");
+    }
+  }
+
+  Adw.ShortcutsSection {
+    title: C_("Now Playing section in the Shortcuts window", "Now Playing window");
+
+    Adw.ShortcutsItem {
+      accelerator: "F";
+      title: C_("In the shortcuts window", "Toggle fullscreen");
+    }
+
+    Adw.ShortcutsItem {
+      accelerator: "1...4";
+      title: C_("In the shortcuts window", "Select display mode");
+    }
+
+    Adw.ShortcutsItem {
+      accelerator: "A";
+      title: C_("In the shortcuts window", "Toggle keep screen awake");
+    }
+
+    Adw.ShortcutsItem {
+      accelerator: "B";
+      title: C_("In the shortcuts window", "Toggle burn-in protection");
+    }
+
+    Adw.ShortcutsItem {
+      accelerator: "P";
+      title: C_("In the shortcuts window", "Open presets");
+    }
+
+    Adw.ShortcutsItem {
+      accelerator: "<Control>1...9 <Control>0";
+      title: C_("In the shortcuts window", "Load one of the first ten presets");
+    }
+
+    Adw.ShortcutsItem {
+      accelerator: "I";
+      title: C_("In the shortcuts window", "Toggle track information");
+    }
+
+    Adw.ShortcutsItem {
+      accelerator: "M";
+      title: C_("In the shortcuts window", "Toggle background motion");
     }
   }
 }

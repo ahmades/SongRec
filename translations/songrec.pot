@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 12:39+0200\n"
+"POT-Creation-Date: 2026-09-22 18:20+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -227,9 +227,9 @@ msgstr ""
 msgid "_Yes"
 msgstr ""
 
-#: src/gui/main_window.rs:1350 src/gui/now_playing_window/presets.rs:556
-#: src/gui/now_playing_window/presets.rs:670
-#: src/gui/now_playing_window/presets.rs:702
+#: src/gui/main_window.rs:1350 src/gui/now_playing_window/presets.rs:642
+#: src/gui/now_playing_window/presets.rs:756
+#: src/gui/now_playing_window/presets.rs:788
 msgid "_Cancel"
 msgstr ""
 
@@ -287,17 +287,17 @@ msgid "Top right"
 msgstr ""
 
 #: src/gui/now_playing_window/cinema_framing.rs:160
-#: src/gui/now_playing_window/menu.rs:291 src/gui/interface.blp:589
+#: src/gui/now_playing_window/menu.rs:292 src/gui/interface.blp:589
 msgid "Left"
 msgstr ""
 
 #: src/gui/now_playing_window/cinema_framing.rs:161
-#: src/gui/now_playing_window/menu.rs:292 src/gui/interface.blp:595
+#: src/gui/now_playing_window/menu.rs:293 src/gui/interface.blp:595
 msgid "Center"
 msgstr ""
 
 #: src/gui/now_playing_window/cinema_framing.rs:162
-#: src/gui/now_playing_window/menu.rs:293 src/gui/interface.blp:600
+#: src/gui/now_playing_window/menu.rs:294 src/gui/interface.blp:600
 msgid "Right"
 msgstr ""
 
@@ -329,147 +329,147 @@ msgstr ""
 msgid "Lights Off"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:188 src/gui/interface.blp:507
+#: src/gui/now_playing_window/menu.rs:189 src/gui/interface.blp:507
 msgid "Dim after (min)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:213 src/gui/interface.blp:513
+#: src/gui/now_playing_window/menu.rs:214 src/gui/interface.blp:513
 msgid "Hide track info"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:215 src/gui/interface.blp:518
+#: src/gui/now_playing_window/menu.rs:216 src/gui/interface.blp:518
 msgid "Text size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:228 src/gui/interface.blp:704
+#: src/gui/now_playing_window/menu.rs:229 src/gui/interface.blp:704
 msgid "Album cover"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:229 src/gui/interface.blp:709
+#: src/gui/now_playing_window/menu.rs:230 src/gui/interface.blp:709
 msgid "Artist"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:231 src/gui/interface.blp:726
+#: src/gui/now_playing_window/menu.rs:232 src/gui/interface.blp:726
 msgid "Soft"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:232 src/gui/interface.blp:732
+#: src/gui/now_playing_window/menu.rs:233 src/gui/interface.blp:732
 msgid "Balanced"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:233 src/gui/interface.blp:737
+#: src/gui/now_playing_window/menu.rs:234 src/gui/interface.blp:737
 msgid "Bold"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:236 src/gui/interface.blp:744
+#: src/gui/now_playing_window/menu.rs:237 src/gui/interface.blp:744
 msgid "Background motion"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:238 src/gui/interface.blp:750
+#: src/gui/now_playing_window/menu.rs:239 src/gui/interface.blp:750
 msgid "Zoom level (%)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:244 src/gui/interface.blp:766
+#: src/gui/now_playing_window/menu.rs:245 src/gui/interface.blp:766
 msgid "Direction change interval (s)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:263 src/gui/interface.blp:668
+#: src/gui/now_playing_window/menu.rs:264 src/gui/interface.blp:668
 msgid "Crop focus"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:287 src/gui/interface.blp:631
+#: src/gui/now_playing_window/menu.rs:288 src/gui/interface.blp:631
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:288 src/gui/interface.blp:636
+#: src/gui/now_playing_window/menu.rs:289 src/gui/interface.blp:636
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:290 src/gui/interface.blp:580
+#: src/gui/now_playing_window/menu.rs:291 src/gui/interface.blp:580
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:372 src/gui/interface.blp:480
+#: src/gui/now_playing_window/menu.rs:374 src/gui/interface.blp:480
 msgid "Fullscreen monitor"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:402
+#: src/gui/now_playing_window/menu.rs:404
 msgid "Presets…"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:409 src/gui/interface.blp:459
+#: src/gui/now_playing_window/menu.rs:411 src/gui/interface.blp:459
 msgid "Reset"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:448 src/gui/interface.blp:485
+#: src/gui/now_playing_window/menu.rs:450 src/gui/interface.blp:485
 msgid "Keep screen awake"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:456 src/gui/interface.blp:490
+#: src/gui/now_playing_window/menu.rs:458 src/gui/interface.blp:490
 msgid "Burn-in protection"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:492 src/gui/interface.blp:532
+#: src/gui/now_playing_window/menu.rs:494 src/gui/interface.blp:532
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:518 src/gui/interface.blp:558
+#: src/gui/now_playing_window/menu.rs:520 src/gui/interface.blp:558
 #: src/gui/interface.blp:564
 msgid "Classic settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:524 src/gui/interface.blp:575
+#: src/gui/now_playing_window/menu.rs:526 src/gui/interface.blp:575
 msgid "Round corners of album cover"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:545 src/gui/interface.blp:644
+#: src/gui/now_playing_window/menu.rs:547 src/gui/interface.blp:644
 #: src/gui/interface.blp:651
 msgid "Cinema settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:559 src/gui/interface.blp:675
+#: src/gui/now_playing_window/menu.rs:561 src/gui/interface.blp:675
 #: src/gui/interface.blp:682
 msgid "Cinema and Ambient settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:776
+#: src/gui/now_playing_window/menu.rs:778
 #: src/gui/now_playing_window/regression_tests.rs:796
 msgid "Exit full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:779
+#: src/gui/now_playing_window/menu.rs:781
 msgid "Enter full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:818 src/gui/interface.blp:475
+#: src/gui/now_playing_window/menu.rs:820 src/gui/interface.blp:475
 msgid "Display mode"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:961 src/gui/interface.blp:662
+#: src/gui/now_playing_window/menu.rs:963 src/gui/interface.blp:662
 msgid "Album cover framing"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:995 src/gui/interface.blp:693
+#: src/gui/now_playing_window/menu.rs:997 src/gui/interface.blp:693
 msgid "Background"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1032 src/gui/interface.blp:716
+#: src/gui/now_playing_window/menu.rs:1034 src/gui/interface.blp:716
 msgid "Background intensity"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1073 src/gui/interface.blp:537
+#: src/gui/now_playing_window/menu.rs:1075 src/gui/interface.blp:537
 msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1095 src/gui/interface.blp:542
+#: src/gui/now_playing_window/menu.rs:1097 src/gui/interface.blp:542
 msgid "Transition duration (ms)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1117 src/gui/interface.blp:607
+#: src/gui/now_playing_window/menu.rs:1119 src/gui/interface.blp:607
 msgid "Album cover size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1185 src/gui/interface.blp:621
+#: src/gui/now_playing_window/menu.rs:1187 src/gui/interface.blp:621
 msgid "Background style"
 msgstr ""
 
@@ -482,173 +482,174 @@ msgstr ""
 msgid "Display"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:65
+#: src/gui/now_playing_window/presets.rs:34
 msgid "Unnamed preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:133
+#: src/gui/now_playing_window/presets.rs:151
 msgid "No saved presets"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:135
+#: src/gui/now_playing_window/presets.rs:153
 msgid "Save the current Now Playing settings to create your first preset."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:139
+#: src/gui/now_playing_window/presets.rs:157
 msgid "No matching presets"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:140
+#: src/gui/now_playing_window/presets.rs:158
 msgid "Try a different search."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:172
+#: src/gui/now_playing_window/presets.rs:190
+#: src/gui/now_playing_window/shortcuts.rs:314
 msgid "Could not load preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:186
+#: src/gui/now_playing_window/presets.rs:204
 msgid "_OK"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:201
-#: src/gui/now_playing_window/presets.rs:382
+#: src/gui/now_playing_window/presets.rs:220
+#: src/gui/now_playing_window/presets.rs:401
 msgid "Now Playing presets"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:207
+#: src/gui/now_playing_window/presets.rs:226
 msgid "Search presets"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:211
+#: src/gui/now_playing_window/presets.rs:230
 msgid "Search saved Now Playing presets"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:295
+#: src/gui/now_playing_window/presets.rs:314
 msgid "Current preset — modified"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:297
+#: src/gui/now_playing_window/presets.rs:316
 msgid "Current preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:311
+#: src/gui/now_playing_window/presets.rs:330
 msgid "Saved Now Playing presets"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:344
+#: src/gui/now_playing_window/presets.rs:363
 msgid "Save current settings as…"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:346
+#: src/gui/now_playing_window/presets.rs:365
 msgid "Delete"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:347
+#: src/gui/now_playing_window/presets.rs:366
 msgid "Delete preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:350
+#: src/gui/now_playing_window/presets.rs:369
 msgid "Rename"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:351
-#: src/gui/now_playing_window/presets.rs:518
+#: src/gui/now_playing_window/presets.rs:370
+#: src/gui/now_playing_window/presets.rs:604
 msgid "Rename preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:353
+#: src/gui/now_playing_window/presets.rs:372
 msgid "Update"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:354
+#: src/gui/now_playing_window/presets.rs:373
 msgid "Load"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:357
+#: src/gui/now_playing_window/presets.rs:376
 msgid "Delete selected preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:360
+#: src/gui/now_playing_window/presets.rs:379
 msgid "Rename selected preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:513
+#: src/gui/now_playing_window/presets.rs:599
 msgid "Save Now Playing preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:514
+#: src/gui/now_playing_window/presets.rs:600
 msgid "_Save"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:519
+#: src/gui/now_playing_window/presets.rs:605
 msgid "_Rename"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:527
-#: src/gui/now_playing_window/presets.rs:530
+#: src/gui/now_playing_window/presets.rs:613
+#: src/gui/now_playing_window/presets.rs:616
 msgid "Preset name"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:596
+#: src/gui/now_playing_window/presets.rs:682
 msgid "Could not save preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:603
+#: src/gui/now_playing_window/presets.rs:689
 msgid "Could not rename preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:633
-#: src/gui/now_playing_window/presets.rs:732
+#: src/gui/now_playing_window/presets.rs:719
+#: src/gui/now_playing_window/presets.rs:818
 msgid "Enter a preset name."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:637
-#: src/gui/now_playing_window/presets.rs:734
+#: src/gui/now_playing_window/presets.rs:723
+#: src/gui/now_playing_window/presets.rs:820
 msgid "Preset names can contain at most {max} characters."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:650
-#: src/gui/now_playing_window/presets.rs:737
+#: src/gui/now_playing_window/presets.rs:736
+#: src/gui/now_playing_window/presets.rs:823
 msgid "A preset with this name already exists."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:661
+#: src/gui/now_playing_window/presets.rs:747
 msgid "Update preset?"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:663
+#: src/gui/now_playing_window/presets.rs:749
 msgid "Replace “{name}” with the current Now Playing settings?"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:671
+#: src/gui/now_playing_window/presets.rs:757
 msgid "_Update"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:682
+#: src/gui/now_playing_window/presets.rs:768
 msgid "Could not update preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:696
+#: src/gui/now_playing_window/presets.rs:782
 msgid "Delete preset?"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:697
+#: src/gui/now_playing_window/presets.rs:783
 msgid "Delete “{name}”? This cannot be undone."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:703
+#: src/gui/now_playing_window/presets.rs:789
 msgid "_Delete"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:715
+#: src/gui/now_playing_window/presets.rs:801
 msgid "Could not delete preset"
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:738
+#: src/gui/now_playing_window/presets.rs:824
 msgid "The selected preset no longer exists."
 msgstr ""
 
-#: src/gui/now_playing_window/presets.rs:739
+#: src/gui/now_playing_window/presets.rs:825
 msgid "A new preset could not be assigned an identifier."
 msgstr ""
 
@@ -656,7 +657,59 @@ msgstr ""
 msgid "Now Playing window is visible"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:389 src/gui/now_playing_window/ui.rs:832
+#: src/gui/now_playing_window/shortcuts.rs:285
+msgid "Display mode: {mode}"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:292
+msgid "Keep screen awake: On"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:294
+msgid "Keep screen awake: Off"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:301
+msgid "Burn-in protection: On"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:303
+msgid "Burn-in protection: Off"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:311
+msgid "Preset loaded: {name}"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:320
+msgid "No preset saved for Ctrl+{number}"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:328
+msgid "Track information is always shown in Lights Off"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:333
+msgid "Track information: Hidden"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:335
+msgid "Track information: Shown"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:343
+msgid "Background motion is available in Cinema and Ambient"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:350
+msgid "Background motion: On"
+msgstr ""
+
+#: src/gui/now_playing_window/shortcuts.rs:352
+msgid "Background motion: Off"
+msgstr ""
+
+#: src/gui/now_playing_window/track.rs:389 src/gui/now_playing_window/ui.rs:834
 msgid "Listening..."
 msgstr ""
 
@@ -700,7 +753,7 @@ msgstr ""
 msgid "Swing down"
 msgstr ""
 
-#: src/gui/now_playing_window/ui.rs:800
+#: src/gui/now_playing_window/ui.rs:802
 msgid "Now playing"
 msgstr ""
 
@@ -1042,29 +1095,74 @@ msgctxt "General section in the Shortcuts window"
 msgid "General"
 msgstr ""
 
-#: src/gui/shortcuts-dialog.blp:10
+#: src/gui/shortcuts-dialog.blp:11
 msgctxt "In the shortcuts window"
 msgid "Close the application"
 msgstr ""
 
-#: src/gui/shortcuts-dialog.blp:15
+#: src/gui/shortcuts-dialog.blp:17
 msgctxt "In the shortcuts window"
 msgid "Recognize from a file"
 msgstr ""
 
-#: src/gui/shortcuts-dialog.blp:20
+#: src/gui/shortcuts-dialog.blp:23
 msgctxt "In the shortcuts window"
 msgid "Show preferences"
 msgstr ""
 
-#: src/gui/shortcuts-dialog.blp:25
+#: src/gui/shortcuts-dialog.blp:29
 msgctxt "In the shortcuts window"
 msgid "Display shortcuts"
 msgstr ""
 
-#: src/gui/shortcuts-dialog.blp:30
+#: src/gui/shortcuts-dialog.blp:35
 msgctxt "In the shortcuts window"
 msgid "Show menu"
+msgstr ""
+
+#: src/gui/shortcuts-dialog.blp:40
+msgctxt "Now Playing section in the Shortcuts window"
+msgid "Now Playing window"
+msgstr ""
+
+#: src/gui/shortcuts-dialog.blp:44
+msgctxt "In the shortcuts window"
+msgid "Toggle fullscreen"
+msgstr ""
+
+#: src/gui/shortcuts-dialog.blp:49
+msgctxt "In the shortcuts window"
+msgid "Select display mode"
+msgstr ""
+
+#: src/gui/shortcuts-dialog.blp:54
+msgctxt "In the shortcuts window"
+msgid "Toggle keep screen awake"
+msgstr ""
+
+#: src/gui/shortcuts-dialog.blp:59
+msgctxt "In the shortcuts window"
+msgid "Toggle burn-in protection"
+msgstr ""
+
+#: src/gui/shortcuts-dialog.blp:64
+msgctxt "In the shortcuts window"
+msgid "Open presets"
+msgstr ""
+
+#: src/gui/shortcuts-dialog.blp:69
+msgctxt "In the shortcuts window"
+msgid "Load one of the first ten presets"
+msgstr ""
+
+#: src/gui/shortcuts-dialog.blp:74
+msgctxt "In the shortcuts window"
+msgid "Toggle track information"
+msgstr ""
+
+#: src/gui/shortcuts-dialog.blp:79
+msgctxt "In the shortcuts window"
+msgid "Toggle background motion"
 msgstr ""
 
 #: packaging/freedesktop/re.fossplant.songrec.metainfo.xml.in:11

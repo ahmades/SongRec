@@ -24,6 +24,7 @@ mod presets;
 mod regression_tests;
 mod screen_awake;
 mod settings_scale;
+mod shortcuts;
 mod state;
 mod style;
 mod text_size;
@@ -38,7 +39,9 @@ use adw::prelude::*;
 use burn_in::BurnInController;
 use controller::NowPlayingSettingsController;
 use menu::NowPlayingControls;
+use presets::PresetManagerLauncher;
 use screen_awake::ScreenAwakeController;
+use shortcuts::ShortcutFeedback;
 use state::NowPlayingState;
 use ui::NowPlayingWidgets;
 
@@ -66,6 +69,8 @@ pub struct NowPlayingWindow {
     applied_settings: std::cell::Cell<Option<NowPlayingSettings>>,
     screen_awake: ScreenAwakeController,
     burn_in: BurnInController,
+    shortcut_feedback: ShortcutFeedback,
+    preset_manager: PresetManagerLauncher,
     artwork_timing: Option<timing::ArtworkTimingProbe>,
     artist_background_service: ArtworkService,
 }
@@ -93,6 +98,8 @@ impl NowPlayingWindow {
         let state = NowPlayingState::new(controller.settings_cell());
         let screen_awake = ScreenAwakeController::new(application);
         let burn_in = BurnInController::new(&ui.burn_in_dim_layer);
+        let shortcut_feedback = ShortcutFeedback::new(&ui.window_overlay);
+        let preset_manager = PresetManagerLauncher::new(controller.clone());
 
         let mut now_playing = Self {
             ui,
@@ -103,10 +110,15 @@ impl NowPlayingWindow {
             applied_settings: std::cell::Cell::new(None),
             screen_awake,
             burn_in,
+            shortcut_feedback,
+            preset_manager,
             artwork_timing: None,
             artist_background_service: ArtworkService::new(ArtworkPolicy::Thumbnail),
         };
 
+        now_playing
+            .preset_manager
+            .bind_parent(&now_playing.ui.window);
         now_playing.setup_rendering();
         now_playing.screen_awake.bind_window(&now_playing.ui.window);
         now_playing.burn_in.bind_window(&now_playing.ui.window);
@@ -114,6 +126,7 @@ impl NowPlayingWindow {
         now_playing.apply_initial_preferences(settings);
         now_playing.setup_context_menu(settings);
         now_playing.connect_control_handlers();
+        now_playing.setup_keyboard_shortcuts();
 
         if std::env::var("SONGREC_ARTWORK_TIMING").as_deref() == Ok("1") {
             now_playing.artwork_timing =
@@ -136,6 +149,7 @@ impl NowPlayingWindow {
     pub fn close(&self) {
         self.screen_awake.release();
         self.burn_in.release();
+        self.shortcut_feedback.hide();
         self.ui.window.close();
     }
 }

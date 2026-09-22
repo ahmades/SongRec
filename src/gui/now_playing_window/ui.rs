@@ -2,6 +2,7 @@
 
 use super::monitor_selection::toggle_fullscreen;
 use super::motion::BackdropMotion;
+use super::shortcuts::SHORTCUT_FEEDBACK_CSS_CLASS;
 use super::style::{
     ALBUM_CSS_CLASS, ALBUM_RESERVATION_CSS_CLASS, ARTIST_CSS_CLASS, ARTIST_RESERVATION_CSS_CLASS,
     DETAILS_CSS_CLASS, DETAILS_RESERVATION_CSS_CLASS, TITLE_CSS_CLASS, TITLE_RESERVATION_CSS_CLASS,
@@ -780,6 +781,7 @@ pub(super) struct NowPlayingWidgets {
     pub(super) background_area: gtk::DrawingArea,
     /// Black, non-interactive scrim outside the transition snapshot subtree.
     pub(super) burn_in_dim_layer: gtk::DrawingArea,
+    pub(super) window_overlay: gtk::Overlay,
     pub(super) content_transition: TrackTransitionLayout,
 }
 
@@ -1031,25 +1033,17 @@ pub(super) fn build_ui(
                  rgb({card_bottom_red}, {card_bottom_green}, {card_bottom_blue}) 100%);
              border: 1px solid rgba(255, 255, 255, {CARD_BORDER_ALPHA});
          }}
-         .now-playing-artwork-rounded {{ border-radius: {ARTWORK_CORNER_RADIUS_PX}px; }}"
+         .now-playing-artwork-rounded {{ border-radius: {ARTWORK_CORNER_RADIUS_PX}px; }}
+         .{SHORTCUT_FEEDBACK_CSS_CLASS} {{
+             color: #ffffff;
+             background-color: rgba(0, 0, 0, 0.82);
+             border-radius: 999px;
+             padding: 8px 14px;
+             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+         }}"
     ));
 
     let text_css = TextCss::new((WINDOW_WIDTH, WINDOW_HEIGHT), super::TextSize::default());
-
-    let key_controller = gtk::EventControllerKey::new();
-    let window_for_key = window.downgrade();
-    let monitor_for_key = fullscreen_monitor;
-    key_controller.connect_key_pressed(move |_, key, _, _| {
-        if key == gtk::gdk::Key::F11
-            && let Some(window) = window_for_key.upgrade()
-        {
-            toggle_fullscreen(&window, monitor_for_key.borrow().as_ref());
-            glib::Propagation::Stop
-        } else {
-            glib::Propagation::Proceed
-        }
-    });
-    window.add_controller(key_controller);
 
     (
         NowPlayingWidgets {
@@ -1076,6 +1070,7 @@ pub(super) fn build_ui(
             immersive_info_box,
             background_area,
             burn_in_dim_layer,
+            window_overlay: window_content,
             content_transition,
         },
         text_css,

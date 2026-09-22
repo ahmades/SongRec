@@ -6,7 +6,7 @@ use crate::core::preferences::{
 };
 use adw::prelude::*;
 use gettextrs::gettext;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 const DIALOG_CONTENT_WIDTH: i32 = 560;
@@ -21,6 +21,46 @@ struct PresetSummary {
     folded_name: String,
     is_current: bool,
     is_modified: bool,
+}
+
+fn ordered_preset_summaries(controller: &SettingsController) -> (Vec<PresetSummary>, bool) {
+    let selected_id = controller.selected_preset_id();
+    let selected_is_modified = controller.selected_preset_is_modified();
+    let catalog = controller.presets();
+    let catalog_is_empty = catalog.is_empty();
+    let mut presets = Vec::with_capacity(catalog.len());
+    presets.extend(catalog.items().iter().map(|preset| {
+        let name = if preset.name.trim().is_empty() {
+            gettext("Unnamed preset")
+        } else {
+            preset.name.trim().to_owned()
+        };
+        PresetSummary {
+            id: preset.id,
+            folded_name: name.to_lowercase(),
+            name,
+            is_current: selected_id == Some(preset.id),
+            is_modified: selected_id == Some(preset.id) && selected_is_modified,
+        }
+    }));
+    presets.sort_by(|left, right| {
+        left.folded_name
+            .cmp(&right.folded_name)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    (presets, catalog_is_empty)
+}
+
+/// Resolves a numbered preset shortcut in the same canonical order shown by
+/// the unfiltered manager list.
+pub(super) fn preset_at_display_index(
+    controller: &SettingsController,
+    index: usize,
+) -> Option<(NowPlayingPresetId, String)> {
+    ordered_preset_summaries(controller)
+        .0
+        .get(index)
+        .map(|preset| (preset.id, preset.name.clone()))
 }
 
 #[derive(Clone)]
@@ -56,29 +96,7 @@ impl ManagerHandles {
         };
 
         let selected_id = self.controller.selected_preset_id();
-        let selected_is_modified = self.controller.selected_preset_is_modified();
-        let catalog = self.controller.presets();
-        let catalog_is_empty = catalog.is_empty();
-        let mut presets = Vec::with_capacity(catalog.len());
-        presets.extend(catalog.items().iter().map(|preset| {
-            let name = if preset.name.trim().is_empty() {
-                gettext("Unnamed preset")
-            } else {
-                preset.name.trim().to_owned()
-            };
-            PresetSummary {
-                id: preset.id,
-                folded_name: name.to_lowercase(),
-                name,
-                is_current: selected_id == Some(preset.id),
-                is_modified: selected_id == Some(preset.id) && selected_is_modified,
-            }
-        }));
-        presets.sort_by(|left, right| {
-            left.folded_name
-                .cmp(&right.folded_name)
-                .then_with(|| left.id.cmp(&right.id))
-        });
+        let (presets, catalog_is_empty) = ordered_preset_summaries(&self.controller);
 
         let objects = presets
             .into_iter()
@@ -192,6 +210,7 @@ impl ManagerHandles {
 pub(super) struct PresetManagerDialog {
     dialog: adw::Dialog,
     handles: ManagerHandles,
+    is_open: Rc<Cell<bool>>,
     #[cfg(test)]
     list: gtk::ListView,
 }
@@ -384,6 +403,9 @@ impl PresetManagerDialog {
             .content_height(DIALOG_CONTENT_HEIGHT)
             .child(&toolbar)
             .build();
+        let is_open = Rc::new(Cell::new(false));
+        let is_open_for_closed = is_open.clone();
+        dialog.connect_closed(move |_| is_open_for_closed.set(false));
         let dialog_for_escape = dialog.downgrade();
         let escape = gtk::EventControllerKey::new();
         escape.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -468,6 +490,7 @@ impl PresetManagerDialog {
         let manager = Self {
             dialog,
             handles,
+            is_open,
             #[cfg(test)]
             list,
         };
@@ -476,13 +499,76 @@ impl PresetManagerDialog {
     }
 
     pub(super) fn present(&self, parent: &impl IsA<gtk::Widget>) {
+        self.refresh();
+        if self.is_open.replace(true) {
+            return;
+        }
         self.dialog.present(Some(parent));
+    }
+
+    pub(super) fn is_open(&self) -> bool {
+        self.is_open.get()
+    }
+
+    fn close(&self) {
+        if self.is_open.replace(false) {
+            self.dialog.force_close();
+        }
     }
 
     /// Refreshes an already-open manager after a catalog update from another view.
     pub(super) fn refresh(&self) {
         let preferred_id = self.handles.selected().map(|preset| preset.id);
         self.handles.refresh(preferred_id);
+    }
+}
+
+/// Lazily creates and reuses the manager owned by one Now Playing window.
+#[derive(Clone)]
+pub(super) struct PresetManagerLauncher {
+    controller: SettingsController,
+    manager: Rc<RefCell<Option<Rc<PresetManagerDialog>>>>,
+}
+
+impl PresetManagerLauncher {
+    pub(super) fn new(controller: SettingsController) -> Self {
+        Self {
+            controller,
+            manager: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    pub(super) fn present(&self, parent: &impl IsA<gtk::Widget>) {
+        let manager = {
+            let mut manager = self.manager.borrow_mut();
+            manager
+                .get_or_insert_with(|| Rc::new(PresetManagerDialog::new(self.controller.clone())))
+                .clone()
+        };
+        manager.present(parent);
+    }
+
+    pub(super) fn bind_parent(&self, parent: &gtk::Window) {
+        let launcher = self.clone();
+        parent.connect_visible_notify(move |parent| {
+            if !parent.is_visible() {
+                launcher.close();
+            }
+        });
+    }
+
+    fn close(&self) {
+        let manager = self.manager.borrow().as_ref().cloned();
+        if let Some(manager) = manager {
+            manager.close();
+        }
+    }
+
+    pub(super) fn is_open(&self) -> bool {
+        self.manager
+            .borrow()
+            .as_ref()
+            .is_some_and(|manager| manager.is_open())
     }
 }
 
@@ -742,9 +828,41 @@ fn preset_error_message(error: PresetError) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{PresetManagerDialog, SettingsController};
+    use super::{
+        PresetManagerDialog, PresetManagerLauncher, SettingsController, preset_at_display_index,
+    };
     use crate::core::preferences::{DisplayMode, NowPlayingPreferences, NowPlayingPresetCatalog};
     use adw::prelude::*;
+
+    #[test]
+    fn preset_shortcuts_follow_the_managers_alphabetical_order() {
+        let mut presets = NowPlayingPresetCatalog::default();
+        let zulu = presets
+            .create("Zulu", NowPlayingPreferences::default())
+            .unwrap();
+        let alpha = presets
+            .create("alpha", NowPlayingPreferences::default())
+            .unwrap();
+        let bravo = presets
+            .create("Bravo", NowPlayingPreferences::default())
+            .unwrap();
+        let controller =
+            SettingsController::new_with_presets(NowPlayingPreferences::default(), presets, None);
+
+        assert_eq!(
+            preset_at_display_index(&controller, 0),
+            Some((alpha, "alpha".to_string()))
+        );
+        assert_eq!(
+            preset_at_display_index(&controller, 1),
+            Some((bravo, "Bravo".to_string()))
+        );
+        assert_eq!(
+            preset_at_display_index(&controller, 2),
+            Some((zulu, "Zulu".to_string()))
+        );
+        assert_eq!(preset_at_display_index(&controller, 3), None);
+    }
 
     #[test]
     #[ignore = "requires a GTK display; run with G_DEBUG=fatal-criticals"]
@@ -775,6 +893,45 @@ mod tests {
         while glib::MainContext::default().iteration(false) {}
 
         assert_eq!(controller.settings(), saved);
+        parent.destroy();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn retained_manager_closes_when_its_parent_hides() {
+        let _serial = crate::MAIN_CONTEXT_TEST_LOCK.lock().unwrap();
+        adw::init().unwrap();
+
+        let controller = SettingsController::new_with_presets(
+            NowPlayingPreferences::default(),
+            NowPlayingPresetCatalog::default(),
+            None,
+        );
+        let parent = gtk::Window::new();
+        let launcher = PresetManagerLauncher::new(controller);
+        launcher.bind_parent(&parent);
+
+        parent.present();
+        launcher.present(&parent);
+        while glib::MainContext::default().iteration(false) {}
+        assert!(launcher.is_open());
+        let dialog = launcher
+            .manager
+            .borrow()
+            .as_ref()
+            .expect("retained manager")
+            .dialog
+            .clone();
+        assert!(dialog.is_mapped());
+
+        parent.set_visible(false);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while dialog.is_mapped() && std::time::Instant::now() < deadline {
+            while glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!launcher.is_open());
+        assert!(!dialog.is_mapped());
         parent.destroy();
     }
 }

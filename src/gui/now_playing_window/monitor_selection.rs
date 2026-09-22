@@ -412,7 +412,7 @@ fn request_fullscreen(window: &gtk::Window, target: Option<&FullscreenMonitorTar
     }
 }
 
-/// Shared by F11, canvas double-click, and the context-menu action.
+/// Shared by the F shortcut, canvas double-click, and the context-menu action.
 pub(super) fn toggle_fullscreen(window: &gtk::Window, target: Option<&FullscreenMonitorTarget>) {
     if window.is_fullscreen() {
         window.unfullscreen();
