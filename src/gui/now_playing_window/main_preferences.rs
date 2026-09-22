@@ -2,6 +2,7 @@
 
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::display_mode::{DisplayModeControls, NowPlayingControlState};
+use super::monitor_selection::MonitorSelector;
 use super::presets::PresetManagerDialog;
 use super::{
     AlbumCoverSize, BackgroundStyle, NowPlayingSettings, SettingsController, TextSize,
@@ -45,6 +46,7 @@ struct PreferencesWidgets {
     reset: gtk::Button,
     presets: gtk::Button,
     display_mode: DisplayModeControls,
+    fullscreen_monitor: MonitorSelector,
     keep_screen_awake: adw::SwitchRow,
     burn_in_protection_enabled: adw::SwitchRow,
     burn_in_inactivity_minutes: adw::SpinRow,
@@ -99,6 +101,17 @@ impl NowPlayingPreferencesView {
                 display_mode_row.title().as_str(),
             )]);
 
+        let fullscreen_monitor = MonitorSelector::new(controller.fullscreen_monitor());
+        let fullscreen_monitor_row: adw::ActionRow =
+            builder.object("fullscreen_monitor_setting").unwrap();
+        fullscreen_monitor_row.add_suffix(fullscreen_monitor.widget());
+        fullscreen_monitor
+            .widget()
+            .update_property(&[gtk::accessible::Property::Label(
+                fullscreen_monitor_row.title().as_str(),
+            )]);
+        fullscreen_monitor.enable_only_with_multiple_monitors(&fullscreen_monitor_row);
+
         let cinema_artwork_framing = CinemaArtworkFramingControls::new();
         let cinema_artwork_framing_row: adw::ActionRow =
             builder.object("cinema_artwork_framing_setting").unwrap();
@@ -116,6 +129,7 @@ impl NowPlayingPreferencesView {
                 .unwrap(),
             presets: builder.object("now_playing_presets_button").unwrap(),
             display_mode,
+            fullscreen_monitor,
             keep_screen_awake: builder.object("keep_screen_awake_setting").unwrap(),
             burn_in_protection_enabled: builder
                 .object("burn_in_protection_enabled_setting")
@@ -359,6 +373,14 @@ impl NowPlayingPreferencesView {
         self.applying.set(was_applying);
     }
 
+    /// Applies window placement independently from visual preset settings.
+    pub(crate) fn apply_fullscreen_monitor(
+        &self,
+        target: Option<crate::core::preferences::FullscreenMonitorTarget>,
+    ) {
+        self.widgets.fullscreen_monitor.set_target(target);
+    }
+
     fn apply_control_state(&self, settings: NowPlayingSettings) {
         let state = NowPlayingControlState::from_settings(settings);
         self.widgets
@@ -395,6 +417,13 @@ impl NowPlayingPreferencesView {
     }
 
     fn connect_handlers(&self, controller: SettingsController) {
+        let controller_for_monitor = controller.clone();
+        self.widgets
+            .fullscreen_monitor
+            .connect_changed(move |target| {
+                controller_for_monitor.update_fullscreen_monitor(target)
+            });
+
         let controller_for_presets = controller.clone();
         let preferences_window = self.widgets.window.downgrade();
         self.widgets.presets.connect_clicked(move |_| {

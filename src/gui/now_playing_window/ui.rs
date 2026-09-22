@@ -1,5 +1,6 @@
 //! GTK widget construction for the Now Playing window.
 
+use super::monitor_selection::toggle_fullscreen;
 use super::motion::BackdropMotion;
 use super::style::{
     ALBUM_CSS_CLASS, ALBUM_RESERVATION_CSS_CLASS, ARTIST_CSS_CLASS, ARTIST_RESERVATION_CSS_CLASS,
@@ -14,9 +15,10 @@ use super::{
     AlbumCoverSize, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
     TRANSITION_DURATION_DEFAULT_MS, TrackInfoAlignment, TransitionEffect,
 };
+use crate::core::preferences::FullscreenMonitorTarget;
 use adw::prelude::*;
 use gettextrs::gettext;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 const BACKGROUND_CSS_CLASS: &str = "now-playing-background";
@@ -781,17 +783,10 @@ pub(super) struct NowPlayingWidgets {
     pub(super) content_transition: TrackTransitionLayout,
 }
 
-/// Shared by the keyboard shortcut, canvas gesture, and context-menu action.
-pub(super) fn toggle_fullscreen(window: &gtk::Window) {
-    if window.is_fullscreen() {
-        window.unfullscreen();
-    } else {
-        window.fullscreen();
-    }
-}
-
 /// Builds the window, artwork presentation, metadata widgets, and static CSS providers.
-pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
+pub(super) fn build_ui(
+    fullscreen_monitor: Rc<RefCell<Option<FullscreenMonitorTarget>>>,
+) -> (NowPlayingWidgets, TextCss) {
     let window = gtk::Window::builder()
         .title("SongRec")
         .default_width(WINDOW_WIDTH)
@@ -1001,12 +996,13 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
     double_click.set_button(gdk::BUTTON_PRIMARY);
     double_click.set_propagation_phase(gtk::PropagationPhase::Capture);
     let window_for_double_click = window.downgrade();
+    let monitor_for_double_click = fullscreen_monitor.clone();
     double_click.connect_pressed(move |gesture, presses, _, _| {
         if presses == 2
             && let Some(window) = window_for_double_click.upgrade()
         {
             gesture.set_state(gtk::EventSequenceState::Claimed);
-            toggle_fullscreen(&window);
+            toggle_fullscreen(&window, monitor_for_double_click.borrow().as_ref());
         }
     });
     overlay.add_controller(double_click);
@@ -1042,11 +1038,12 @@ pub(super) fn build_ui() -> (NowPlayingWidgets, TextCss) {
 
     let key_controller = gtk::EventControllerKey::new();
     let window_for_key = window.downgrade();
+    let monitor_for_key = fullscreen_monitor;
     key_controller.connect_key_pressed(move |_, key, _, _| {
         if key == gtk::gdk::Key::F11
             && let Some(window) = window_for_key.upgrade()
         {
-            toggle_fullscreen(&window);
+            toggle_fullscreen(&window, monitor_for_key.borrow().as_ref());
             glib::Propagation::Stop
         } else {
             glib::Propagation::Proceed
@@ -1313,7 +1310,7 @@ mod tests {
         gtk::Settings::default()
             .unwrap()
             .set_gtk_enable_animations(true);
-        let (ui, _) = super::build_ui();
+        let (ui, _) = super::build_ui(Rc::new(RefCell::new(None)));
         ui.title_label.set_label("Old scene");
         ui.window.present();
         let context = glib::MainContext::default();

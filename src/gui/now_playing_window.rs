@@ -13,6 +13,7 @@ mod controller;
 mod display_mode;
 mod main_preferences;
 mod menu;
+mod monitor_selection;
 mod motion;
 mod palette;
 #[cfg(test)]
@@ -87,7 +88,7 @@ impl NowPlayingWindow {
         application: Option<&gtk::Application>,
     ) -> Self {
         let settings = controller.settings();
-        let (ui, text_css) = ui::build_ui();
+        let (ui, text_css) = ui::build_ui(controller.fullscreen_monitor_cell());
         let controls = menu::build_controls();
         let state = NowPlayingState::new(controller.settings_cell());
         let screen_awake = ScreenAwakeController::new(application);

@@ -460,7 +460,7 @@ Adw.ApplicationWindow main_window {
             };
 
             Adw.ActionRow now_playing_presets_setting {
-              subtitle: _("Save and restore complete Now Playing setups");
+              subtitle: _("Save and restore visual Now Playing setups");
               title: _("Presets");
 
               [suffix]
@@ -473,6 +473,11 @@ Adw.ApplicationWindow main_window {
             Adw.ActionRow display_mode_setting {
               subtitle: _("Choose how the recognized song is presented");
               title: _("Display mode");
+            }
+
+            Adw.ActionRow fullscreen_monitor_setting {
+              subtitle: _("Choose where the Now Playing window enters fullscreen");
+              title: _("Fullscreen monitor");
             }
 
             Adw.SwitchRow keep_screen_awake_setting {

@@ -3,7 +3,9 @@
 use crate::core::artwork::{Artwork, ArtworkStatus};
 use crate::core::fingerprinting::signature_format::DecodedSignature;
 #[cfg(feature = "gui")]
-use crate::core::preferences::{NowPlayingPreferences, NowPlayingPresetCatalog, PreferencesPatch};
+use crate::core::preferences::{
+    FullscreenMonitorTarget, NowPlayingPreferences, NowPlayingPresetCatalog, PreferencesPatch,
+};
 
 use std::sync::Arc;
 use std::thread;
@@ -197,6 +199,12 @@ pub enum GUIMessage {
     #[cfg(feature = "gui")]
     NowPlayingPreferenceChanged {
         settings: NowPlayingPreferences,
+        persist: bool,
+    },
+    /// Window placement changed without changing the visual preset snapshot.
+    #[cfg(feature = "gui")]
+    NowPlayingFullscreenMonitorChanged {
+        target: Option<FullscreenMonitorTarget>,
         persist: bool,
     },
     /// The named Now Playing snapshots changed without changing the active

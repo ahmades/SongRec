@@ -153,9 +153,10 @@ impl App {
 
         let preferences_interface: PreferencesInterface = PreferencesInterface::new();
         let old_preferences: Preferences = preferences_interface.preferences.clone();
-        let now_playing_controller = SettingsController::new_with_presets(
+        let now_playing_controller = SettingsController::new_with_presets_and_fullscreen_monitor(
             old_preferences.now_playing,
             old_preferences.now_playing_presets.clone(),
+            old_preferences.now_playing_fullscreen_monitor.clone(),
             Some(gui_tx.clone()),
         );
         let preferences_interface = Arc::new(Mutex::new(preferences_interface));
@@ -1040,6 +1041,16 @@ impl App {
                                         window.set_listening_state();
                                     }
                                 }
+                            }
+                        }
+                        NowPlayingFullscreenMonitorChanged { target, persist } => {
+                            preferences_interface_ptr
+                                .lock()
+                                .unwrap()
+                                .set_now_playing_fullscreen_monitor(target.clone(), persist);
+                            now_playing_preferences_view.apply_fullscreen_monitor(target);
+                            if let Some(ref window) = *now_playing_window.borrow() {
+                                window.apply_fullscreen_monitor();
                             }
                         }
                         NowPlayingPresetCatalogChanged { presets } => {

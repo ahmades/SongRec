@@ -2,7 +2,8 @@
 
 use super::NowPlayingSettings;
 use crate::core::preferences::{
-    NowPlayingPreferenceChange, NowPlayingPresetCatalog, NowPlayingPresetId, PresetError,
+    FullscreenMonitorTarget, NowPlayingPreferenceChange, NowPlayingPresetCatalog,
+    NowPlayingPresetId, PresetError,
 };
 use crate::core::thread_messages::GUIMessage;
 use gio::prelude::*;
@@ -16,6 +17,7 @@ const PERSISTENCE_DEBOUNCE_MS: u64 = 150;
 #[derive(Clone)]
 pub(crate) struct NowPlayingSettingsController {
     settings: Rc<Cell<NowPlayingSettings>>,
+    fullscreen_monitor: Rc<RefCell<Option<FullscreenMonitorTarget>>>,
     presets: Rc<RefCell<NowPlayingPresetCatalog>>,
     selected_preset_id: Rc<Cell<Option<NowPlayingPresetId>>>,
     gui_tx: Option<async_channel::Sender<GUIMessage>>,
@@ -31,13 +33,24 @@ impl NowPlayingSettingsController {
         Self::new_with_presets(settings, NowPlayingPresetCatalog::default(), gui_tx)
     }
 
+    #[cfg(test)]
     pub(crate) fn new_with_presets(
         settings: NowPlayingSettings,
         presets: NowPlayingPresetCatalog,
         gui_tx: Option<async_channel::Sender<GUIMessage>>,
     ) -> Self {
+        Self::new_with_presets_and_fullscreen_monitor(settings, presets, None, gui_tx)
+    }
+
+    pub(crate) fn new_with_presets_and_fullscreen_monitor(
+        settings: NowPlayingSettings,
+        presets: NowPlayingPresetCatalog,
+        fullscreen_monitor: Option<FullscreenMonitorTarget>,
+        gui_tx: Option<async_channel::Sender<GUIMessage>>,
+    ) -> Self {
         Self {
             settings: Rc::new(Cell::new(settings)),
+            fullscreen_monitor: Rc::new(RefCell::new(fullscreen_monitor)),
             presets: Rc::new(RefCell::new(presets)),
             selected_preset_id: Rc::new(Cell::new(None)),
             gui_tx,
@@ -51,6 +64,22 @@ impl NowPlayingSettingsController {
 
     pub(crate) fn settings_cell(&self) -> Rc<Cell<NowPlayingSettings>> {
         self.settings.clone()
+    }
+
+    pub(crate) fn fullscreen_monitor(&self) -> Option<FullscreenMonitorTarget> {
+        self.fullscreen_monitor.borrow().clone()
+    }
+
+    pub(crate) fn fullscreen_monitor_cell(&self) -> Rc<RefCell<Option<FullscreenMonitorTarget>>> {
+        self.fullscreen_monitor.clone()
+    }
+
+    pub(crate) fn update_fullscreen_monitor(&self, target: Option<FullscreenMonitorTarget>) {
+        if *self.fullscreen_monitor.borrow() == target {
+            return;
+        }
+        *self.fullscreen_monitor.borrow_mut() = target;
+        self.send_fullscreen_monitor(true);
     }
 
     pub(crate) fn presets(&self) -> NowPlayingPresetCatalog {
@@ -125,6 +154,10 @@ impl NowPlayingSettingsController {
     }
 
     pub(crate) fn update(&self, change: NowPlayingPreferenceChange) {
+        if matches!(change, NowPlayingPreferenceChange::Reset) {
+            self.reset();
+            return;
+        }
         self.cancel_all();
         self.apply(change);
         self.send(true);
@@ -153,7 +186,14 @@ impl NowPlayingSettingsController {
     }
 
     pub(crate) fn reset(&self) {
-        self.update(NowPlayingPreferenceChange::Reset);
+        self.cancel_all();
+        self.apply(NowPlayingPreferenceChange::Reset);
+        let monitor_changed = self.fullscreen_monitor.borrow_mut().take().is_some();
+        if monitor_changed {
+            // The settings message that follows performs the single disk write.
+            self.send_fullscreen_monitor(false);
+        }
+        self.send(true);
     }
 
     /// Stops delayed saves. At shutdown the owner also saves `settings()`
@@ -178,6 +218,7 @@ impl NowPlayingSettingsController {
             controller.cancel_all();
             let mut preferences = preferences.lock().unwrap();
             preferences.set_now_playing(controller.settings(), false);
+            preferences.set_now_playing_fullscreen_monitor(controller.fullscreen_monitor(), false);
             preferences.set_now_playing_presets(controller.presets(), true);
         });
     }
@@ -208,6 +249,17 @@ impl NowPlayingSettingsController {
             log::error!("Failed to update Now Playing presets: {error}");
         }
     }
+
+    fn send_fullscreen_monitor(&self, persist: bool) {
+        if let Some(sender) = self.gui_tx.as_ref()
+            && let Err(error) = sender.try_send(GUIMessage::NowPlayingFullscreenMonitorChanged {
+                target: self.fullscreen_monitor(),
+                persist,
+            })
+        {
+            log::error!("Failed to update the Now Playing fullscreen monitor: {error}");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -215,8 +267,8 @@ mod tests {
     use super::NowPlayingSettingsController;
     use crate::core::preferences::{
         BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
-        CinemaArtworkFraming, CinemaCropFocus, DisplayMode, NowPlayingPreferenceChange,
-        NowPlayingPreferences, NowPlayingPresetCatalog, TextSize,
+        CinemaArtworkFraming, CinemaCropFocus, DisplayMode, FullscreenMonitorTarget,
+        NowPlayingPreferenceChange, NowPlayingPreferences, NowPlayingPresetCatalog, TextSize,
     };
     use crate::core::thread_messages::GUIMessage;
 
@@ -372,6 +424,54 @@ mod tests {
         ));
         assert_eq!(controller.selected_preset_id(), None);
         assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn monitor_selection_is_persisted_but_excluded_from_presets() {
+        let (sender, receiver) = async_channel::unbounded();
+        let controller =
+            NowPlayingSettingsController::new(NowPlayingPreferences::default(), Some(sender));
+        let preset_id = controller.create_preset("Projector").unwrap();
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            GUIMessage::NowPlayingPresetCatalogChanged { .. }
+        ));
+
+        let target = FullscreenMonitorTarget {
+            connector: Some("HDMI-1".to_string()),
+            description: Some("Projector".to_string()),
+            manufacturer: Some("Epson".to_string()),
+            model: Some("EH-TW7100".to_string()),
+            width: 3840,
+            height: 2160,
+        };
+        controller.update_fullscreen_monitor(Some(target.clone()));
+        match receiver.try_recv().unwrap() {
+            GUIMessage::NowPlayingFullscreenMonitorChanged {
+                target: updated,
+                persist,
+            } => {
+                assert_eq!(updated, Some(target));
+                assert!(persist);
+            }
+            message => panic!("unexpected GUI message: {message:?}"),
+        }
+        assert_eq!(controller.selected_preset_id(), Some(preset_id));
+        assert!(!controller.selected_preset_is_modified());
+
+        controller.reset();
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            GUIMessage::NowPlayingFullscreenMonitorChanged {
+                target: None,
+                persist: false
+            }
+        ));
+        assert!(matches!(
+            receiver.try_recv().unwrap(),
+            GUIMessage::NowPlayingPreferenceChanged { persist: true, .. }
+        ));
+        assert_eq!(controller.fullscreen_monitor(), None);
     }
 
     #[test]

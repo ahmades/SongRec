@@ -2,8 +2,8 @@
 
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::display_mode::{DisplayModeControls, NowPlayingControlState};
+use super::monitor_selection::{MonitorSelector, reapply_fullscreen_target, toggle_fullscreen};
 use super::presets::PresetManagerDialog;
-use super::ui::toggle_fullscreen;
 use super::{
     AlbumCoverSize, BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
     ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow, TextSize, TrackInfoAlignment,
@@ -175,6 +175,7 @@ pub(super) struct NowPlayingControls {
     pub(super) transition_menu: gtk::DropDown,
     pub(super) transition_duration: gtk::Scale,
     pub(super) transition_duration_details: gtk::Revealer,
+    pub(super) fullscreen_monitor: MonitorSelector,
     pub(super) fullscreen_button: gtk::Button,
     pub(super) fullscreen_button_content: adw::ButtonContent,
 }
@@ -276,6 +277,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     transition_duration.set_hexpand(true);
     transition_duration.set_width_request(190);
     let transition_duration_details = dependent_revealer();
+    let fullscreen_monitor = MonitorSelector::new(None);
     let fullscreen_button_content = adw::ButtonContent::new();
     let fullscreen_button = gtk::Button::builder()
         .halign(gtk::Align::Fill)
@@ -335,6 +337,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
         transition_menu,
         transition_duration,
         transition_duration_details,
+        fullscreen_monitor,
         fullscreen_button,
         fullscreen_button_content,
     }
@@ -360,6 +363,39 @@ impl NowPlayingWindow {
             self.ui.window.is_fullscreen(),
         );
         menu_box.append(&self.controls.fullscreen_button);
+
+        self.controls
+            .fullscreen_monitor
+            .set_target(self.controller.fullscreen_monitor());
+        let monitor_row = menu_grid();
+        monitor_row.set_margin_start(DEPENDENT_ROW_INDENT);
+        let monitor_label = gtk::Label::new(Some(&gettext("Fullscreen monitor")));
+        monitor_label.set_halign(gtk::Align::Start);
+        monitor_label.set_valign(gtk::Align::Center);
+        monitor_label.set_hexpand(true);
+        monitor_row.attach(&monitor_label, 0, 0, 1, 1);
+        self.controls
+            .fullscreen_monitor
+            .widget()
+            .set_width_request(210);
+        label_control(&monitor_label, self.controls.fullscreen_monitor.widget());
+        monitor_row.attach(self.controls.fullscreen_monitor.widget(), 1, 0, 1, 1);
+        self.controls
+            .fullscreen_monitor
+            .show_only_with_multiple_monitors(&monitor_row);
+        menu_box.append(&monitor_row);
+
+        let window_for_topology = self.ui.window.downgrade();
+        let controller_for_topology = self.controller.clone();
+        self.controls
+            .fullscreen_monitor
+            .connect_topology_changed(move || {
+                let Some(window) = window_for_topology.upgrade() else {
+                    return;
+                };
+                let target = controller_for_topology.fullscreen_monitor();
+                reapply_fullscreen_target(&window, target.as_ref());
+            });
         menu_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
 
         let presets_button = gtk::Button::builder()
@@ -691,6 +727,7 @@ impl NowPlayingWindow {
 
         let window_for_fullscreen_button = self.ui.window.downgrade();
         let popover_for_fullscreen_button = popover.downgrade();
+        let controller_for_fullscreen_button = self.controller.clone();
         self.controls.fullscreen_button.connect_clicked(move |_| {
             let Some(window) = window_for_fullscreen_button.upgrade() else {
                 return;
@@ -699,7 +736,8 @@ impl NowPlayingWindow {
             if let Some(popover) = popover_for_fullscreen_button.upgrade() {
                 popover.popdown();
             }
-            toggle_fullscreen(&window);
+            let target = controller_for_fullscreen_button.fullscreen_monitor();
+            toggle_fullscreen(&window, target.as_ref());
         });
 
         let fullscreen_cursor_hide = DebouncedAction::default();
@@ -740,6 +778,13 @@ impl NowPlayingWindow {
             content.set_icon_name("view-fullscreen-symbolic");
             content.set_label(&gettext("Enter full screen"));
         }
+    }
+
+    /// Synchronizes the menu and immediately retargets an active fullscreen window.
+    pub(crate) fn apply_fullscreen_monitor(&self) {
+        let target = self.controller.fullscreen_monitor();
+        self.controls.fullscreen_monitor.set_target(target.clone());
+        reapply_fullscreen_target(&self.ui.window, target.as_ref());
     }
 
     /// Temporarily reveals the cursor in fullscreen, then hides it after the pointer is idle.
@@ -1162,6 +1207,11 @@ impl NowPlayingWindow {
 
     /// Controls only emit model changes; renderer updates have one application path.
     pub(super) fn connect_control_handlers(&self) {
+        let controller = self.controller.clone();
+        self.controls
+            .fullscreen_monitor
+            .connect_changed(move |target| controller.update_fullscreen_monitor(target));
+
         let bind_switch = |switch: &gtk::Switch, change: fn(bool) -> NowPlayingPreferenceChange| {
             let applying = self.state.applying_settings.clone();
             let controller = self.controller.clone();

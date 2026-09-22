@@ -538,7 +538,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                         </property>
                         <child>
                           <object class="AdwActionRow" id="now_playing_presets_setting">
-                            <property name="subtitle" translatable="yes">Save and restore complete Now Playing setups</property>
+                            <property name="subtitle" translatable="yes">Save and restore visual Now Playing setups</property>
                             <property name="title" translatable="yes">Presets</property>
                             <child type="suffix">
                               <object class="GtkButton" id="now_playing_presets_button">
@@ -552,6 +552,12 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           <object class="AdwActionRow" id="display_mode_setting">
                             <property name="subtitle" translatable="yes">Choose how the recognized song is presented</property>
                             <property name="title" translatable="yes">Display mode</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow" id="fullscreen_monitor_setting">
+                            <property name="subtitle" translatable="yes">Choose where the Now Playing window enters fullscreen</property>
+                            <property name="title" translatable="yes">Fullscreen monitor</property>
                           </object>
                         </child>
                         <child>

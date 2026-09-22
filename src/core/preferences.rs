@@ -1134,6 +1134,22 @@ const MAX_PERSISTED_PRESET_ID: NowPlayingPresetId = i64::MAX as NowPlayingPreset
 /// Long enough for descriptive preset names without allowing accidental essays.
 pub const NOW_PLAYING_PRESET_NAME_MAX_CHARS: usize = 64;
 
+/// Best-effort, backend-independent identity for a preferred fullscreen monitor.
+///
+/// GDK does not expose a stable cross-platform monitor identifier. Keeping the
+/// available descriptive fields lets the GUI prefer an exact connector match
+/// and fall back to an unambiguous hardware match after displays are reordered.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FullscreenMonitorTarget {
+    pub connector: Option<String>,
+    pub description: Option<String>,
+    pub manufacturer: Option<String>,
+    pub model: Option<String>,
+    pub width: u32,
+    pub height: u32,
+}
+
 /// A named, immutable-at-rest snapshot of all Now Playing settings.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NowPlayingPreset {
@@ -1413,6 +1429,10 @@ pub struct Preferences {
     pub website_search_text: Option<String>,
     #[serde(default, skip_serializing_if = "NowPlayingPresetCatalog::is_pristine")]
     pub now_playing_presets: NowPlayingPresetCatalog,
+    /// Preferred monitor for fullscreen Now Playing. This is deliberately
+    /// outside `NowPlayingPreferences` so visual presets never move windows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub now_playing_fullscreen_monitor: Option<FullscreenMonitorTarget>,
     #[serde(flatten)]
     pub now_playing: NowPlayingPreferences,
 }
@@ -1442,6 +1462,7 @@ impl Default for Preferences {
             website_search_url: Some("https://www.youtube.com/results?search_query=".to_string()),
             website_search_text: Some(gettext("Search on YouTube".to_string())),
             now_playing_presets: NowPlayingPresetCatalog::default(),
+            now_playing_fullscreen_monitor: None,
             now_playing: NowPlayingPreferences::default(),
         }
     }
@@ -1567,6 +1588,18 @@ impl PreferencesInterface {
         }
     }
 
+    /// Updates the preferred fullscreen monitor independently of visual presets.
+    pub fn set_now_playing_fullscreen_monitor(
+        &mut self,
+        target: Option<FullscreenMonitorTarget>,
+        persist: bool,
+    ) {
+        self.preferences.now_playing_fullscreen_monitor = target;
+        if persist {
+            self.write_after_update();
+        }
+    }
+
     fn write_after_update(&self) {
         if let Err(error) = self.write() {
             error!("{} {}", gettext("When saving the preferences file:"), error);
@@ -1592,13 +1625,14 @@ mod tests {
         BURN_IN_INACTIVITY_DEFAULT_MINUTES, BURN_IN_INACTIVITY_MAX_MINUTES,
         BURN_IN_INACTIVITY_MIN_MINUTES, BURN_IN_INACTIVITY_STEP_MINUTES, BackdropIntensity,
         BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, CinemaNowPlayingPreferences,
-        ClassicNowPlayingPreferences, DisplayMode, ImmersiveBackgroundSource,
-        MAX_PERSISTED_PRESET_ID, NOW_PLAYING_PRESET_NAME_MAX_CHARS, NowPlayingPreferenceChange,
-        NowPlayingPreferences, NowPlayingPresetCatalog, Preferences, PreferencesInterface,
-        PreferencesPatch, PresetError, SharedNowPlayingPreferences, TRANSITION_DURATION_DEFAULT_MS,
-        TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS, TRANSITION_DURATION_STEP_MS,
-        TextSize, TrackInfoAlignment, TransitionEffect, clamp_background_motion_zoom_percent,
-        clamp_transition_duration_ms, normalize_burn_in_inactivity_minutes,
+        ClassicNowPlayingPreferences, DisplayMode, FullscreenMonitorTarget,
+        ImmersiveBackgroundSource, MAX_PERSISTED_PRESET_ID, NOW_PLAYING_PRESET_NAME_MAX_CHARS,
+        NowPlayingPreferenceChange, NowPlayingPreferences, NowPlayingPresetCatalog, Preferences,
+        PreferencesInterface, PreferencesPatch, PresetError, SharedNowPlayingPreferences,
+        TRANSITION_DURATION_DEFAULT_MS, TRANSITION_DURATION_MAX_MS, TRANSITION_DURATION_MIN_MS,
+        TRANSITION_DURATION_STEP_MS, TextSize, TrackInfoAlignment, TransitionEffect,
+        clamp_background_motion_zoom_percent, clamp_transition_duration_ms,
+        normalize_burn_in_inactivity_minutes,
     };
 
     #[test]
@@ -1973,6 +2007,7 @@ now_playing_background_motion_reversal_duration_secs = 23
         let table = serialized.parse::<toml::Table>().unwrap();
 
         assert!(!table.contains_key("now_playing"));
+        assert!(!table.contains_key("now_playing_fullscreen_monitor"));
         assert_eq!(table["now_playing_display_mode"].as_str(), Some("classic"));
         assert_eq!(
             table["now_playing_keep_screen_awake"].as_bool(),
@@ -2038,6 +2073,40 @@ now_playing_background_motion_reversal_duration_secs = 23
             Some(2_000)
         );
         assert!(!table.contains_key("lights_off_enabled"));
+    }
+
+    #[test]
+    fn fullscreen_monitor_round_trips_outside_visual_presets() {
+        let target = FullscreenMonitorTarget {
+            connector: Some("DP-2".to_string()),
+            description: Some("Dell U2723QE".to_string()),
+            manufacturer: Some("Dell".to_string()),
+            model: Some("U2723QE".to_string()),
+            width: 3840,
+            height: 2160,
+        };
+        let mut preferences = Preferences {
+            now_playing_fullscreen_monitor: Some(target.clone()),
+            ..Preferences::default()
+        };
+        preferences
+            .now_playing_presets
+            .create("Cinema", NowPlayingPreferences::default())
+            .unwrap();
+
+        let serialized = toml::to_string(&preferences).unwrap();
+        let deserialized: Preferences = toml::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.now_playing_fullscreen_monitor, Some(target));
+        assert_eq!(
+            deserialized.now_playing_presets.items()[0].settings,
+            NowPlayingPreferences::default()
+        );
+        assert!(
+            !toml::to_string(&preferences.now_playing_presets)
+                .unwrap()
+                .contains("fullscreen_monitor")
+        );
     }
 
     #[test]
@@ -2358,6 +2427,10 @@ now_playing_background_motion_reversal_duration_secs = 23
             .unwrap();
         let preferences = Preferences {
             now_playing_presets: presets.clone(),
+            now_playing_fullscreen_monitor: Some(FullscreenMonitorTarget {
+                connector: Some("HDMI-1".to_string()),
+                ..FullscreenMonitorTarget::default()
+            }),
             now_playing: NowPlayingPreferences {
                 classic: ClassicNowPlayingPreferences {
                     background_style: BackgroundStyle::Solid,
@@ -2368,6 +2441,7 @@ now_playing_background_motion_reversal_duration_secs = 23
             ..Preferences::default()
         };
         let expected_now_playing = preferences.now_playing;
+        let expected_monitor = preferences.now_playing_fullscreen_monitor.clone();
         let mut interface = PreferencesInterface {
             preferences_file_path: None,
             preferences,
@@ -2380,6 +2454,10 @@ now_playing_background_motion_reversal_duration_secs = 23
         assert_eq!(interface.preferences.enable_notifications, Some(false));
         assert_eq!(interface.preferences.now_playing, expected_now_playing);
         assert_eq!(interface.preferences.now_playing_presets, presets);
+        assert_eq!(
+            interface.preferences.now_playing_fullscreen_monitor,
+            expected_monitor
+        );
     }
 
     #[test]
