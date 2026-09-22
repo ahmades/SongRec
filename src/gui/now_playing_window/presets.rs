@@ -213,6 +213,8 @@ pub(super) struct PresetManagerDialog {
     is_open: Rc<Cell<bool>>,
     #[cfg(test)]
     list: gtk::ListView,
+    #[cfg(test)]
+    cancel: gtk::Button,
 }
 
 impl PresetManagerDialog {
@@ -371,6 +373,10 @@ impl PresetManagerDialog {
             .build();
         let update = gtk::Button::with_label(&gettext("Update"));
         let load = gtk::Button::with_label(&gettext("Load"));
+        let cancel = gtk::Button::builder()
+            .label(gettext("_Cancel"))
+            .use_underline(true)
+            .build();
         load.add_css_class("suggested-action");
         delete.update_property(&[gtk::accessible::Property::Label(&gettext(
             "Delete selected preset",
@@ -395,6 +401,7 @@ impl PresetManagerDialog {
         actions.append(&rename);
         actions.append(&update);
         actions.append(&load);
+        actions.append(&cancel);
         toolbar.add_bottom_bar(&actions);
 
         let dialog = adw::Dialog::builder()
@@ -406,6 +413,12 @@ impl PresetManagerDialog {
         let is_open = Rc::new(Cell::new(false));
         let is_open_for_closed = is_open.clone();
         dialog.connect_closed(move |_| is_open_for_closed.set(false));
+        let dialog_for_cancel = dialog.downgrade();
+        cancel.connect_clicked(move |_| {
+            if let Some(dialog) = dialog_for_cancel.upgrade() {
+                let _ = dialog.close();
+            }
+        });
         let dialog_for_escape = dialog.downgrade();
         let escape = gtk::EventControllerKey::new();
         escape.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -493,6 +506,8 @@ impl PresetManagerDialog {
             is_open,
             #[cfg(test)]
             list,
+            #[cfg(test)]
+            cancel,
         };
         manager.refresh();
         manager
@@ -523,7 +538,7 @@ impl PresetManagerDialog {
     }
 }
 
-/// Lazily creates and reuses the manager owned by one Now Playing window.
+/// Owns at most one open manager and creates a fresh dialog after it closes.
 #[derive(Clone)]
 pub(super) struct PresetManagerLauncher {
     controller: SettingsController,
@@ -541,8 +556,13 @@ impl PresetManagerLauncher {
     pub(super) fn present(&self, parent: &impl IsA<gtk::Widget>) {
         let manager = {
             let mut manager = self.manager.borrow_mut();
+            let needs_fresh_dialog = manager.as_ref().is_none_or(|manager| !manager.is_open());
+            if needs_fresh_dialog {
+                *manager = Some(Rc::new(PresetManagerDialog::new(self.controller.clone())));
+            }
             manager
-                .get_or_insert_with(|| Rc::new(PresetManagerDialog::new(self.controller.clone())))
+                .as_ref()
+                .expect("preset manager was created")
                 .clone()
         };
         manager.present(parent);
@@ -569,6 +589,14 @@ impl PresetManagerLauncher {
             .borrow()
             .as_ref()
             .is_some_and(|manager| manager.is_open())
+    }
+
+    #[cfg(test)]
+    pub(super) fn dialog_is_mapped(&self) -> bool {
+        self.manager
+            .borrow()
+            .as_ref()
+            .is_some_and(|manager| manager.dialog.is_mapped())
     }
 }
 
@@ -932,6 +960,64 @@ mod tests {
         }
         assert!(!launcher.is_open());
         assert!(!dialog.is_mapped());
+        parent.destroy();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display; run with G_DEBUG=fatal-warnings"]
+    fn cancel_closes_and_reopening_uses_a_fresh_dialog() {
+        let _serial = crate::MAIN_CONTEXT_TEST_LOCK.lock().unwrap();
+        adw::init().unwrap();
+
+        let settings = NowPlayingPreferences::default();
+        let controller = SettingsController::new_with_presets(
+            settings,
+            NowPlayingPresetCatalog::default(),
+            None,
+        );
+        let parent = gtk::Window::new();
+        let launcher = PresetManagerLauncher::new(controller.clone());
+        launcher.bind_parent(&parent);
+        parent.present();
+
+        launcher.present(&parent);
+        while glib::MainContext::default().iteration(false) {}
+        let first = launcher
+            .manager
+            .borrow()
+            .as_ref()
+            .expect("first manager")
+            .clone();
+        assert!(first.dialog.is_mapped());
+        first.cancel.emit_clicked();
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while first.dialog.is_mapped() && std::time::Instant::now() < deadline {
+            while glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!first.dialog.is_mapped());
+        assert!(!launcher.is_open());
+        assert_eq!(controller.settings(), settings);
+
+        launcher.present(&parent);
+        while glib::MainContext::default().iteration(false) {}
+        let second = launcher
+            .manager
+            .borrow()
+            .as_ref()
+            .expect("second manager")
+            .clone();
+        assert!(!std::rc::Rc::ptr_eq(&first, &second));
+        assert!(second.dialog.is_mapped());
+
+        parent.set_visible(false);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while second.dialog.is_mapped() && std::time::Instant::now() < deadline {
+            while glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!second.dialog.is_mapped());
         parent.destroy();
     }
 }

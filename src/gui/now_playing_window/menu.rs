@@ -3,6 +3,7 @@
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::display_mode::{DisplayModeControls, NowPlayingControlState};
 use super::monitor_selection::{MonitorSelector, reapply_fullscreen_target, toggle_fullscreen};
+use super::presets::PresetManagerLauncher;
 use super::{
     AlbumCoverSize, BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
     ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow, TextSize, TrackInfoAlignment,
@@ -128,6 +129,42 @@ fn label_control(label: &gtk::Label, control: &impl IsA<gtk::Widget>) {
     control
         .as_ref()
         .update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
+}
+
+/// Presents the preset manager only after the context popover has completely
+/// closed. Waiting for `closed` avoids creating another transient surface
+/// while GTK is still tearing down the popup.
+fn connect_preset_manager_handoff(
+    button: &gtk::Button,
+    popover: &gtk::Popover,
+    window: glib::WeakRef<gtk::Window>,
+    manager: PresetManagerLauncher,
+) {
+    let pending = Rc::new(Cell::new(false));
+    let pending_for_button = pending.clone();
+    let popover_for_button = popover.downgrade();
+    button.connect_clicked(move |_| {
+        let Some(popover) = popover_for_button.upgrade() else {
+            return;
+        };
+        pending_for_button.set(true);
+        popover.popdown();
+    });
+
+    popover.connect_closed(move |_| {
+        if !pending.replace(false) {
+            return;
+        }
+        let window = window.clone();
+        let manager = manager.clone();
+        glib::idle_add_local_once(move || {
+            if let Some(window) = window.upgrade()
+                && window.is_visible()
+            {
+                manager.present(&window);
+            }
+        });
+    });
 }
 
 /// The context-menu controls whose state mirrors the active presentation settings.
@@ -418,25 +455,12 @@ impl NowPlayingWindow {
             controller_for_reset.reset();
         });
 
-        let window_for_presets = self.ui.window.downgrade();
-        let popover_for_presets = popover.downgrade();
-        let preset_manager = self.preset_manager.clone();
-        presets_button.connect_clicked(move |_| {
-            if let Some(popover) = popover_for_presets.upgrade() {
-                popover.popdown();
-            }
-
-            // Let the nonmodal context menu release its popup state before a
-            // dialog is presented. This avoids nesting another interactive
-            // surface inside the menu's manually managed dismissal path.
-            let window_for_presets = window_for_presets.clone();
-            let preset_manager = preset_manager.clone();
-            glib::idle_add_local_once(move || {
-                if let Some(window) = window_for_presets.upgrade() {
-                    preset_manager.present(&window);
-                }
-            });
-        });
+        connect_preset_manager_handoff(
+            &presets_button,
+            &popover,
+            self.ui.window.downgrade(),
+            self.preset_manager.clone(),
+        );
 
         let shared_grid = menu_grid();
         self.add_display_mode_menu_row(
@@ -1391,7 +1415,11 @@ impl NowPlayingWindow {
 
 #[cfg(test)]
 mod tests {
-    use super::{ContextMenuPointerAction, context_menu_pointer_action};
+    use super::{
+        ContextMenuPointerAction, connect_preset_manager_handoff, context_menu_pointer_action,
+    };
+    use crate::gui::now_playing_window::presets::PresetManagerLauncher;
+    use crate::gui::now_playing_window::{NowPlayingSettings, SettingsController};
 
     #[test]
     fn context_menu_pointer_actions_do_not_reopen_an_outside_secondary_click() {
@@ -1457,5 +1485,52 @@ mod tests {
         drop(controls);
         assert!(text_size.upgrade().is_none());
         assert!(album_cover_size.upgrade().is_none());
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display; run with G_DEBUG=fatal-warnings"]
+    fn presets_open_after_the_context_popover_has_closed() {
+        use adw::prelude::*;
+
+        let _serial = crate::MAIN_CONTEXT_TEST_LOCK.lock().unwrap();
+        adw::init().unwrap();
+
+        let parent = gtk::Window::new();
+        let popover = gtk::Popover::new();
+        let button = gtk::Button::with_label("Presets");
+        popover.set_child(Some(&button));
+        popover.set_parent(&parent);
+
+        let manager = PresetManagerLauncher::new(SettingsController::new(
+            NowPlayingSettings::default(),
+            None,
+        ));
+        manager.bind_parent(&parent);
+        connect_preset_manager_handoff(&button, &popover, parent.downgrade(), manager.clone());
+
+        parent.present();
+        popover.popup();
+        while glib::MainContext::default().iteration(false) {}
+        assert!(popover.is_visible());
+        button.emit_clicked();
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while !manager.dialog_is_mapped() && std::time::Instant::now() < deadline {
+            while glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!popover.is_visible());
+        assert!(manager.is_open());
+        assert!(manager.dialog_is_mapped());
+
+        parent.set_visible(false);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while manager.dialog_is_mapped() && std::time::Instant::now() < deadline {
+            while glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!manager.dialog_is_mapped());
+        popover.unparent();
+        parent.destroy();
     }
 }
