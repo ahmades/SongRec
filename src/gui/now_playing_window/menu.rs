@@ -300,6 +300,7 @@ pub(super) fn build_controls() -> NowPlayingControls {
     let cinema_artwork_framing = CinemaArtworkFramingControls::new();
     let cinema_crop_focus_label = gtk::Label::new(Some(&gettext("Crop focus")));
     let cinema_crop_focus = CinemaCropFocusControls::new();
+    cinema_crop_focus.set_compact(true);
     let cinema_crop_focus_details = dependent_revealer();
     let always_display_last_recognized_song = gtk::Switch::new();
     let transition_labels: Vec<_> = TransitionEffect::ALL
@@ -994,7 +995,7 @@ impl NowPlayingWindow {
         menu_grid.attach(self.controls.cinema_artwork_framing.widget(), 1, row, 1, 1);
     }
 
-    /// Adds the retained 3×3 selector used only by Cinema's Fill framing.
+    /// Adds the interactive focus preview used only by Cinema's Fill framing.
     fn add_cinema_crop_focus_menu_row(
         &self,
         menu_grid: &gtk::Grid,
@@ -1308,7 +1309,7 @@ impl NowPlayingWindow {
             .cinema_crop_focus
             .connect_changed(move |focus| {
                 if !applying.get() {
-                    controller.update(NowPlayingPreferenceChange::CinemaCropFocus(focus));
+                    controller.update_debounced(NowPlayingPreferenceChange::CinemaCropFocus(focus));
                 }
             });
 

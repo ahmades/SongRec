@@ -122,6 +122,19 @@ impl NowPlayingPreferencesView {
             builder.object("cinema_crop_focus_setting").unwrap();
         cinema_crop_focus_row.add_suffix(cinema_crop_focus.widget());
 
+        // Reuse the already-decoded result texture. The preview never starts
+        // another artwork download or image-processing job.
+        let results_image: gtk::Image = builder.object("results_image").unwrap();
+        sync_crop_preview_artwork(&cinema_crop_focus, &results_image);
+        let crop_focus_for_paintable = cinema_crop_focus.clone();
+        results_image.connect_notify_local(Some("paintable"), move |image, _| {
+            sync_crop_preview_artwork(&crop_focus_for_paintable, image);
+        });
+        let crop_focus_for_visibility = cinema_crop_focus.clone();
+        results_image.connect_visible_notify(move |image| {
+            sync_crop_preview_artwork(&crop_focus_for_visibility, image);
+        });
+
         let widgets = PreferencesWidgets {
             window: builder.object("main_window").unwrap(),
             reset: builder
@@ -526,7 +539,7 @@ impl NowPlayingPreferencesView {
             .connect_changed(move |focus| {
                 if !applying.get() {
                     controller_for_crop_focus
-                        .update(NowPlayingPreferenceChange::CinemaCropFocus(focus));
+                        .update_debounced(NowPlayingPreferenceChange::CinemaCropFocus(focus));
                 }
             });
 
@@ -612,6 +625,11 @@ impl NowPlayingPreferencesView {
             NowPlayingPreferenceChange::TransitionDurationMs(transition_duration_from_scale(value))
         });
     }
+}
+
+fn sync_crop_preview_artwork(controls: &CinemaCropFocusControls, image: &gtk::Image) {
+    let paintable = image.is_visible().then(|| image.paintable()).flatten();
+    controls.set_artwork(paintable.as_ref());
 }
 
 /// Marks rows that are conditionally revealed by the immediately preceding row.

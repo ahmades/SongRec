@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 00:11+0200\n"
+"POT-Creation-Date: 2026-09-23 13:38+0200\n"
 "PO-Revision-Date: 2021-12-26 11:36+0100\n"
 "Last-Translator: Rafał Mikrut <qarminkrut@gmail.com>\n"
 "Language-Team: \n"
@@ -183,17 +183,17 @@ msgstr ""
 msgid "Audio error: No input device available"
 msgstr ""
 
-#: src/core/preferences.rs:1463 src/gui/main_window.rs:354
+#: src/core/preferences.rs:1551 src/gui/main_window.rs:354
 #: src/gui/interface.blp:129 src/gui/interface.blp:906
 #: src/gui/interface.blp:956
 msgid "Search on YouTube"
 msgstr "Wyszukaj na YouTube"
 
-#: src/core/preferences.rs:1504
+#: src/core/preferences.rs:1592
 msgid "When parsing the preferences file:"
 msgstr ""
 
-#: src/core/preferences.rs:1605
+#: src/core/preferences.rs:1693
 msgid "When saving the preferences file:"
 msgstr ""
 
@@ -277,57 +277,51 @@ msgstr ""
 msgid "Large"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:17
+#: src/gui/now_playing_window/cinema_framing.rs:80
 #: src/gui/now_playing_window/monitor_selection.rs:38
 #: src/gui/now_playing_window/monitor_selection.rs:149
 msgid "Automatic"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:18
+#: src/gui/now_playing_window/cinema_framing.rs:81
 msgid "Fit"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:19
+#: src/gui/now_playing_window/cinema_framing.rs:82
 msgid "Fill"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:157
-msgid "Top left"
+#: src/gui/now_playing_window/cinema_framing.rs:171
+msgid "No album cover available"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:158
-msgid "Top"
+#: src/gui/now_playing_window/cinema_framing.rs:186
+#: src/gui/now_playing_window/menu.rs:301 src/gui/interface.blp:668
+msgid "Crop focus"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:159
-msgid "Top right"
+#: src/gui/now_playing_window/cinema_framing.rs:188
+msgid ""
+"Drag on the album cover or use the arrow keys to choose which point remains "
+"visible"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:160
-#: src/gui/now_playing_window/menu.rs:329 src/gui/interface.blp:589
-msgid "Left"
-msgstr ""
-
-#: src/gui/now_playing_window/cinema_framing.rs:161
-#: src/gui/now_playing_window/menu.rs:330 src/gui/interface.blp:595
+#: src/gui/now_playing_window/cinema_framing.rs:219
+#: src/gui/now_playing_window/menu.rs:331 src/gui/interface.blp:595
 msgid "Center"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:162
-#: src/gui/now_playing_window/menu.rs:331 src/gui/interface.blp:600
-msgid "Right"
+#: src/gui/now_playing_window/cinema_framing.rs:423
+msgid "No album cover is available for crop-focus preview"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:163
-msgid "Bottom left"
+#: src/gui/now_playing_window/cinema_framing.rs:486
+msgid "Crop focus: {x}% from left, {y}% from top"
 msgstr ""
 
-#: src/gui/now_playing_window/cinema_framing.rs:164
-msgid "Bottom"
-msgstr ""
-
-#: src/gui/now_playing_window/cinema_framing.rs:165
-msgid "Bottom right"
+#: src/gui/now_playing_window/cinema_framing.rs:493
+msgid ""
+"{position}. Drag on the album cover or use the arrow keys to change the focus"
 msgstr ""
 
 #: src/gui/now_playing_window/display_mode.rs:137
@@ -390,103 +384,107 @@ msgstr ""
 msgid "Direction change interval (s)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:301 src/gui/interface.blp:668
-msgid "Crop focus"
-msgstr ""
-
-#: src/gui/now_playing_window/menu.rs:325 src/gui/interface.blp:631
+#: src/gui/now_playing_window/menu.rs:326 src/gui/interface.blp:631
 msgid "Gradient"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:326 src/gui/interface.blp:636
+#: src/gui/now_playing_window/menu.rs:327 src/gui/interface.blp:636
 msgid "Solid"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:328 src/gui/interface.blp:580
+#: src/gui/now_playing_window/menu.rs:329 src/gui/interface.blp:580
 msgid "Track info alignment"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:411 src/gui/interface.blp:480
+#: src/gui/now_playing_window/menu.rs:330 src/gui/interface.blp:589
+msgid "Left"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:332 src/gui/interface.blp:600
+msgid "Right"
+msgstr ""
+
+#: src/gui/now_playing_window/menu.rs:412 src/gui/interface.blp:480
 msgid "Fullscreen monitor"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:441
+#: src/gui/now_playing_window/menu.rs:442
 msgid "Presets…"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:448 src/gui/interface.blp:459
+#: src/gui/now_playing_window/menu.rs:449 src/gui/interface.blp:459
 msgid "Reset"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:474 src/gui/interface.blp:485
+#: src/gui/now_playing_window/menu.rs:475 src/gui/interface.blp:485
 msgid "Keep screen awake"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:482 src/gui/interface.blp:490
+#: src/gui/now_playing_window/menu.rs:483 src/gui/interface.blp:490
 msgid "Burn-in protection"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:518 src/gui/interface.blp:532
+#: src/gui/now_playing_window/menu.rs:519 src/gui/interface.blp:532
 msgid "Always display last recognized song"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:544 src/gui/interface.blp:558
+#: src/gui/now_playing_window/menu.rs:545 src/gui/interface.blp:558
 #: src/gui/interface.blp:564
 msgid "Classic settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:550 src/gui/interface.blp:575
+#: src/gui/now_playing_window/menu.rs:551 src/gui/interface.blp:575
 msgid "Round corners of album cover"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:571 src/gui/interface.blp:644
+#: src/gui/now_playing_window/menu.rs:572 src/gui/interface.blp:644
 #: src/gui/interface.blp:651
 msgid "Cinema settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:585 src/gui/interface.blp:675
+#: src/gui/now_playing_window/menu.rs:586 src/gui/interface.blp:675
 #: src/gui/interface.blp:682
 msgid "Cinema and Ambient settings"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:802
-#: src/gui/now_playing_window/regression_tests.rs:796
+#: src/gui/now_playing_window/menu.rs:803
+#: src/gui/now_playing_window/regression_tests.rs:790
 msgid "Exit full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:805
+#: src/gui/now_playing_window/menu.rs:806
 msgid "Enter full screen"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:844 src/gui/interface.blp:475
+#: src/gui/now_playing_window/menu.rs:845 src/gui/interface.blp:475
 msgid "Display mode"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:987 src/gui/interface.blp:662
+#: src/gui/now_playing_window/menu.rs:988 src/gui/interface.blp:662
 msgid "Album cover framing"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1021 src/gui/interface.blp:693
+#: src/gui/now_playing_window/menu.rs:1022 src/gui/interface.blp:693
 msgid "Background"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1058 src/gui/interface.blp:716
+#: src/gui/now_playing_window/menu.rs:1059 src/gui/interface.blp:716
 msgid "Background intensity"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1099 src/gui/interface.blp:537
+#: src/gui/now_playing_window/menu.rs:1100 src/gui/interface.blp:537
 msgid "Transition effect"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1121 src/gui/interface.blp:542
+#: src/gui/now_playing_window/menu.rs:1122 src/gui/interface.blp:542
 msgid "Transition duration (ms)"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1143 src/gui/interface.blp:607
+#: src/gui/now_playing_window/menu.rs:1144 src/gui/interface.blp:607
 msgid "Album cover size"
 msgstr ""
 
-#: src/gui/now_playing_window/menu.rs:1211 src/gui/interface.blp:621
+#: src/gui/now_playing_window/menu.rs:1212 src/gui/interface.blp:621
 msgid "Background style"
 msgstr ""
 
@@ -726,7 +724,7 @@ msgstr ""
 msgid "Background motion: Off"
 msgstr ""
 
-#: src/gui/now_playing_window/track.rs:389 src/gui/now_playing_window/ui.rs:834
+#: src/gui/now_playing_window/track.rs:394 src/gui/now_playing_window/ui.rs:820
 msgid "Listening..."
 msgstr ""
 
@@ -770,7 +768,7 @@ msgstr ""
 msgid "Swing down"
 msgstr ""
 
-#: src/gui/now_playing_window/ui.rs:802
+#: src/gui/now_playing_window/ui.rs:788
 msgid "Now playing"
 msgstr ""
 
@@ -1032,7 +1030,7 @@ msgid "Choose whether the whole cover is shown or cropped to fill its frame"
 msgstr ""
 
 #: src/gui/interface.blp:667
-msgid "Choose which part of the cover stays visible when Fill crops it"
+msgid "Drag on the preview to choose which part of the cover stays visible"
 msgstr ""
 
 #: src/gui/interface.blp:692

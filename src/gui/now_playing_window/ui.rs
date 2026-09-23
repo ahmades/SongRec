@@ -113,27 +113,13 @@ fn cinema_foreground_rect(
             draw_height.min(viewport_height),
         ),
         CinemaArtworkFraming::Fill => {
-            let (focus_x, focus_y) = cinema_crop_focus_coordinates(crop_focus);
+            let (focus_x, focus_y) = crop_focus.normalized_coordinates();
             let overflow_x = draw_width.saturating_sub(viewport_width);
             let overflow_y = draw_height.saturating_sub(viewport_height);
             let x = -((f64::from(overflow_x) * focus_x).round() as i32);
             let y = -((f64::from(overflow_y) * focus_y).round() as i32);
             gdk::Rectangle::new(x, y, draw_width, draw_height)
         }
-    }
-}
-
-fn cinema_crop_focus_coordinates(focus: CinemaCropFocus) -> (f64, f64) {
-    match focus {
-        CinemaCropFocus::TopLeft => (0.0, 0.0),
-        CinemaCropFocus::Top => (0.5, 0.0),
-        CinemaCropFocus::TopRight => (1.0, 0.0),
-        CinemaCropFocus::Left => (0.0, 0.5),
-        CinemaCropFocus::Center => (0.5, 0.5),
-        CinemaCropFocus::Right => (1.0, 0.5),
-        CinemaCropFocus::BottomLeft => (0.0, 1.0),
-        CinemaCropFocus::Bottom => (0.5, 1.0),
-        CinemaCropFocus::BottomRight => (1.0, 1.0),
     }
 }
 
@@ -1500,7 +1486,7 @@ mod tests {
                 720,
                 (1_000, 1_000),
                 CinemaArtworkFraming::Automatic,
-                CinemaCropFocus::BottomRight,
+                CinemaCropFocus::BOTTOM_RIGHT,
             ),
             gdk::Rectangle::new(0, 0, 820, 720)
         );
@@ -1514,7 +1500,7 @@ mod tests {
                 720,
                 (1_000, 1_000),
                 CinemaArtworkFraming::Fit,
-                CinemaCropFocus::Center,
+                CinemaCropFocus::CENTER,
             ),
             gdk::Rectangle::new(50, 0, 720, 720)
         );
@@ -1524,7 +1510,7 @@ mod tests {
                 820,
                 (1_000, 1_000),
                 CinemaArtworkFraming::Fit,
-                CinemaCropFocus::Center,
+                CinemaCropFocus::CENTER,
             ),
             gdk::Rectangle::new(0, 50, 720, 720)
         );
@@ -1537,15 +1523,15 @@ mod tests {
         };
 
         assert_eq!(
-            render(CinemaCropFocus::Top),
+            render(CinemaCropFocus::TOP),
             gdk::Rectangle::new(0, 0, 820, 820)
         );
         assert_eq!(
-            render(CinemaCropFocus::Center),
+            render(CinemaCropFocus::CENTER),
             gdk::Rectangle::new(0, -50, 820, 820)
         );
         assert_eq!(
-            render(CinemaCropFocus::Bottom),
+            render(CinemaCropFocus::BOTTOM),
             gdk::Rectangle::new(0, -100, 820, 820)
         );
     }
@@ -1557,31 +1543,40 @@ mod tests {
         };
 
         assert_eq!(
-            render(CinemaCropFocus::Left),
+            render(CinemaCropFocus::LEFT),
             gdk::Rectangle::new(0, 0, 820, 820)
         );
         assert_eq!(
-            render(CinemaCropFocus::Center),
+            render(CinemaCropFocus::CENTER),
             gdk::Rectangle::new(-50, 0, 820, 820)
         );
         assert_eq!(
-            render(CinemaCropFocus::Right),
+            render(CinemaCropFocus::RIGHT),
             gdk::Rectangle::new(-100, 0, 820, 820)
+        );
+    }
+
+    #[test]
+    fn cinema_fill_supports_intermediate_focus_positions() {
+        let focus = CinemaCropFocus::new(2_500, 7_300);
+
+        assert_eq!(
+            cinema_foreground_rect(820, 720, (1_000, 1_000), CinemaArtworkFraming::Fill, focus,),
+            gdk::Rectangle::new(0, -73, 820, 820)
+        );
+        assert_eq!(
+            cinema_foreground_rect(720, 820, (1_000, 1_000), CinemaArtworkFraming::Fill, focus,),
+            gdk::Rectangle::new(-25, 0, 820, 820)
         );
     }
 
     #[test]
     fn cinema_crop_focus_does_not_move_an_exact_aspect_image() {
         for focus in [
-            CinemaCropFocus::TopLeft,
-            CinemaCropFocus::Top,
-            CinemaCropFocus::TopRight,
-            CinemaCropFocus::Left,
-            CinemaCropFocus::Center,
-            CinemaCropFocus::Right,
-            CinemaCropFocus::BottomLeft,
-            CinemaCropFocus::Bottom,
-            CinemaCropFocus::BottomRight,
+            CinemaCropFocus::TOP_LEFT,
+            CinemaCropFocus::CENTER,
+            CinemaCropFocus::BOTTOM_RIGHT,
+            CinemaCropFocus::new(1_234, 8_765),
         ] {
             assert_eq!(
                 cinema_foreground_rect(800, 400, (1_600, 800), CinemaArtworkFraming::Fill, focus,),
@@ -1598,7 +1593,7 @@ mod tests {
                 720,
                 (1_000, 1_000),
                 CinemaArtworkFraming::Fill,
-                CinemaCropFocus::Center,
+                CinemaCropFocus::CENTER,
             ),
             gdk::Rectangle::new(0, 0, 0, 720)
         );
@@ -1608,7 +1603,7 @@ mod tests {
                 720,
                 (0, 0),
                 CinemaArtworkFraming::Fit,
-                CinemaCropFocus::Center,
+                CinemaCropFocus::CENTER,
             ),
             gdk::Rectangle::new(0, 0, 820, 720)
         );

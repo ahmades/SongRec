@@ -573,63 +573,151 @@ impl<'de> Deserialize<'de> for CinemaArtworkFraming {
 }
 
 /// Selects the point retained when Cinema artwork is cropped to fill its region.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum CinemaCropFocus {
-    TopLeft,
-    Top,
-    TopRight,
-    Left,
-    #[default]
-    Center,
-    Right,
-    BottomLeft,
-    Bottom,
-    BottomRight,
+///
+/// Coordinates use basis points so drag interactions can retain fine-grained
+/// positions while the complete Now Playing settings snapshot remains `Copy`
+/// and exactly comparable. Both axes run from `0` (left/top) through
+/// [`Self::SCALE`] (right/bottom).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CinemaCropFocus {
+    x_basis_points: u16,
+    y_basis_points: u16,
+}
+
+impl Default for CinemaCropFocus {
+    fn default() -> Self {
+        Self::CENTER
+    }
 }
 
 impl CinemaCropFocus {
-    /// All crop-focus choices used by serialization round-trip tests.
+    /// Maximum value accepted on either normalized axis.
+    pub const SCALE: u16 = 10_000;
+
+    pub const TOP_LEFT: Self = Self::new(0, 0);
+    pub const TOP: Self = Self::new(Self::SCALE / 2, 0);
+    pub const TOP_RIGHT: Self = Self::new(Self::SCALE, 0);
+    pub const LEFT: Self = Self::new(0, Self::SCALE / 2);
+    pub const CENTER: Self = Self::new(Self::SCALE / 2, Self::SCALE / 2);
+    pub const RIGHT: Self = Self::new(Self::SCALE, Self::SCALE / 2);
+    pub const BOTTOM_LEFT: Self = Self::new(0, Self::SCALE);
+    pub const BOTTOM: Self = Self::new(Self::SCALE / 2, Self::SCALE);
+    pub const BOTTOM_RIGHT: Self = Self::new(Self::SCALE, Self::SCALE);
+
+    /// Legacy named positions retained for preference migration tests.
     #[cfg(test)]
     pub const ALL: [Self; 9] = [
-        Self::TopLeft,
-        Self::Top,
-        Self::TopRight,
-        Self::Left,
-        Self::Center,
-        Self::Right,
-        Self::BottomLeft,
-        Self::Bottom,
-        Self::BottomRight,
+        Self::TOP_LEFT,
+        Self::TOP,
+        Self::TOP_RIGHT,
+        Self::LEFT,
+        Self::CENTER,
+        Self::RIGHT,
+        Self::BOTTOM_LEFT,
+        Self::BOTTOM,
+        Self::BOTTOM_RIGHT,
     ];
 
-    /// Returns the persisted string representation of this crop focus.
-    pub fn as_preference_value(self) -> &'static str {
-        match self {
-            Self::TopLeft => "top-left",
-            Self::Top => "top",
-            Self::TopRight => "top-right",
-            Self::Left => "left",
-            Self::Center => "center",
-            Self::Right => "right",
-            Self::BottomLeft => "bottom-left",
-            Self::Bottom => "bottom",
-            Self::BottomRight => "bottom-right",
+    /// Constructs a normalized focus, clamping both axes to the supported range.
+    pub const fn new(x_basis_points: u16, y_basis_points: u16) -> Self {
+        Self {
+            x_basis_points: if x_basis_points > Self::SCALE {
+                Self::SCALE
+            } else {
+                x_basis_points
+            },
+            y_basis_points: if y_basis_points > Self::SCALE {
+                Self::SCALE
+            } else {
+                y_basis_points
+            },
         }
     }
 
-    /// Parses a persisted crop focus, defaulting to the center.
+    /// Converts normalized floating-point coordinates into the persisted form.
+    pub fn from_fractions(x: f64, y: f64) -> Self {
+        Self::new(
+            Self::fraction_to_basis_points(x),
+            Self::fraction_to_basis_points(y),
+        )
+    }
+
+    pub const fn x_basis_points(self) -> u16 {
+        self.x_basis_points
+    }
+
+    pub const fn y_basis_points(self) -> u16 {
+        self.y_basis_points
+    }
+
+    /// Returns coordinates in the normalized range used by crop calculations.
+    pub fn normalized_coordinates(self) -> (f64, f64) {
+        let scale = f64::from(Self::SCALE);
+        (
+            f64::from(self.x_basis_points) / scale,
+            f64::from(self.y_basis_points) / scale,
+        )
+    }
+
+    /// Returns the persisted string representation of this crop focus.
+    ///
+    /// The original names remain canonical for their exact positions. Custom
+    /// positions use a stable pair of integer basis-point coordinates while
+    /// retaining the old string value type for downgrade safety.
+    pub fn as_preference_value(self) -> String {
+        match self {
+            Self::TOP_LEFT => "top-left".to_owned(),
+            Self::TOP => "top".to_owned(),
+            Self::TOP_RIGHT => "top-right".to_owned(),
+            Self::LEFT => "left".to_owned(),
+            Self::CENTER => "center".to_owned(),
+            Self::RIGHT => "right".to_owned(),
+            Self::BOTTOM_LEFT => "bottom-left".to_owned(),
+            Self::BOTTOM => "bottom".to_owned(),
+            Self::BOTTOM_RIGHT => "bottom-right".to_owned(),
+            Self {
+                x_basis_points,
+                y_basis_points,
+            } => format!("{x_basis_points}:{y_basis_points}"),
+        }
+    }
+
+    /// Parses either a legacy named focus or a continuous coordinate pair.
+    /// Malformed values default to the center; numeric axes are clamped.
     pub fn from_preference(value: Option<&str>) -> Self {
         match value {
-            Some("top-left") => Self::TopLeft,
-            Some("top") => Self::Top,
-            Some("top-right") => Self::TopRight,
-            Some("left") => Self::Left,
-            Some("right") => Self::Right,
-            Some("bottom-left") => Self::BottomLeft,
-            Some("bottom") => Self::Bottom,
-            Some("bottom-right") => Self::BottomRight,
-            _ => Self::Center,
+            Some("top-left") => Self::TOP_LEFT,
+            Some("top") => Self::TOP,
+            Some("top-right") => Self::TOP_RIGHT,
+            Some("left") => Self::LEFT,
+            Some("center") => Self::CENTER,
+            Some("right") => Self::RIGHT,
+            Some("bottom-left") => Self::BOTTOM_LEFT,
+            Some("bottom") => Self::BOTTOM,
+            Some("bottom-right") => Self::BOTTOM_RIGHT,
+            Some(value) => Self::parse_coordinate_pair(value).unwrap_or(Self::CENTER),
+            None => Self::CENTER,
         }
+    }
+
+    fn fraction_to_basis_points(value: f64) -> u16 {
+        if value.is_nan() {
+            return Self::SCALE / 2;
+        }
+        (value.clamp(0.0, 1.0) * f64::from(Self::SCALE)).round() as u16
+    }
+
+    fn parse_coordinate_pair(value: &str) -> Option<Self> {
+        let (x, y) = value.split_once(':')?;
+        if y.contains(':') {
+            return None;
+        }
+        let parse_axis = |axis: &str| {
+            axis.parse::<u64>()
+                .ok()
+                .map(|axis| axis.min(u64::from(Self::SCALE)) as u16)
+        };
+        Some(Self::new(parse_axis(x)?, parse_axis(y)?))
     }
 }
 
@@ -638,7 +726,7 @@ impl Serialize for CinemaCropFocus {
     where
         S: Serializer,
     {
-        serializer.serialize_str(self.as_preference_value())
+        serializer.serialize_str(&self.as_preference_value())
     }
 }
 
@@ -1817,12 +1905,14 @@ id = 1
 name = "Duplicate"
 [now_playing_presets.items.settings]
 now_playing_background_motion_zoom_percent = 117
+now_playing_cinema_crop_focus = "bottom-right"
 
 [[now_playing_presets.items]]
 id = 1
 name = "duplicate"
 [now_playing_presets.items.settings]
 now_playing_transition_duration_ms = 749
+now_playing_cinema_crop_focus = "2345:8765"
 
 [[now_playing_presets.items]]
 name = "  manually padded  "
@@ -1850,6 +1940,14 @@ now_playing_background_motion_reversal_duration_secs = 23
         assert_eq!(
             catalog.items()[1].settings.shared.transition_duration_ms,
             500
+        );
+        assert_eq!(
+            catalog.items()[0].settings.cinema.crop_focus,
+            CinemaCropFocus::BOTTOM_RIGHT
+        );
+        assert_eq!(
+            catalog.items()[1].settings.cinema.crop_focus,
+            CinemaCropFocus::new(2_345, 8_765)
         );
         assert_eq!(
             catalog.items()[2]
@@ -1930,7 +2028,7 @@ now_playing_background_motion_reversal_duration_secs = 23
             defaults.cinema.artwork_framing,
             CinemaArtworkFraming::Automatic
         );
-        assert_eq!(defaults.cinema.crop_focus, CinemaCropFocus::Center);
+        assert_eq!(defaults.cinema.crop_focus, CinemaCropFocus::CENTER);
         assert!(!defaults.shared.keep_screen_awake);
         assert!(!defaults.shared.burn_in_protection_enabled);
         assert_eq!(
@@ -2190,12 +2288,72 @@ now_playing_cinema_crop_focus = "top-right"
         );
         assert_eq!(
             configured.now_playing.cinema.crop_focus,
-            CinemaCropFocus::TopRight
+            CinemaCropFocus::TOP_RIGHT
         );
 
         let serialized = toml::to_string(&configured).unwrap();
         let deserialized: Preferences = toml::from_str(&serialized).unwrap();
         assert_eq!(deserialized.now_playing, configured.now_playing);
+    }
+
+    #[test]
+    fn continuous_cinema_crop_focus_is_normalized_and_round_trips() {
+        let focus = CinemaCropFocus::new(2_345, 8_765);
+        assert_eq!(focus.x_basis_points(), 2_345);
+        assert_eq!(focus.y_basis_points(), 8_765);
+        assert_eq!(focus.as_preference_value(), "2345:8765");
+        assert_eq!(CinemaCropFocus::from_preference(Some("2345:8765")), focus);
+
+        let clamped = CinemaCropFocus::new(u16::MAX, 42);
+        assert_eq!(clamped.x_basis_points(), CinemaCropFocus::SCALE);
+        assert_eq!(clamped.y_basis_points(), 42);
+        assert_eq!(
+            CinemaCropFocus::from_preference(Some("999999:12000")),
+            CinemaCropFocus::BOTTOM_RIGHT
+        );
+        assert_eq!(
+            CinemaCropFocus::from_fractions(-0.5, 1.5),
+            CinemaCropFocus::BOTTOM_LEFT
+        );
+        assert_eq!(
+            CinemaCropFocus::from_fractions(f64::NAN, 0.25),
+            CinemaCropFocus::new(5_000, 2_500)
+        );
+        let (x, y) = focus.normalized_coordinates();
+        assert!((x - 0.2345).abs() < 1e-12);
+        assert!((y - 0.8765).abs() < 1e-12);
+
+        for malformed in ["", "1234", "1:2:3", "-1:5000", "left:bottom"] {
+            assert_eq!(
+                CinemaCropFocus::from_preference(Some(malformed)),
+                CinemaCropFocus::CENTER
+            );
+        }
+
+        let mut preferences = Preferences::default();
+        preferences.now_playing.cinema.crop_focus = focus;
+        let serialized = toml::to_string(&preferences).unwrap();
+        assert!(serialized.contains("now_playing_cinema_crop_focus = \"2345:8765\""));
+        let restored: Preferences = toml::from_str(&serialized).unwrap();
+        assert_eq!(restored.now_playing.cinema.crop_focus, focus);
+    }
+
+    #[test]
+    fn legacy_cinema_crop_focus_values_keep_their_stable_strings() {
+        for (focus, value) in [
+            (CinemaCropFocus::TOP_LEFT, "top-left"),
+            (CinemaCropFocus::TOP, "top"),
+            (CinemaCropFocus::TOP_RIGHT, "top-right"),
+            (CinemaCropFocus::LEFT, "left"),
+            (CinemaCropFocus::CENTER, "center"),
+            (CinemaCropFocus::RIGHT, "right"),
+            (CinemaCropFocus::BOTTOM_LEFT, "bottom-left"),
+            (CinemaCropFocus::BOTTOM, "bottom"),
+            (CinemaCropFocus::BOTTOM_RIGHT, "bottom-right"),
+        ] {
+            assert_eq!(focus.as_preference_value(), value);
+            assert_eq!(CinemaCropFocus::from_preference(Some(value)), focus);
+        }
     }
 
     #[test]
@@ -2394,7 +2552,7 @@ now_playing_background_motion_reversal_duration_secs = 23
                     },
                     cinema: CinemaNowPlayingPreferences {
                         artwork_framing: CinemaArtworkFraming::Fill,
-                        crop_focus: CinemaCropFocus::BottomLeft,
+                        crop_focus: CinemaCropFocus::BOTTOM_LEFT,
                     },
                     shared: SharedNowPlayingPreferences {
                         burn_in_protection_enabled: true,
@@ -2473,7 +2631,7 @@ now_playing_background_motion_reversal_duration_secs = 23
                 },
                 cinema: CinemaNowPlayingPreferences {
                     artwork_framing: CinemaArtworkFraming::Fill,
-                    crop_focus: CinemaCropFocus::BottomRight,
+                    crop_focus: CinemaCropFocus::BOTTOM_RIGHT,
                 },
                 shared: SharedNowPlayingPreferences {
                     keep_screen_awake: true,
@@ -2529,7 +2687,7 @@ now_playing_background_motion_reversal_duration_secs = 23
             CinemaArtworkFraming::Fill,
         ));
         interface.update_now_playing(NowPlayingPreferenceChange::CinemaCropFocus(
-            CinemaCropFocus::TopLeft,
+            CinemaCropFocus::TOP_LEFT,
         ));
         interface.update_now_playing(NowPlayingPreferenceChange::RoundCorners(false));
         interface.update_now_playing(NowPlayingPreferenceChange::DisplayMode(
@@ -2580,7 +2738,7 @@ now_playing_background_motion_reversal_duration_secs = 23
         );
         assert_eq!(
             interface.preferences.now_playing.cinema.crop_focus,
-            CinemaCropFocus::TopLeft
+            CinemaCropFocus::TOP_LEFT
         );
         assert!(!interface.preferences.now_playing.classic.round_corners);
 
@@ -2678,13 +2836,13 @@ now_playing_background_motion_reversal_duration_secs = 23
 
         for focus in CinemaCropFocus::ALL {
             assert_eq!(
-                CinemaCropFocus::from_preference(Some(focus.as_preference_value())),
+                CinemaCropFocus::from_preference(Some(&focus.as_preference_value())),
                 focus
             );
         }
         assert_eq!(
             CinemaCropFocus::from_preference(Some("unknown")),
-            CinemaCropFocus::Center
+            CinemaCropFocus::CENTER
         );
 
         for effect in TransitionEffect::ALL {

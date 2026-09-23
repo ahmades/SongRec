@@ -768,7 +768,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                         </child>
                         <child>
                           <object class="AdwActionRow" id="cinema_crop_focus_setting">
-                            <property name="subtitle" translatable="yes">Choose which part of the cover stays visible when Fill crops it</property>
+                            <property name="subtitle" translatable="yes">Drag on the preview to choose which part of the cover stays visible</property>
                             <property name="title" translatable="yes">Crop focus</property>
                             <property name="visible">false</property>
                           </object>

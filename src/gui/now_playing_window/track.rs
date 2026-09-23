@@ -2,6 +2,7 @@
 
 use super::background::{CachedGradient, redraw_background};
 use super::burn_in::BurnInController;
+use super::cinema_framing::CinemaCropFocusControls;
 use super::palette::{
     ArtworkRequirement, ArtworkVisuals, Background, prepare_artwork, prepare_immersive_background,
     visuals_from_artwork,
@@ -52,6 +53,7 @@ pub(super) struct TrackPresentation {
     artwork: gtk::Picture,
     classic_missing_artwork: gtk::Image,
     cinema_artwork: CinemaArtworkLayout,
+    cinema_crop_focus: CinemaCropFocusControls,
     ambient_artwork: AmbientArtworkLayout,
     scrim_area: gtk::DrawingArea,
     artwork_placeholder: gtk::Label,
@@ -268,6 +270,7 @@ impl TrackPresentation {
             artwork: window.ui.artwork.clone(),
             classic_missing_artwork: window.ui.classic_missing_artwork.clone(),
             cinema_artwork: window.ui.cinema_artwork.clone(),
+            cinema_crop_focus: window.controls.cinema_crop_focus.clone(),
             ambient_artwork: window.ui.ambient_artwork.clone(),
             scrim_area: window.ui.scrim_area.clone(),
             artwork_placeholder: window.ui.artwork_placeholder.clone(),
@@ -331,6 +334,8 @@ impl TrackPresentation {
             _ => None,
         };
         let foreground = track.artwork.as_ref().map(|artwork| &artwork.texture);
+        let preview_paintable = foreground.map(|texture| texture.upcast_ref::<gdk::Paintable>());
+        self.cinema_crop_focus.set_artwork(preview_paintable);
         let album_backdrop = track
             .artwork
             .as_ref()
@@ -416,6 +421,7 @@ impl TrackPresentation {
 
     fn clear_artwork(&self) {
         self.artwork.set_paintable(Option::<&gdk::Texture>::None);
+        self.cinema_crop_focus.set_artwork(None);
         self.cinema_artwork.set_artwork(None, None);
         self.ambient_artwork.set_artwork(None, None);
     }

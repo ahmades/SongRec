@@ -299,18 +299,14 @@ mod tests {
         controller.update(NowPlayingPreferenceChange::CinemaArtworkFraming(
             CinemaArtworkFraming::Fill,
         ));
-        controller.update(NowPlayingPreferenceChange::CinemaCropFocus(
-            CinemaCropFocus::TopRight,
-        ));
+        let crop_focus = CinemaCropFocus::new(2_345, 8_765);
+        controller.update(NowPlayingPreferenceChange::CinemaCropFocus(crop_focus));
         controller.update(NowPlayingPreferenceChange::DisplayMode(DisplayMode::Cinema));
         assert_eq!(
             controller.settings().cinema.artwork_framing,
             CinemaArtworkFraming::Fill
         );
-        assert_eq!(
-            controller.settings().cinema.crop_focus,
-            CinemaCropFocus::TopRight
-        );
+        assert_eq!(controller.settings().cinema.crop_focus, crop_focus);
         controller.update(NowPlayingPreferenceChange::BackgroundMotionEnabled(true));
         controller.update(NowPlayingPreferenceChange::BackgroundMotionZoomPercent(
             u16::MAX,

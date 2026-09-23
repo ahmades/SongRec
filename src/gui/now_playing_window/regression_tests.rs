@@ -467,16 +467,10 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
         dispatch();
         assert!(cinema_crop_focus_row.get_visible());
         assert!(window.0.controls.cinema_crop_focus_details.reveals_child());
-        window
-            .0
-            .controls
-            .cinema_crop_focus
-            .set_value(CinemaCropFocus::BottomRight);
+        let crop_focus = CinemaCropFocus::new(2_345, 8_765);
+        window.0.controls.cinema_crop_focus.set_value(crop_focus);
         dispatch();
-        assert_eq!(
-            controller.settings().cinema.crop_focus,
-            CinemaCropFocus::BottomRight
-        );
+        assert_eq!(controller.settings().cinema.crop_focus, crop_focus);
         mode.set_active_name(Some(super::DisplayMode::Ambient.as_preference_value()));
         dispatch();
         assert!(!cinema_heading.get_visible());
