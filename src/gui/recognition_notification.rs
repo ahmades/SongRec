@@ -261,6 +261,7 @@ mod tests {
             song_name: key.into(),
             artist_name: "Artist".into(),
             album_name: None,
+            record_label: None,
             release_year: None,
             genre: None,
             artist_background_url: None,

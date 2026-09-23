@@ -11,6 +11,7 @@ mod burn_in;
 mod cinema_framing;
 mod controller;
 mod display_mode;
+mod displayed_information;
 mod main_preferences;
 mod menu;
 mod monitor_selection;
@@ -20,6 +21,7 @@ mod palette;
 mod performance_tests;
 mod preferences;
 mod presets;
+mod recognition_age;
 #[cfg(test)]
 mod regression_tests;
 mod screen_awake;
@@ -40,6 +42,7 @@ use burn_in::BurnInController;
 use controller::NowPlayingSettingsController;
 use menu::NowPlayingControls;
 use presets::PresetManagerLauncher;
+use recognition_age::RecognitionAgeController;
 use screen_awake::ScreenAwakeController;
 use shortcuts::ShortcutFeedback;
 use state::NowPlayingState;
@@ -47,7 +50,8 @@ use ui::NowPlayingWidgets;
 
 pub use crate::core::preferences::{
     AlbumCoverSize, BackdropIntensity, BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus,
-    DisplayMode, ImmersiveBackgroundSource, TextSize, TrackInfoAlignment, TransitionEffect,
+    DisplayMode, DisplayedInformation, ImmersiveBackgroundSource, TextSize, TrackInfoAlignment,
+    TransitionEffect,
 };
 pub(crate) use crate::core::preferences::{
     BACKGROUND_MOTION_REVERSAL_DURATION_DEFAULT_SECS, BACKGROUND_MOTION_ZOOM_DEFAULT_PERCENT,
@@ -69,6 +73,7 @@ pub struct NowPlayingWindow {
     applied_settings: std::cell::Cell<Option<NowPlayingSettings>>,
     screen_awake: ScreenAwakeController,
     burn_in: BurnInController,
+    recognition_age: RecognitionAgeController,
     shortcut_feedback: ShortcutFeedback,
     preset_manager: PresetManagerLauncher,
     artwork_timing: Option<timing::ArtworkTimingProbe>,
@@ -98,6 +103,10 @@ impl NowPlayingWindow {
         let state = NowPlayingState::new(controller.settings_cell());
         let screen_awake = ScreenAwakeController::new(application);
         let burn_in = BurnInController::new(&ui.burn_in_dim_layer);
+        let recognition_age = RecognitionAgeController::new(
+            &ui.recognition_age_label,
+            &ui.immersive_recognition_age_label,
+        );
         let shortcut_feedback = ShortcutFeedback::new(&ui.window_overlay);
         let preset_manager = PresetManagerLauncher::new(controller.clone());
 
@@ -110,6 +119,7 @@ impl NowPlayingWindow {
             applied_settings: std::cell::Cell::new(None),
             screen_awake,
             burn_in,
+            recognition_age,
             shortcut_feedback,
             preset_manager,
             artwork_timing: None,
@@ -122,6 +132,9 @@ impl NowPlayingWindow {
         now_playing.setup_rendering();
         now_playing.screen_awake.bind_window(&now_playing.ui.window);
         now_playing.burn_in.bind_window(&now_playing.ui.window);
+        now_playing
+            .recognition_age
+            .bind_window(&now_playing.ui.window);
         now_playing.setup_track_transition_handlers();
         now_playing.apply_initial_preferences(settings);
         now_playing.setup_context_menu(settings);
@@ -149,6 +162,7 @@ impl NowPlayingWindow {
     pub fn close(&self) {
         self.screen_awake.release();
         self.burn_in.release();
+        self.recognition_age.release();
         self.shortcut_feedback.hide();
         self.ui.window.close();
     }

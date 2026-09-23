@@ -616,6 +616,19 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
                           </object>
                         </child>
                         <child>
+                          <object class="AdwActionRow" id="displayed_information_setting">
+                            <property name="subtitle" translatable="yes">Choose the details shown below the artist</property>
+                            <property name="title" translatable="yes">Displayed information</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow" id="displayed_information_details">
+                            <property name="activatable">false</property>
+                            <property name="selectable">false</property>
+                            <property name="visible">false</property>
+                          </object>
+                        </child>
+                        <child>
                           <object class="AdwSwitchRow" id="always_display_last_recognized_song_setting">
                             <property name="subtitle" translatable="yes">Keep showing the last recognized song when there is no current match</property>
                             <property name="title" translatable="yes">Always display last recognized song</property>

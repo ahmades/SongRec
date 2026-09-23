@@ -911,6 +911,48 @@ pub struct CinemaNowPlayingPreferences {
     pub crop_focus: CinemaCropFocus,
 }
 
+/// Optional metadata shown below the artist in every mode that displays track info.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct DisplayedInformation {
+    #[serde(rename = "now_playing_show_album")]
+    pub album: bool,
+    #[serde(rename = "now_playing_show_record_label")]
+    pub record_label: bool,
+    #[serde(rename = "now_playing_show_release_year")]
+    pub release_year: bool,
+    #[serde(rename = "now_playing_show_genre")]
+    pub genre: bool,
+    #[serde(rename = "now_playing_show_recognition_age")]
+    pub recognition_age: bool,
+}
+
+impl Default for DisplayedInformation {
+    fn default() -> Self {
+        Self {
+            album: true,
+            record_label: false,
+            release_year: true,
+            genre: false,
+            recognition_age: false,
+        }
+    }
+}
+
+impl DisplayedInformation {
+    pub(crate) fn enabled_count(self) -> usize {
+        [
+            self.album,
+            self.record_label,
+            self.release_year,
+            self.genre,
+            self.recognition_age,
+        ]
+        .into_iter()
+        .filter(|enabled| *enabled)
+        .count()
+    }
+}
+
 /// Settings and behavior shared by more than one display mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SharedNowPlayingPreferences {
@@ -924,6 +966,8 @@ pub struct SharedNowPlayingPreferences {
     pub hide_track_info: bool,
     #[serde(rename = "now_playing_text_size_percent")]
     pub text_size: TextSize,
+    #[serde(flatten)]
+    pub displayed_information: DisplayedInformation,
     #[serde(rename = "now_playing_immersive_background_source")]
     pub immersive_background_source: ImmersiveBackgroundSource,
     #[serde(rename = "now_playing_immersive_backdrop_intensity")]
@@ -949,6 +993,7 @@ impl Default for SharedNowPlayingPreferences {
             burn_in_inactivity_minutes: BURN_IN_INACTIVITY_DEFAULT_MINUTES,
             hide_track_info: false,
             text_size: TextSize::default(),
+            displayed_information: DisplayedInformation::default(),
             immersive_background_source: ImmersiveBackgroundSource::default(),
             backdrop_intensity: BackdropIntensity::default(),
             background_motion_enabled: false,
@@ -1005,6 +1050,16 @@ struct NowPlayingPreferencesWire {
     hide_track_info: Option<bool>,
     #[serde(rename = "now_playing_text_size_percent")]
     text_size: Option<TextSize>,
+    #[serde(rename = "now_playing_show_album")]
+    show_album: Option<bool>,
+    #[serde(rename = "now_playing_show_record_label")]
+    show_record_label: Option<bool>,
+    #[serde(rename = "now_playing_show_release_year")]
+    show_release_year: Option<bool>,
+    #[serde(rename = "now_playing_show_genre")]
+    show_genre: Option<bool>,
+    #[serde(rename = "now_playing_show_recognition_age")]
+    show_recognition_age: Option<bool>,
     #[serde(rename = "now_playing_immersive_background_source")]
     immersive_background_source: Option<ImmersiveBackgroundSource>,
     #[serde(rename = "now_playing_immersive_backdrop_intensity")]
@@ -1081,6 +1136,23 @@ impl<'de> Deserialize<'de> for NowPlayingPreferences {
                     .hide_track_info
                     .unwrap_or(defaults.shared.hide_track_info),
                 text_size: wire.text_size.unwrap_or(defaults.shared.text_size),
+                displayed_information: DisplayedInformation {
+                    album: wire
+                        .show_album
+                        .unwrap_or(defaults.shared.displayed_information.album),
+                    record_label: wire
+                        .show_record_label
+                        .unwrap_or(defaults.shared.displayed_information.record_label),
+                    release_year: wire
+                        .show_release_year
+                        .unwrap_or(defaults.shared.displayed_information.release_year),
+                    genre: wire
+                        .show_genre
+                        .unwrap_or(defaults.shared.displayed_information.genre),
+                    recognition_age: wire
+                        .show_recognition_age
+                        .unwrap_or(defaults.shared.displayed_information.recognition_age),
+                },
                 immersive_background_source: wire
                     .immersive_background_source
                     .unwrap_or(defaults.shared.immersive_background_source),
@@ -1150,6 +1222,9 @@ impl NowPlayingPreferences {
             NowPlayingPreferenceChange::TextSize(value) => {
                 self.shared.text_size = value;
             }
+            NowPlayingPreferenceChange::DisplayedInformation(value) => {
+                self.shared.displayed_information = value;
+            }
             NowPlayingPreferenceChange::ImmersiveBackgroundSource(value) => {
                 self.shared.immersive_background_source = value;
             }
@@ -1199,6 +1274,7 @@ pub enum NowPlayingPreferenceChange {
     CinemaCropFocus(CinemaCropFocus),
     HideTrackInfo(bool),
     TextSize(TextSize),
+    DisplayedInformation(DisplayedInformation),
     ImmersiveBackgroundSource(ImmersiveBackgroundSource),
     BackdropIntensity(BackdropIntensity),
     BackgroundMotionEnabled(bool),
@@ -1713,7 +1789,7 @@ mod tests {
         BURN_IN_INACTIVITY_DEFAULT_MINUTES, BURN_IN_INACTIVITY_MAX_MINUTES,
         BURN_IN_INACTIVITY_MIN_MINUTES, BURN_IN_INACTIVITY_STEP_MINUTES, BackdropIntensity,
         BackgroundStyle, CinemaArtworkFraming, CinemaCropFocus, CinemaNowPlayingPreferences,
-        ClassicNowPlayingPreferences, DisplayMode, FullscreenMonitorTarget,
+        ClassicNowPlayingPreferences, DisplayMode, DisplayedInformation, FullscreenMonitorTarget,
         ImmersiveBackgroundSource, MAX_PERSISTED_PRESET_ID, NOW_PLAYING_PRESET_NAME_MAX_CHARS,
         NowPlayingPreferenceChange, NowPlayingPreferences, NowPlayingPresetCatalog, Preferences,
         PreferencesInterface, PreferencesPatch, PresetError, SharedNowPlayingPreferences,
@@ -2038,6 +2114,16 @@ now_playing_background_motion_reversal_duration_secs = 23
         assert!(!defaults.shared.hide_track_info);
         assert_eq!(defaults.shared.text_size, TextSize::MEDIUM);
         assert_eq!(
+            defaults.shared.displayed_information,
+            DisplayedInformation {
+                album: true,
+                record_label: false,
+                release_year: true,
+                genre: false,
+                recognition_age: false,
+            }
+        );
+        assert_eq!(
             defaults.shared.immersive_background_source,
             ImmersiveBackgroundSource::AlbumCover
         );
@@ -2124,6 +2210,17 @@ now_playing_background_motion_reversal_duration_secs = 23
         assert_eq!(
             table["now_playing_text_size_percent"].as_integer(),
             Some(100)
+        );
+        assert_eq!(table["now_playing_show_album"].as_bool(), Some(true));
+        assert_eq!(
+            table["now_playing_show_record_label"].as_bool(),
+            Some(false)
+        );
+        assert_eq!(table["now_playing_show_release_year"].as_bool(), Some(true));
+        assert_eq!(table["now_playing_show_genre"].as_bool(), Some(false));
+        assert_eq!(
+            table["now_playing_show_recognition_age"].as_bool(),
+            Some(false)
         );
         assert_eq!(
             table["now_playing_immersive_background_source"].as_str(),
@@ -2241,6 +2338,7 @@ lights_off_enabled = false
                     burn_in_inactivity_minutes: BURN_IN_INACTIVITY_DEFAULT_MINUTES,
                     hide_track_info: true,
                     text_size: TextSize::MEDIUM,
+                    displayed_information: DisplayedInformation::default(),
                     immersive_background_source: ImmersiveBackgroundSource::AlbumCover,
                     backdrop_intensity: BackdropIntensity::Balanced,
                     background_motion_enabled: false,
@@ -2559,6 +2657,13 @@ now_playing_background_motion_reversal_duration_secs = 23
                         burn_in_inactivity_minutes: 47,
                         hide_track_info: true,
                         text_size: TextSize::from_scale_value(113.0),
+                        displayed_information: DisplayedInformation {
+                            album: false,
+                            record_label: true,
+                            release_year: false,
+                            genre: true,
+                            recognition_age: true,
+                        },
                         immersive_background_source: ImmersiveBackgroundSource::Artist,
                         backdrop_intensity: BackdropIntensity::Bold,
                         background_motion_enabled: true,
@@ -2677,6 +2782,16 @@ now_playing_background_motion_reversal_duration_secs = 23
         interface.update_now_playing(NowPlayingPreferenceChange::TextSize(
             TextSize::from_scale_value(113.0),
         ));
+        let displayed_information = DisplayedInformation {
+            album: false,
+            record_label: true,
+            release_year: false,
+            genre: true,
+            recognition_age: true,
+        };
+        interface.update_now_playing(NowPlayingPreferenceChange::DisplayedInformation(
+            displayed_information,
+        ));
         interface.update_now_playing(NowPlayingPreferenceChange::ImmersiveBackgroundSource(
             ImmersiveBackgroundSource::Artist,
         ));
@@ -2719,6 +2834,14 @@ now_playing_background_motion_reversal_duration_secs = 23
         assert_eq!(
             interface.preferences.now_playing.shared.text_size,
             TextSize::from_scale_value(113.0)
+        );
+        assert_eq!(
+            interface
+                .preferences
+                .now_playing
+                .shared
+                .displayed_information,
+            displayed_information
         );
         assert_eq!(
             interface

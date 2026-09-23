@@ -30,6 +30,7 @@ pub struct SongRecognizedMessage {
     pub response_received_at: Option<i64>,
     pub artist_name: String,
     pub album_name: Option<String>,
+    pub record_label: Option<String>,
     pub song_name: String,
     /// Response-provided artist image URL used on demand by immersive displays.
     /// Kept separately from the full response so consumers never need to parse it again.
@@ -264,6 +265,7 @@ mod tests {
             response_received_at: None,
             artist_name: "Artist".to_string(),
             album_name: None,
+            record_label: None,
             song_name: format!("Song {key}"),
             artist_background_url: None,
             artwork: ArtworkStatus::Pending,

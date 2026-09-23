@@ -27,6 +27,7 @@ pub(crate) fn parse_recognition(json_object: Value) -> Option<ParsedRecognition>
     let response_received_at = Some(glib::monotonic_time());
 
     let mut album_name: Option<String> = None;
+    let mut record_label: Option<String> = None;
     let mut release_year: Option<String> = None;
 
     // Sometimes the idea of trying to write functional poetry hurts
@@ -43,6 +44,10 @@ pub(crate) fn parse_recognition(json_object: Value) -> Option<ParsedRecognition>
                                 && let Value::String(text) = &metadatum["text"]
                             {
                                 album_name = Some(text.to_string());
+                            } else if title == "Label"
+                                && let Value::String(text) = &metadatum["text"]
+                            {
+                                record_label = Some(text.to_string());
                             } else if title == "Released"
                                 && let Value::String(text) = &metadatum["text"]
                             {
@@ -73,6 +78,7 @@ pub(crate) fn parse_recognition(json_object: Value) -> Option<ParsedRecognition>
             response_received_at,
             artist_name,
             album_name,
+            record_label,
             song_name,
             artist_background_url: json_object["track"]["images"]["background"]
                 .as_str()
@@ -166,7 +172,9 @@ mod tests {
             "images": {"coverarthq": "cover.jpg", "background": artist_background},
             "genres": {"primary": "Rock"},
             "sections": [{"type": "SONG", "metadata": [
-                {"title": "Album", "text": "Album"}, {"title": "Released", "text": "1977"}
+                {"title": "Album", "text": "Album"},
+                {"title": "Label", "text": "Harvest Records"},
+                {"title": "Released", "text": "1977"}
             ]}]
         }});
         let before = glib::monotonic_time();
@@ -174,6 +182,10 @@ mod tests {
         let received = parsed.message.response_received_at.unwrap();
         assert!((before..=glib::monotonic_time()).contains(&received));
         assert_eq!(parsed.message.album_name.as_deref(), Some("Album"));
+        assert_eq!(
+            parsed.message.record_label.as_deref(),
+            Some("Harvest Records")
+        );
         assert_eq!(parsed.message.release_year.as_deref(), Some("1977"));
         assert_eq!(parsed.message.genre.as_deref(), Some("Rock"));
         assert_eq!(
@@ -229,6 +241,30 @@ mod tests {
                     .unwrap()
                     .message
                     .artist_background_url
+                    .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn post_response_parser_treats_missing_or_invalid_record_label_as_unavailable() {
+        let response = |metadata: serde_json::Value| {
+            json!({"track": {
+                "key": "123", "title": "Song", "subtitle": "Artist",
+                "sections": [{"type": "SONG", "metadata": metadata}]
+            }})
+        };
+
+        for metadata in [
+            json!([]),
+            json!([{"title": "Label", "text": null}]),
+            json!([{"title": "Label", "text": 123}]),
+        ] {
+            assert!(
+                parse_recognition(response(metadata))
+                    .unwrap()
+                    .message
+                    .record_label
                     .is_none()
             );
         }

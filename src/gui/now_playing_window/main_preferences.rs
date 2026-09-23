@@ -2,6 +2,7 @@
 
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::display_mode::{DisplayModeControls, NowPlayingControlState};
+use super::displayed_information::{DisplayedInformationEditor, selection_summary};
 use super::monitor_selection::MonitorSelector;
 use super::presets::PresetManagerDialog;
 use super::{
@@ -60,6 +61,10 @@ struct PreferencesWidgets {
     hide_track_info: adw::SwitchRow,
     text_size_row: adw::ActionRow,
     text_size: gtk::Scale,
+    displayed_information_row: adw::ActionRow,
+    displayed_information_button: gtk::ToggleButton,
+    displayed_information_details: adw::ActionRow,
+    displayed_information: DisplayedInformationEditor,
     immersive_background_source_album_cover: gtk::ToggleButton,
     immersive_background_source_artist: gtk::ToggleButton,
     backdrop_intensity_soft: gtk::ToggleButton,
@@ -122,6 +127,20 @@ impl NowPlayingPreferencesView {
             builder.object("cinema_crop_focus_setting").unwrap();
         cinema_crop_focus_row.add_suffix(cinema_crop_focus.widget());
 
+        let displayed_information = DisplayedInformationEditor::new();
+        let displayed_information_row: adw::ActionRow =
+            builder.object("displayed_information_setting").unwrap();
+        let displayed_information_button = gtk::ToggleButton::builder()
+            .label(selection_summary(super::DisplayedInformation::default()))
+            .valign(gtk::Align::Center)
+            .build();
+        displayed_information_row.add_suffix(&displayed_information_button);
+        let displayed_information_details: adw::ActionRow =
+            builder.object("displayed_information_details").unwrap();
+        displayed_information.widget().set_margin_top(6);
+        displayed_information.widget().set_margin_bottom(6);
+        displayed_information_details.add_suffix(displayed_information.widget());
+
         // Reuse the already-decoded result texture. The preview never starts
         // another artwork download or image-processing job.
         let results_image: gtk::Image = builder.object("results_image").unwrap();
@@ -183,6 +202,10 @@ impl NowPlayingPreferencesView {
             hide_track_info: builder.object("hide_track_info_setting").unwrap(),
             text_size_row: builder.object("text_size_setting").unwrap(),
             text_size: builder.object("text_size_setting_scale").unwrap(),
+            displayed_information_row,
+            displayed_information_button,
+            displayed_information_details,
+            displayed_information,
             immersive_background_source_album_cover: builder
                 .object("immersive_background_source_album_cover")
                 .unwrap(),
@@ -232,6 +255,7 @@ impl NowPlayingPreferencesView {
 
         for row in [
             &widgets.text_size_row,
+            &widgets.displayed_information_details,
             &widgets.transition_duration_row,
             &widgets.cinema_crop_focus_row,
             &widgets.background_motion_zoom_row,
@@ -312,6 +336,12 @@ impl NowPlayingPreferencesView {
         self.widgets
             .text_size
             .set_value(settings.shared.text_size.scale_value());
+        self.widgets
+            .displayed_information
+            .set_value(settings.shared.displayed_information);
+        self.widgets
+            .displayed_information_button
+            .set_label(&selection_summary(settings.shared.displayed_information));
         self.widgets
             .immersive_background_source_album_cover
             .set_active(matches!(
@@ -404,6 +434,13 @@ impl NowPlayingPreferencesView {
             .set_sensitive(state.hide_track_info_sensitive);
         self.widgets.text_size_row.set_visible(state.show_text_size);
         self.widgets
+            .displayed_information_row
+            .set_visible(state.show_displayed_information);
+        self.widgets.displayed_information_details.set_visible(
+            state.show_displayed_information
+                && self.widgets.displayed_information_button.is_active(),
+        );
+        self.widgets
             .immersive_settings
             .set_visible(state.show_immersive_settings);
         self.widgets
@@ -476,6 +513,27 @@ impl NowPlayingPreferencesView {
             &self.widgets.hide_track_info,
             NowPlayingPreferenceChange::HideTrackInfo,
         );
+
+        let displayed_information_details = self.widgets.displayed_information_details.clone();
+        let displayed_information_row = self.widgets.displayed_information_row.clone();
+        self.widgets
+            .displayed_information_button
+            .connect_toggled(move |button| {
+                displayed_information_details
+                    .set_visible(button.is_active() && displayed_information_row.is_visible());
+            });
+        let applying = self.applying.clone();
+        let controller_for_displayed_information = controller.clone();
+        let displayed_information_button = self.widgets.displayed_information_button.clone();
+        self.widgets
+            .displayed_information
+            .connect_changed(move |value| {
+                displayed_information_button.set_label(&selection_summary(value));
+                if !applying.get() {
+                    controller_for_displayed_information
+                        .update(NowPlayingPreferenceChange::DisplayedInformation(value));
+                }
+            });
         bind_switch(
             &self.widgets.background_motion_enabled,
             NowPlayingPreferenceChange::BackgroundMotionEnabled,

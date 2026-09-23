@@ -7,6 +7,7 @@ use super::palette::{
     ArtworkRequirement, ArtworkVisuals, Background, prepare_artwork, prepare_immersive_background,
     visuals_from_artwork,
 };
+use super::recognition_age::RecognitionAgeController;
 use super::state::{
     ArtistBackgroundState, ArtistBackgroundWork, PresentationAction, PresentationMode,
     PresentedTrack, TrackPresentationState,
@@ -15,7 +16,8 @@ use super::ui::{
     AmbientArtworkLayout, CinemaArtworkLayout, TrackTransitionLayout, configure_immersive_info,
 };
 use super::{
-    BackdropIntensity, DisplayMode, NowPlayingSettings, NowPlayingWindow, TransitionEffect,
+    BackdropIntensity, DisplayMode, DisplayedInformation, NowPlayingSettings, NowPlayingWindow,
+    TransitionEffect,
 };
 use crate::core::artwork::{Artwork, ArtworkStatus};
 use crate::core::thread_messages::SongRecognizedMessage;
@@ -59,13 +61,14 @@ pub(super) struct TrackPresentation {
     artwork_placeholder: gtk::Label,
     title_label: gtk::Label,
     artist_label: gtk::Label,
-    album_label: gtk::Label,
-    details_label: gtk::Label,
+    release_info_label: gtk::Label,
+    genre_label: gtk::Label,
     immersive_info_box: gtk::Box,
     immersive_title_label: gtk::Label,
     immersive_artist_label: gtk::Label,
-    immersive_album_label: gtk::Label,
-    immersive_details_label: gtk::Label,
+    immersive_release_info_label: gtk::Label,
+    immersive_genre_label: gtk::Label,
+    immersive_recognition_age_label: gtk::Label,
     background_area: gtk::DrawingArea,
     gradient_surface: Rc<RefCell<Option<CachedGradient>>>,
     settings: Rc<Cell<NowPlayingSettings>>,
@@ -73,6 +76,7 @@ pub(super) struct TrackPresentation {
     current_background: Rc<Cell<Background>>,
     track_state: Rc<RefCell<TrackPresentationState>>,
     burn_in: BurnInController,
+    recognition_age: RecognitionAgeController,
 }
 
 /// Cloneable callback context for lazy artist-background preparation.
@@ -276,13 +280,14 @@ impl TrackPresentation {
             artwork_placeholder: window.ui.artwork_placeholder.clone(),
             title_label: window.ui.title_label.clone(),
             artist_label: window.ui.artist_label.clone(),
-            album_label: window.ui.album_label.clone(),
-            details_label: window.ui.details_label.clone(),
+            release_info_label: window.ui.release_info_label.clone(),
+            genre_label: window.ui.genre_label.clone(),
             immersive_info_box: window.ui.immersive_info_box.clone(),
             immersive_title_label: window.ui.immersive_title_label.clone(),
             immersive_artist_label: window.ui.immersive_artist_label.clone(),
-            immersive_album_label: window.ui.immersive_album_label.clone(),
-            immersive_details_label: window.ui.immersive_details_label.clone(),
+            immersive_release_info_label: window.ui.immersive_release_info_label.clone(),
+            immersive_genre_label: window.ui.immersive_genre_label.clone(),
+            immersive_recognition_age_label: window.ui.immersive_recognition_age_label.clone(),
             background_area: window.ui.background_area.clone(),
             gradient_surface: window.state.gradient_surface.clone(),
             settings: window.state.settings.clone(),
@@ -290,6 +295,7 @@ impl TrackPresentation {
             current_background: window.state.current_background.clone(),
             track_state: window.state.track_presentation.clone(),
             burn_in: window.burn_in.clone(),
+            recognition_age: window.recognition_age.clone(),
         }
     }
 
@@ -395,28 +401,39 @@ impl TrackPresentation {
         self.clear_artwork();
         self.title_label.set_label("");
         self.artist_label.set_label("");
-        self.album_label.set_label("");
-        self.details_label.set_label("");
+        set_optional_label(&self.release_info_label, "");
+        set_optional_label(&self.genre_label, "");
+        self.recognition_age.set_response_received_at(None);
         self.immersive_title_label.set_label("");
         self.immersive_artist_label.set_label("");
-        self.immersive_album_label.set_label("");
-        self.immersive_details_label.set_label("");
+        set_optional_label(&self.immersive_release_info_label, "");
+        set_optional_label(&self.immersive_genre_label, "");
         self.sync_artwork_visibility();
     }
 
     fn set_metadata(&self, track: &PresentedTrack) {
+        let displayed = self.settings.get().shared.displayed_information;
+        let release_information = release_information(
+            track.album_name.as_deref(),
+            track.record_label.as_deref(),
+            track.release_year.as_deref(),
+            displayed,
+        );
+        let genre = if displayed.genre {
+            optional_metadata(&track.genre)
+        } else {
+            ""
+        };
         self.title_label.set_label(&track.song_name);
         self.artist_label.set_label(&track.artist_name);
-        self.album_label
-            .set_label(optional_metadata(&track.album_name));
-        self.details_label
-            .set_label(optional_metadata(&track.release_year));
+        set_optional_label(&self.release_info_label, &release_information);
+        set_optional_label(&self.genre_label, genre);
         self.immersive_title_label.set_label(&track.song_name);
         self.immersive_artist_label.set_label(&track.artist_name);
-        self.immersive_album_label
-            .set_label(optional_metadata(&track.album_name));
-        self.immersive_details_label
-            .set_label(optional_metadata(&track.release_year));
+        set_optional_label(&self.immersive_release_info_label, &release_information);
+        set_optional_label(&self.immersive_genre_label, genre);
+        self.recognition_age
+            .set_response_received_at(track.response_received_at);
     }
 
     fn clear_artwork(&self) {
@@ -481,8 +498,9 @@ impl TrackPresentation {
             [
                 &self.immersive_title_label,
                 &self.immersive_artist_label,
-                &self.immersive_album_label,
-                &self.immersive_details_label,
+                &self.immersive_release_info_label,
+                &self.immersive_genre_label,
+                &self.immersive_recognition_age_label,
             ],
             settings.display_mode,
             self.cinema_artwork.layout(width, height),
@@ -543,6 +561,16 @@ impl TrackPresentation {
             self.render_track(&track);
         } else {
             self.refresh_mode();
+        }
+    }
+
+    /// Rebuilds only text derived from the current track and its display flags.
+    pub(super) fn refresh_metadata(&self) {
+        let track = self.track_state.borrow().displayed_track.clone();
+        if let Some(track) = track {
+            self.set_metadata(&track);
+        } else {
+            self.recognition_age.set_response_received_at(None);
         }
     }
 }
@@ -653,6 +681,15 @@ impl NowPlayingWindow {
             can_animate,
             requirement,
         );
+        let displayed_response_received_at = self
+            .state
+            .track_presentation
+            .borrow()
+            .displayed_track
+            .as_ref()
+            .and_then(|track| track.response_received_at);
+        self.recognition_age
+            .set_response_received_at(displayed_response_received_at);
 
         match action {
             PresentationAction::BeginTransition => {
@@ -982,6 +1019,30 @@ fn optional_metadata(value: &Option<String>) -> &str {
         .unwrap_or("")
 }
 
+fn release_information(
+    album: Option<&str>,
+    record_label: Option<&str>,
+    release_year: Option<&str>,
+    displayed: DisplayedInformation,
+) -> String {
+    [
+        (displayed.album, album),
+        (displayed.record_label, record_label),
+        (displayed.release_year, release_year),
+    ]
+    .into_iter()
+    .filter_map(|(enabled, value)| enabled.then_some(value).flatten())
+    .map(str::trim)
+    .filter(|value| !value.is_empty())
+    .collect::<Vec<_>>()
+    .join(" · ")
+}
+
+fn set_optional_label(label: &gtk::Label, text: &str) {
+    label.set_label(text);
+    label.set_visible(!text.is_empty());
+}
+
 /// Selects a new artwork palette without introducing an intermediate fallback.
 ///
 /// Recognition metadata is delivered before its separately fetched artwork.
@@ -1071,11 +1132,137 @@ fn presentation_visibility(
 mod tests {
     use super::{
         PresentationVisibility, background_after_track_update, presentation_visibility,
-        transition_leg_duration_ms,
+        release_information, transition_leg_duration_ms,
     };
-    use crate::gui::now_playing_window::DisplayMode;
     use crate::gui::now_playing_window::palette::Background;
     use crate::gui::now_playing_window::state::PresentationMode;
+    use crate::gui::now_playing_window::{DisplayMode, DisplayedInformation};
+
+    #[test]
+    fn release_information_uses_enabled_nonempty_fields_in_the_agreed_order() {
+        let defaults = DisplayedInformation::default();
+        assert_eq!(
+            release_information(
+                Some("Animals"),
+                Some("Harvest Records"),
+                Some("1977"),
+                defaults,
+            ),
+            "Animals · 1977"
+        );
+
+        let all = DisplayedInformation {
+            album: true,
+            record_label: true,
+            release_year: true,
+            genre: true,
+            recognition_age: true,
+        };
+        assert_eq!(
+            release_information(Some("Animals"), Some("Harvest Records"), Some("1977"), all,),
+            "Animals · Harvest Records · 1977"
+        );
+        assert_eq!(
+            release_information(Some("  "), None, Some("1977"), all),
+            "1977"
+        );
+
+        for mask in 0_u8..8 {
+            let displayed = DisplayedInformation {
+                album: mask & 1 != 0,
+                record_label: mask & 2 != 0,
+                release_year: mask & 4 != 0,
+                genre: false,
+                recognition_age: false,
+            };
+            let expected = [
+                displayed.album.then_some("Album"),
+                displayed.record_label.then_some("Label"),
+                displayed.release_year.then_some("Year"),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" · ");
+            assert_eq!(
+                release_information(Some("Album"), Some("Label"), Some("Year"), displayed),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn all_displayed_information_is_rendered_in_the_agreed_layout() {
+        use crate::core::artwork::ArtworkStatus;
+        use crate::core::thread_messages::SongRecognizedMessage;
+        use crate::gui::now_playing_window::controller::NowPlayingSettingsController;
+        use crate::gui::now_playing_window::{NowPlayingSettings, NowPlayingWindow};
+        use adw::prelude::*;
+
+        let _serial = crate::MAIN_CONTEXT_TEST_LOCK.lock().unwrap();
+        adw::init().unwrap();
+        let mut settings = NowPlayingSettings::default();
+        settings.shared.displayed_information = DisplayedInformation {
+            album: true,
+            record_label: true,
+            release_year: true,
+            genre: true,
+            recognition_age: true,
+        };
+        let window = NowPlayingWindow::new_with_controller(NowPlayingSettingsController::new(
+            settings, None,
+        ));
+        window.ui.window.present();
+        while glib::MainContext::default().iteration(false) {}
+
+        window.update(&SongRecognizedMessage {
+            response_received_at: Some(glib::monotonic_time() - 20_000_000),
+            track_key: "pigs".to_string(),
+            song_name: "Pigs (Three Different Ones)".to_string(),
+            artist_name: "Pink Floyd".to_string(),
+            album_name: Some("Animals".to_string()),
+            record_label: Some("Harvest Records".to_string()),
+            release_year: Some("1977".to_string()),
+            genre: Some("Progressive Rock".to_string()),
+            artist_background_url: None,
+            shazam_json: String::new(),
+            artwork: ArtworkStatus::Unavailable,
+        });
+        while glib::MainContext::default().iteration(false) {}
+
+        assert_eq!(window.ui.title_label.label(), "Pigs (Three Different Ones)");
+        assert_eq!(window.ui.artist_label.label(), "Pink Floyd");
+        assert_eq!(
+            window.ui.release_info_label.label(),
+            "Animals · Harvest Records · 1977"
+        );
+        assert_eq!(window.ui.genre_label.label(), "Progressive Rock");
+        assert_eq!(
+            window.ui.recognition_age_label.label(),
+            "Recognized 20 seconds ago"
+        );
+        assert!(window.ui.recognition_age_label.is_visible());
+        assert_eq!(
+            window.ui.immersive_release_info_label.label(),
+            window.ui.release_info_label.label()
+        );
+        assert_eq!(
+            window.ui.immersive_genre_label.label(),
+            window.ui.genre_label.label()
+        );
+
+        if let Some(popover) = window
+            .controls
+            .display_mode
+            .widget()
+            .ancestor(gtk::Popover::static_type())
+        {
+            popover.unparent();
+        }
+        window.close();
+        window.ui.window.destroy();
+    }
 
     #[test]
     #[ignore = "requires a GTK display"]
@@ -1107,6 +1294,7 @@ mod tests {
             song_name: "Song".to_string(),
             artist_name: "Artist".to_string(),
             album_name: None,
+            record_label: None,
             release_year: None,
             genre: None,
             artist_background_url: Some(artist_url.to_string()),
@@ -1187,6 +1375,7 @@ mod tests {
                 song_name: key.to_string(),
                 artist_name: "Artist".to_string(),
                 album_name: None,
+                record_label: None,
                 release_year: None,
                 genre: None,
                 artist_background_url: None,

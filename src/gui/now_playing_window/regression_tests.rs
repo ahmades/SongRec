@@ -241,6 +241,36 @@ fn find_toggle_group(widget: &impl IsA<gtk::Widget>) -> Option<adw::ToggleGroup>
     None
 }
 
+fn find_toggle_button(widget: &impl IsA<gtk::Widget>) -> Option<gtk::ToggleButton> {
+    if let Some(button) = widget.as_ref().downcast_ref::<gtk::ToggleButton>() {
+        return Some(button.clone());
+    }
+    let mut child = widget.as_ref().first_child();
+    while let Some(current) = child {
+        if let Some(button) = find_toggle_button(&current) {
+            return Some(button);
+        }
+        child = current.next_sibling();
+    }
+    None
+}
+
+fn find_check_button(widget: &impl IsA<gtk::Widget>, text: &str) -> Option<gtk::CheckButton> {
+    if let Some(button) = widget.as_ref().downcast_ref::<gtk::CheckButton>()
+        && button.label().as_deref() == Some(text)
+    {
+        return Some(button.clone());
+    }
+    let mut child = widget.as_ref().first_child();
+    while let Some(current) = child {
+        if let Some(button) = find_check_button(&current, text) {
+            return Some(button);
+        }
+        child = current.next_sibling();
+    }
+    None
+}
+
 pub(super) struct TestWindow(pub(super) NowPlayingWindow);
 
 impl Drop for TestWindow {
@@ -332,6 +362,16 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
     let backdrop_soft: gtk::ToggleButton = builder.object("backdrop_intensity_soft").unwrap();
     let backdrop_bold: gtk::ToggleButton = builder.object("backdrop_intensity_bold").unwrap();
     let text_row: adw::ActionRow = builder.object("text_size_setting").unwrap();
+    let displayed_information_row: adw::ActionRow =
+        builder.object("displayed_information_setting").unwrap();
+    let displayed_information_details: adw::ActionRow =
+        builder.object("displayed_information_details").unwrap();
+    let displayed_information_button =
+        find_toggle_button(&displayed_information_row).expect("displayed-information disclosure");
+    let record_label = find_check_button(&displayed_information_details, "Record label")
+        .expect("record-label preference");
+    let genre =
+        find_check_button(&displayed_information_details, "Genre").expect("genre preference");
     let classic_heading: adw::PreferencesRow =
         builder.object("classic_now_playing_preferences").unwrap();
     let classic_row: adw::SwitchRow = builder.object("round_corners_setting").unwrap();
@@ -450,6 +490,33 @@ fn settings_views_stay_in_sync_and_immediate_quit_preserves_sliders() {
         dispatch();
         assert!(window.0.controls.text_size_details.reveals_child());
         assert!(window.0.controls.track_info_alignment_label.is_sensitive());
+        assert!(displayed_information_row.get_visible());
+        displayed_information_button.set_active(true);
+        assert!(displayed_information_details.get_visible());
+        record_label.set_active(true);
+        dispatch();
+        assert!(window.0.controls.displayed_information.value().record_label);
+        assert_eq!(
+            window
+                .0
+                .controls
+                .displayed_information_button
+                .label()
+                .as_deref(),
+            Some("3 selected")
+        );
+        window
+            .0
+            .controls
+            .displayed_information_button
+            .set_active(true);
+        let context_genre =
+            find_check_button(window.0.controls.displayed_information.widget(), "Genre")
+                .expect("genre context-menu option");
+        context_genre.set_active(true);
+        dispatch();
+        assert!(genre.is_active());
+        assert!(controller.settings().shared.displayed_information.genre);
         mode.set_active_name(Some(super::DisplayMode::Cinema.as_preference_value()));
         dispatch();
         assert!(!classic_heading.get_visible());

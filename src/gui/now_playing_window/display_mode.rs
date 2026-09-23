@@ -67,6 +67,7 @@ pub(crate) struct NowPlayingControlState {
     pub(crate) hide_track_info_sensitive: bool,
     pub(crate) show_burn_in_details: bool,
     pub(crate) show_text_size: bool,
+    pub(crate) show_displayed_information: bool,
     pub(crate) show_crop_focus: bool,
     pub(crate) show_motion_details: bool,
     pub(crate) show_transition_duration: bool,
@@ -85,6 +86,7 @@ impl NowPlayingControlState {
             hide_track_info_sensitive: display_mode.supports_hiding_track_info(),
             show_burn_in_details: settings.shared.burn_in_protection_enabled,
             show_text_size: track_info_visible,
+            show_displayed_information: track_info_visible,
             show_crop_focus: display_mode.shows_cinema_crop_focus(settings.cinema.artwork_framing),
             show_motion_details: display_mode.supports_background_motion()
                 && settings.shared.background_motion_enabled,
@@ -252,6 +254,7 @@ mod tests {
 
                 assert_eq!(state.hide_track_info_sensitive, can_hide);
                 assert_eq!(state.show_text_size, track_info_visible);
+                assert_eq!(state.show_displayed_information, track_info_visible);
                 assert_eq!(
                     state.track_info_alignment_sensitive,
                     matches!(display_mode, DisplayMode::Classic) && track_info_visible

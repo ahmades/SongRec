@@ -1,13 +1,15 @@
 //! Applying persisted Now Playing preferences to the active window.
 
 use super::display_mode::NowPlayingControlState;
+use super::displayed_information::selection_summary;
 use super::track::TrackPresentation;
 use super::ui::apply_classic_track_info_alignment;
 use super::{
     AlbumCoverSize, BackdropIntensity, CinemaArtworkFraming, CinemaCropFocus, DisplayMode,
-    ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow, TextSize, TrackInfoAlignment,
-    TransitionEffect, clamp_background_motion_zoom_percent, clamp_transition_duration_ms,
-    normalize_background_motion_reversal_duration_secs, normalize_burn_in_inactivity_minutes,
+    DisplayedInformation, ImmersiveBackgroundSource, NowPlayingSettings, NowPlayingWindow,
+    TextSize, TrackInfoAlignment, TransitionEffect, clamp_background_motion_zoom_percent,
+    clamp_transition_duration_ms, normalize_background_motion_reversal_duration_secs,
+    normalize_burn_in_inactivity_minutes,
 };
 use adw::prelude::*;
 
@@ -71,6 +73,9 @@ impl NowPlayingWindow {
             if changed!(shared.text_size) {
                 self.set_text_size(settings.shared.text_size);
             }
+            if changed!(shared.displayed_information) {
+                self.set_displayed_information(settings.shared.displayed_information);
+            }
             if changed!(shared.immersive_background_source) {
                 self.set_immersive_background_source(settings.shared.immersive_background_source);
             }
@@ -107,6 +112,12 @@ impl NowPlayingWindow {
             if changed!(classic.background_style) {
                 self.set_background_style(settings.classic.background_style);
             }
+            self.recognition_age.set_enabled(
+                settings.shared.displayed_information.recognition_age
+                    && settings
+                        .display_mode
+                        .shows_track_info(settings.shared.hide_track_info),
+            );
             self.apply_control_state(NowPlayingControlState::from_settings(settings));
         });
     }
@@ -320,8 +331,9 @@ impl NowPlayingWindow {
                 [
                     &self.ui.title_label,
                     &self.ui.artist_label,
-                    &self.ui.album_label,
-                    &self.ui.details_label,
+                    &self.ui.release_info_label,
+                    &self.ui.genre_label,
+                    &self.ui.recognition_age_label,
                 ],
                 alignment,
             );
@@ -355,6 +367,24 @@ impl NowPlayingWindow {
                 self.controls.text_size.set_value(size.scale_value());
             }
         });
+    }
+
+    /// Selects the optional metadata lines and refreshes labels without touching artwork.
+    pub(super) fn set_displayed_information(&self, value: DisplayedInformation) {
+        self.with_preference_updates_suspended(|| {
+            self.controls.displayed_information.set_value(value);
+            self.controls
+                .displayed_information_button
+                .set_label(&selection_summary(value));
+        });
+        self.ui
+            .release_info_reservation
+            .set_visible(value.album || value.record_label || value.release_year);
+        self.ui.genre_reservation.set_visible(value.genre);
+        self.ui
+            .recognition_age_reservation
+            .set_visible(value.recognition_age);
+        TrackPresentation::from_window(self).refresh_metadata();
     }
 
     /// Shows or hides the metadata block for the current track.

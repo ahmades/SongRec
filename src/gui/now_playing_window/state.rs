@@ -78,7 +78,9 @@ pub(super) struct PresentedTrack {
     pub(super) song_name: String,
     pub(super) artist_name: String,
     pub(super) album_name: Option<String>,
+    pub(super) record_label: Option<String>,
     pub(super) release_year: Option<String>,
+    pub(super) genre: Option<String>,
     pub(super) artwork: Option<PreparedArtwork>,
     pub(super) artwork_pending: bool,
     pub(super) artist_background_url: Option<String>,
@@ -99,7 +101,9 @@ impl PresentedTrack {
             song_name: message.song_name.clone(),
             artist_name: message.artist_name.clone(),
             album_name: message.album_name.clone(),
+            record_label: message.record_label.clone(),
             release_year: message.release_year.clone(),
+            genre: message.genre.clone(),
             artwork,
             artwork_pending: message.artwork_pending() || visuals_pending,
             artist_background_url: message.artist_background_url.clone(),
@@ -115,7 +119,9 @@ impl PresentedTrack {
             song_name: self.song_name.clone(),
             artist_name: self.artist_name.clone(),
             album_name: self.album_name.clone(),
+            record_label: self.record_label.clone(),
             release_year: self.release_year.clone(),
+            genre: self.genre.clone(),
             artwork: Some(artwork),
             artwork_pending: false,
             artist_background_url: self.artist_background_url.clone(),
@@ -139,6 +145,14 @@ impl PresentedTrack {
                 .is_some_and(|value| !value.trim().is_empty())
             || self
                 .release_year
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+            || self
+                .record_label
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty())
+            || self
+                .genre
                 .as_deref()
                 .is_some_and(|value| !value.trim().is_empty())
             || self.artwork.is_some()
@@ -185,7 +199,9 @@ impl PresentedTrack {
             && self.song_name == other.song_name
             && self.artist_name == other.artist_name
             && self.album_name == other.album_name
+            && self.record_label == other.record_label
             && self.release_year == other.release_year
+            && self.genre == other.genre
             && self.artwork_pending == other.artwork_pending
             && self.artist_background_url == other.artist_background_url
             && self
@@ -700,10 +716,25 @@ impl TrackPresentationState {
         if self
             .queued_track
             .as_ref()
-            .or(self.pending_track.as_ref())
-            .or(self.displayed_track.as_ref())
             .is_some_and(|current| current.same_presentation(&track))
         {
+            self.queued_track = Some(track);
+            return PresentationAction::None;
+        }
+        if self
+            .pending_track
+            .as_ref()
+            .is_some_and(|current| current.same_presentation(&track))
+        {
+            self.pending_track = Some(track);
+            return PresentationAction::None;
+        }
+        if self
+            .displayed_track
+            .as_ref()
+            .is_some_and(|current| current.same_presentation(&track))
+        {
+            self.displayed_track = Some(track);
             return PresentationAction::None;
         }
         if let Some(phase) = self.pending_transition_phase {
@@ -1065,7 +1096,9 @@ mod tests {
             song_name: format!("Song {key}"),
             artist_name: "Artist".to_string(),
             album_name: None,
+            record_label: None,
             release_year: None,
+            genre: None,
             artwork: None,
             artwork_pending: false,
             artist_background_url: None,
@@ -1964,13 +1997,24 @@ mod tests {
     #[test]
     fn unchanged_recognition_does_not_reapply_the_scene_but_metadata_changes_do() {
         let source = artwork(1);
-        let track = Rc::new(track_expecting("a", &source).with_artwork(prepared_artwork(&source)));
+        let mut initial = track_expecting("a", &source).with_artwork(prepared_artwork(&source));
+        initial.response_received_at = Some(10);
+        let track = Rc::new(initial);
         let mut state = TrackPresentationState::default();
         state.receive_track(track.clone(), false, ArtworkRequirement::IMMERSIVE);
+        let mut repeated = (*track).clone();
+        repeated.response_received_at = Some(20);
         assert!(matches!(
-            state.receive_track(track.clone(), true, ArtworkRequirement::IMMERSIVE),
+            state.receive_track(Rc::new(repeated), true, ArtworkRequirement::IMMERSIVE),
             PresentationAction::None
         ));
+        assert_eq!(
+            state
+                .displayed_track
+                .as_ref()
+                .and_then(|track| track.response_received_at),
+            Some(20)
+        );
 
         let mut changed = (*track).clone();
         changed.album_name = Some("Updated album".to_string());

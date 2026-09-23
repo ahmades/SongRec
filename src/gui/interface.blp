@@ -527,6 +527,17 @@ Adw.ApplicationWindow main_window {
               }
             }
 
+            Adw.ActionRow displayed_information_setting {
+              subtitle: _("Choose the details shown below the artist");
+              title: _("Displayed information");
+            }
+
+            Adw.ActionRow displayed_information_details {
+              activatable: false;
+              selectable: false;
+              visible: false;
+            }
+
             Adw.SwitchRow always_display_last_recognized_song_setting {
               subtitle: _("Keep showing the last recognized song when there is no current match");
               title: _("Always display last recognized song");

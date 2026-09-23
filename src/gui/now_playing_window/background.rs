@@ -66,8 +66,9 @@ impl NowPlayingWindow {
         let immersive_info_for_resize = self.ui.immersive_info_box.clone();
         let immersive_title_for_resize = self.ui.immersive_title_label.clone();
         let immersive_artist_for_resize = self.ui.immersive_artist_label.clone();
-        let immersive_album_for_resize = self.ui.immersive_album_label.clone();
-        let immersive_details_for_resize = self.ui.immersive_details_label.clone();
+        let immersive_release_info_for_resize = self.ui.immersive_release_info_label.clone();
+        let immersive_genre_for_resize = self.ui.immersive_genre_label.clone();
+        let immersive_age_for_resize = self.ui.immersive_recognition_age_label.clone();
         self.ui
             .background_area
             .connect_resize(move |area, width, height| {
@@ -94,8 +95,9 @@ impl NowPlayingWindow {
                     [
                         &immersive_title_for_resize,
                         &immersive_artist_for_resize,
-                        &immersive_album_for_resize,
-                        &immersive_details_for_resize,
+                        &immersive_release_info_for_resize,
+                        &immersive_genre_for_resize,
+                        &immersive_age_for_resize,
                     ],
                     settings.display_mode,
                     cinema_for_resize.layout(width, height),

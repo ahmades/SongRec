@@ -755,14 +755,19 @@ pub(super) struct NowPlayingWidgets {
     pub(super) artwork_placeholder: gtk::Label,
     pub(super) title_label: gtk::Label,
     pub(super) artist_label: gtk::Label,
-    pub(super) album_label: gtk::Label,
-    pub(super) details_label: gtk::Label,
+    pub(super) release_info_label: gtk::Label,
+    pub(super) genre_label: gtk::Label,
+    pub(super) recognition_age_label: gtk::Label,
+    pub(super) release_info_reservation: gtk::Label,
+    pub(super) genre_reservation: gtk::Label,
+    pub(super) recognition_age_reservation: gtk::Label,
     pub(super) info_box: gtk::Box,
     pub(super) classic_info_layout: gtk::Overlay,
     pub(super) immersive_title_label: gtk::Label,
     pub(super) immersive_artist_label: gtk::Label,
-    pub(super) immersive_album_label: gtk::Label,
-    pub(super) immersive_details_label: gtk::Label,
+    pub(super) immersive_release_info_label: gtk::Label,
+    pub(super) immersive_genre_label: gtk::Label,
+    pub(super) immersive_recognition_age_label: gtk::Label,
     pub(super) immersive_info_box: gtk::Box,
     pub(super) background_area: gtk::DrawingArea,
     /// Black, non-interactive scrim outside the transition snapshot subtree.
@@ -845,8 +850,11 @@ pub(super) fn build_ui(
 
     let title_label = metadata_label(TITLE_CSS_CLASS);
     let artist_label = metadata_label(ARTIST_CSS_CLASS);
-    let album_label = metadata_label(ALBUM_CSS_CLASS);
-    let details_label = metadata_label(DETAILS_CSS_CLASS);
+    let release_info_label = metadata_label(ALBUM_CSS_CLASS);
+    release_info_label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+    let genre_label = metadata_label(DETAILS_CSS_CLASS);
+    let recognition_age_label = metadata_label(DETAILS_CSS_CLASS);
+    recognition_age_label.set_visible(false);
 
     let info_box = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -856,8 +864,9 @@ pub(super) fn build_ui(
         .build();
     info_box.append(&title_label);
     info_box.append(&artist_label);
-    info_box.append(&album_label);
-    info_box.append(&details_label);
+    info_box.append(&release_info_label);
+    info_box.append(&genre_label);
+    info_box.append(&recognition_age_label);
 
     // Measure Classic metadata at the largest selectable text size. The real
     // labels are unmeasured overlays, so changing their size cannot take space
@@ -868,14 +877,16 @@ pub(super) fn build_ui(
         .opacity(0.0)
         .can_target(false)
         .build();
-    for css_class in [
-        TITLE_RESERVATION_CSS_CLASS,
-        ARTIST_RESERVATION_CSS_CLASS,
-        ALBUM_RESERVATION_CSS_CLASS,
-        DETAILS_RESERVATION_CSS_CLASS,
-    ] {
-        info_reservation.append(&metadata_reservation_label(css_class));
-    }
+    info_reservation.append(&metadata_reservation_label(TITLE_RESERVATION_CSS_CLASS));
+    info_reservation.append(&metadata_reservation_label(ARTIST_RESERVATION_CSS_CLASS));
+    let release_info_reservation = metadata_reservation_label(ALBUM_RESERVATION_CSS_CLASS);
+    let genre_reservation = metadata_reservation_label(DETAILS_RESERVATION_CSS_CLASS);
+    genre_reservation.set_visible(false);
+    let recognition_age_reservation = metadata_reservation_label(DETAILS_RESERVATION_CSS_CLASS);
+    recognition_age_reservation.set_visible(false);
+    info_reservation.append(&release_info_reservation);
+    info_reservation.append(&genre_reservation);
+    info_reservation.append(&recognition_age_reservation);
     let classic_info_layout = gtk::Overlay::builder().hexpand(true).build();
     classic_info_layout.set_child(Some(&info_reservation));
     classic_info_layout.add_overlay(&info_box);
@@ -886,12 +897,16 @@ pub(super) fn build_ui(
 
     let immersive_title_label = metadata_label(TITLE_CSS_CLASS);
     let immersive_artist_label = metadata_label(ARTIST_CSS_CLASS);
-    let immersive_album_label = metadata_label(ALBUM_CSS_CLASS);
-    let immersive_details_label = metadata_label(DETAILS_CSS_CLASS);
+    let immersive_release_info_label = metadata_label(ALBUM_CSS_CLASS);
+    immersive_release_info_label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
+    let immersive_genre_label = metadata_label(DETAILS_CSS_CLASS);
+    let immersive_recognition_age_label = metadata_label(DETAILS_CSS_CLASS);
+    immersive_recognition_age_label.set_visible(false);
     immersive_title_label.add_css_class(IMMERSIVE_INFO_CSS_CLASS);
     immersive_artist_label.add_css_class(IMMERSIVE_INFO_CSS_CLASS);
-    immersive_album_label.add_css_class(IMMERSIVE_INFO_CSS_CLASS);
-    immersive_details_label.add_css_class(IMMERSIVE_INFO_CSS_CLASS);
+    immersive_release_info_label.add_css_class(IMMERSIVE_INFO_CSS_CLASS);
+    immersive_genre_label.add_css_class(IMMERSIVE_INFO_CSS_CLASS);
+    immersive_recognition_age_label.add_css_class(IMMERSIVE_INFO_CSS_CLASS);
     let immersive_info_box = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(INFO_BOX_SPACING)
@@ -901,8 +916,9 @@ pub(super) fn build_ui(
         .build();
     immersive_info_box.append(&immersive_title_label);
     immersive_info_box.append(&immersive_artist_label);
-    immersive_info_box.append(&immersive_album_label);
-    immersive_info_box.append(&immersive_details_label);
+    immersive_info_box.append(&immersive_release_info_label);
+    immersive_info_box.append(&immersive_genre_label);
+    immersive_info_box.append(&immersive_recognition_age_label);
 
     let cinema_artwork = CinemaArtworkLayout::new();
     cinema_artwork.container.set_visible(false);
@@ -1045,14 +1061,19 @@ pub(super) fn build_ui(
             artwork_placeholder,
             title_label,
             artist_label,
-            album_label,
-            details_label,
+            release_info_label,
+            genre_label,
+            recognition_age_label,
+            release_info_reservation,
+            genre_reservation,
+            recognition_age_reservation,
             info_box,
             classic_info_layout,
             immersive_title_label,
             immersive_artist_label,
-            immersive_album_label,
-            immersive_details_label,
+            immersive_release_info_label,
+            immersive_genre_label,
+            immersive_recognition_age_label,
             immersive_info_box,
             background_area,
             burn_in_dim_layer,
@@ -1088,7 +1109,7 @@ fn metadata_reservation_label(css_class: &str) -> gtk::Label {
 /// ensure that text in an expanding label follows the selected edge as well.
 pub(super) fn apply_classic_track_info_alignment(
     info_box: &gtk::Box,
-    labels: [&gtk::Label; 4],
+    labels: [&gtk::Label; 5],
     alignment: TrackInfoAlignment,
 ) {
     let (widget_alignment, text_alignment, xalign) = match alignment {
@@ -1128,7 +1149,7 @@ fn classic_padding_for_size(width: i32, height: i32) -> i32 {
 /// Updates the fixed immersive metadata layout for a mode and viewport.
 pub(super) fn configure_immersive_info(
     info_box: &gtk::Box,
-    labels: [&gtk::Label; 4],
+    labels: [&gtk::Label; 5],
     mode: DisplayMode,
     cinema_layout: CinemaLayout,
     width: i32,

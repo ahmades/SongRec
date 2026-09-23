@@ -267,8 +267,9 @@ mod tests {
     use super::NowPlayingSettingsController;
     use crate::core::preferences::{
         BACKGROUND_MOTION_REVERSAL_DURATION_MIN_SECS, BACKGROUND_MOTION_ZOOM_MAX_PERCENT,
-        CinemaArtworkFraming, CinemaCropFocus, DisplayMode, FullscreenMonitorTarget,
-        NowPlayingPreferenceChange, NowPlayingPreferences, NowPlayingPresetCatalog, TextSize,
+        CinemaArtworkFraming, CinemaCropFocus, DisplayMode, DisplayedInformation,
+        FullscreenMonitorTarget, NowPlayingPreferenceChange, NowPlayingPreferences,
+        NowPlayingPresetCatalog, TextSize,
     };
     use crate::core::thread_messages::GUIMessage;
 
@@ -479,6 +480,13 @@ mod tests {
         let _guard = context.acquire().unwrap();
         let mut saved = NowPlayingPreferences::default();
         saved.shared.text_size = TextSize::LARGE;
+        saved.shared.displayed_information = DisplayedInformation {
+            album: false,
+            record_label: true,
+            release_year: true,
+            genre: true,
+            recognition_age: true,
+        };
         let mut presets = NowPlayingPresetCatalog::default();
         let id = presets.create("Large", saved).unwrap();
         let (sender, receiver) = async_channel::unbounded();

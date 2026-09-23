@@ -2,6 +2,7 @@
 
 use super::cinema_framing::{CinemaArtworkFramingControls, CinemaCropFocusControls};
 use super::display_mode::{DisplayModeControls, NowPlayingControlState};
+use super::displayed_information::{DisplayedInformationEditor, selection_summary};
 use super::monitor_selection::{MonitorSelector, reapply_fullscreen_target, toggle_fullscreen};
 use super::presets::PresetManagerLauncher;
 use super::{
@@ -185,6 +186,10 @@ pub(super) struct NowPlayingControls {
     pub(super) text_size_label: gtk::Label,
     pub(super) text_size: gtk::Scale,
     pub(super) text_size_details: gtk::Revealer,
+    pub(super) displayed_information_label: gtk::Label,
+    pub(super) displayed_information_button: gtk::ToggleButton,
+    pub(super) displayed_information: DisplayedInformationEditor,
+    pub(super) displayed_information_details: gtk::Revealer,
     pub(super) immersive_background_source_album_cover: gtk::ToggleButton,
     pub(super) immersive_background_source_artist: gtk::ToggleButton,
     pub(super) backdrop_intensity_soft: gtk::ToggleButton,
@@ -262,6 +267,12 @@ pub(super) fn build_controls() -> NowPlayingControls {
     text_size.set_value(TextSize::default().scale_value());
     text_size.set_width_request(190);
     let text_size_details = dependent_revealer();
+    let displayed_information_label = gtk::Label::new(Some(&gettext("Displayed information")));
+    let displayed_information_button = gtk::ToggleButton::builder()
+        .label(selection_summary(super::DisplayedInformation::default()))
+        .build();
+    let displayed_information = DisplayedInformationEditor::new();
+    let displayed_information_details = dependent_revealer();
     let immersive_background_source_album_cover =
         gtk::ToggleButton::with_label(&gettext("Album cover"));
     let immersive_background_source_artist = gtk::ToggleButton::with_label(&gettext("Artist"));
@@ -350,6 +361,10 @@ pub(super) fn build_controls() -> NowPlayingControls {
         text_size_label,
         text_size,
         text_size_details,
+        displayed_information_label,
+        displayed_information_button,
+        displayed_information,
+        displayed_information_details,
         immersive_background_source_album_cover,
         immersive_background_source_artist,
         backdrop_intensity_soft,
@@ -511,6 +526,38 @@ impl NowPlayingWindow {
             &self.controls.text_size,
             settings.shared.text_size.scale_value(),
         );
+        self.controls
+            .displayed_information_label
+            .set_halign(gtk::Align::Start);
+        self.controls
+            .displayed_information_label
+            .set_valign(gtk::Align::Center);
+        self.controls.displayed_information_label.set_hexpand(true);
+        text_size_grid.attach(&self.controls.displayed_information_label, 0, 1, 1, 1);
+        self.controls
+            .displayed_information
+            .set_value(settings.shared.displayed_information);
+        self.controls
+            .displayed_information_button
+            .set_label(&selection_summary(settings.shared.displayed_information));
+        self.controls
+            .displayed_information_button
+            .set_halign(gtk::Align::End);
+        self.controls
+            .displayed_information_button
+            .set_valign(gtk::Align::Center);
+        label_control(
+            &self.controls.displayed_information_label,
+            &self.controls.displayed_information_button,
+        );
+        text_size_grid.attach(&self.controls.displayed_information_button, 1, 1, 1, 1);
+        let displayed_information_grid = menu_grid();
+        displayed_information_grid.attach(self.controls.displayed_information.widget(), 0, 0, 2, 1);
+        set_dependent_rows(
+            &self.controls.displayed_information_details,
+            &displayed_information_grid,
+        );
+        text_size_grid.attach(&self.controls.displayed_information_details, 0, 2, 2, 1);
         set_dependent_rows(&self.controls.text_size_details, &text_size_grid);
         shared_grid.attach(&self.controls.text_size_details, 0, 5, 2, 1);
         self.add_switch_menu_row(
@@ -953,6 +1000,12 @@ impl NowPlayingWindow {
             .text_size_details
             .set_reveal_child(state.show_text_size);
         self.controls
+            .displayed_information_details
+            .set_reveal_child(
+                state.show_displayed_information
+                    && self.controls.displayed_information_button.is_active(),
+            );
+        self.controls
             .burn_in_details
             .set_reveal_child(state.show_burn_in_details);
         self.controls
@@ -1264,6 +1317,24 @@ impl NowPlayingWindow {
             &self.controls.hide_track_info,
             NowPlayingPreferenceChange::HideTrackInfo,
         );
+
+        let displayed_information_details = self.controls.displayed_information_details.clone();
+        self.controls
+            .displayed_information_button
+            .connect_toggled(move |button| {
+                displayed_information_details.set_reveal_child(button.is_active());
+            });
+        let applying = self.state.applying_settings.clone();
+        let controller = self.controller.clone();
+        let displayed_information_button = self.controls.displayed_information_button.clone();
+        self.controls
+            .displayed_information
+            .connect_changed(move |value| {
+                displayed_information_button.set_label(&selection_summary(value));
+                if !applying.get() {
+                    controller.update(NowPlayingPreferenceChange::DisplayedInformation(value));
+                }
+            });
         bind_switch(
             &self.controls.background_motion_enabled,
             NowPlayingPreferenceChange::BackgroundMotionEnabled,
