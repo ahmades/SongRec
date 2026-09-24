@@ -6,6 +6,8 @@ use gettextrs::{gettext, ngettext};
 use std::cell::Cell;
 use std::rc::Rc;
 
+const CHECKBOX_COLUMN_SPACING: i32 = 40;
+
 #[derive(Clone)]
 pub(super) struct DisplayedInformationEditor {
     widget: gtk::Grid,
@@ -21,7 +23,7 @@ impl DisplayedInformationEditor {
     pub(super) fn new() -> Self {
         let widget = gtk::Grid::builder()
             .row_spacing(6)
-            .column_spacing(18)
+            .column_spacing(CHECKBOX_COLUMN_SPACING)
             .hexpand(true)
             .build();
         let album = gtk::CheckButton::with_label(&gettext("Album"));

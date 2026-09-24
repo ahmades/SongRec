@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 20:44+0200\n"
+"POT-Creation-Date: 2026-09-24 22:48+0200\n"
 "PO-Revision-Date: 2026-05-18 12:07+1100\n"
 "Last-Translator: Aleksandr Shamaraev <shad@altlinux.org>\n"
 "Language-Team: Russian <https://weblate.fossplant.re/projects/songrec/"
@@ -335,37 +335,37 @@ msgid ""
 "{position}. Drag on the album cover or use the arrow keys to change the focus"
 msgstr ""
 
-#: src/gui/now_playing_window/displayed_information.rs:27
+#: src/gui/now_playing_window/displayed_information.rs:29
 #: src/gui/interface.blp:247 src/gui/interface.blp:341
 msgid "Album"
 msgstr "Альбом"
 
-#: src/gui/now_playing_window/displayed_information.rs:28
+#: src/gui/now_playing_window/displayed_information.rs:30
 msgid "Record label"
 msgstr ""
 
-#: src/gui/now_playing_window/displayed_information.rs:29
+#: src/gui/now_playing_window/displayed_information.rs:31
 msgid "Year"
 msgstr ""
 
-#: src/gui/now_playing_window/displayed_information.rs:30
+#: src/gui/now_playing_window/displayed_information.rs:32
 msgid "Genre"
 msgstr ""
 
-#: src/gui/now_playing_window/displayed_information.rs:31
+#: src/gui/now_playing_window/displayed_information.rs:33
 msgid "Recognition age"
 msgstr ""
 
-#: src/gui/now_playing_window/displayed_information.rs:99
+#: src/gui/now_playing_window/displayed_information.rs:101
 #: src/gui/now_playing_window/transition.rs:45
 msgid "None"
 msgstr ""
 
-#: src/gui/now_playing_window/displayed_information.rs:100
+#: src/gui/now_playing_window/displayed_information.rs:102
 msgid "All"
 msgstr ""
 
-#: src/gui/now_playing_window/displayed_information.rs:102
+#: src/gui/now_playing_window/displayed_information.rs:104
 msgid "1 selected"
 msgid_plural "{count} selected"
 msgstr[0] ""

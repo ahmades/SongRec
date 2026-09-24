@@ -255,6 +255,7 @@ impl NowPlayingPreferencesView {
 
         for row in [
             &widgets.text_size_row,
+            &widgets.displayed_information_row,
             &widgets.displayed_information_details,
             &widgets.transition_duration_row,
             &widgets.cinema_crop_focus_row,

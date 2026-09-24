@@ -1551,6 +1551,7 @@ mod tests {
         assert_eq!(controls.transition_duration.value(), 500.0);
         controls.transition_duration.set_value(750.0);
         assert_eq!(controls.transition_duration.value(), 1_000.0);
+        assert_eq!(controls.displayed_information.widget().column_spacing(), 40);
 
         let text_size = controls.text_size.downgrade();
         let album_cover_size = controls.album_cover_size.downgrade();

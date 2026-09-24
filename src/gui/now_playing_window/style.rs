@@ -13,10 +13,13 @@ pub(super) const TITLE_CSS_CLASS: &str = "now-playing-title";
 pub(super) const ARTIST_CSS_CLASS: &str = "now-playing-artist";
 pub(super) const ALBUM_CSS_CLASS: &str = "now-playing-album";
 pub(super) const DETAILS_CSS_CLASS: &str = "now-playing-details";
+pub(super) const RECOGNITION_AGE_CSS_CLASS: &str = "now-playing-recognition-age";
 pub(super) const TITLE_RESERVATION_CSS_CLASS: &str = "now-playing-title-reservation";
 pub(super) const ARTIST_RESERVATION_CSS_CLASS: &str = "now-playing-artist-reservation";
 pub(super) const ALBUM_RESERVATION_CSS_CLASS: &str = "now-playing-album-reservation";
 pub(super) const DETAILS_RESERVATION_CSS_CLASS: &str = "now-playing-details-reservation";
+pub(super) const RECOGNITION_AGE_RESERVATION_CSS_CLASS: &str =
+    "now-playing-recognition-age-reservation";
 
 /// Shares responsive typography and its cache across resize and setting callbacks.
 #[derive(Clone)]
@@ -83,6 +86,7 @@ struct MetadataFontSizes {
     artist: i32,
     album: i32,
     details: i32,
+    recognition_age: i32,
 }
 
 /// Generates CSS for metadata font sizes scaled to the supplied window dimensions.
@@ -95,18 +99,22 @@ pub(super) fn font_css_for_size(size: (i32, i32), text_size: TextSize) -> String
          .{ARTIST_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
          .{ALBUM_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
          .{DETAILS_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
+         .{RECOGNITION_AGE_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
          .{TITLE_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
          .{ARTIST_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
          .{ALBUM_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
-         .{DETAILS_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}",
+         .{DETAILS_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}
+         .{RECOGNITION_AGE_RESERVATION_CSS_CLASS} {{ font-size: {}px; font-weight: bold; }}",
         sizes.title,
         sizes.artist,
         sizes.album,
         sizes.details,
+        sizes.recognition_age,
         reservation_sizes.title,
         reservation_sizes.artist,
         reservation_sizes.album,
         reservation_sizes.details,
+        reservation_sizes.recognition_age,
     )
 }
 
@@ -123,6 +131,7 @@ fn metadata_font_sizes_for_size(size: (i32, i32), text_size: TextSize) -> Metada
         artist: (ARTIST_BASE_FONT_SIZE * scale).round() as i32,
         album: (ALBUM_BASE_FONT_SIZE * scale).round() as i32,
         details: (DETAILS_BASE_FONT_SIZE * scale).round() as i32,
+        recognition_age: (RECOGNITION_AGE_BASE_FONT_SIZE * scale).round() as i32,
     }
 }
 
@@ -140,6 +149,7 @@ mod tests {
                 artist: 14,
                 album: 11,
                 details: 11,
+                recognition_age: 10,
             }
         );
         assert_eq!(
@@ -149,6 +159,7 @@ mod tests {
                 artist: 54,
                 album: 41,
                 details: 41,
+                recognition_age: 36,
             }
         );
     }
@@ -162,6 +173,7 @@ mod tests {
                 artist: 24,
                 album: 18,
                 details: 18,
+                recognition_age: 16,
             }
         );
         assert!(font_css_for_size((720, 820), TextSize::MEDIUM).contains("font-size: 32px"));
@@ -176,6 +188,7 @@ mod tests {
                 artist: 19,
                 album: 14,
                 details: 14,
+                recognition_age: 13,
             }
         );
         assert_eq!(
@@ -185,11 +198,13 @@ mod tests {
                 artist: 29,
                 album: 22,
                 details: 22,
+                recognition_age: 19,
             }
         );
 
         let small_css = font_css_for_size((720, 820), TextSize::SMALL);
         assert!(small_css.contains(".now-playing-title { font-size: 26px"));
+        assert!(small_css.contains(".now-playing-recognition-age { font-size: 13px"));
         assert!(small_css.contains(".now-playing-title-reservation { font-size: 38px"));
     }
 }

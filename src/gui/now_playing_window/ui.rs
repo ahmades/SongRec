@@ -5,8 +5,8 @@ use super::motion::BackdropMotion;
 use super::shortcuts::SHORTCUT_FEEDBACK_CSS_CLASS;
 use super::style::{
     ALBUM_CSS_CLASS, ALBUM_RESERVATION_CSS_CLASS, ARTIST_CSS_CLASS, ARTIST_RESERVATION_CSS_CLASS,
-    DETAILS_CSS_CLASS, DETAILS_RESERVATION_CSS_CLASS, TITLE_CSS_CLASS, TITLE_RESERVATION_CSS_CLASS,
-    TextCss,
+    DETAILS_CSS_CLASS, DETAILS_RESERVATION_CSS_CLASS, RECOGNITION_AGE_CSS_CLASS,
+    RECOGNITION_AGE_RESERVATION_CSS_CLASS, TITLE_CSS_CLASS, TITLE_RESERVATION_CSS_CLASS, TextCss,
 };
 use super::track::transition_leg_duration_ms;
 use super::transition::RevealerLayout;
@@ -853,7 +853,7 @@ pub(super) fn build_ui(
     let release_info_label = metadata_label(ALBUM_CSS_CLASS);
     release_info_label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
     let genre_label = metadata_label(DETAILS_CSS_CLASS);
-    let recognition_age_label = metadata_label(DETAILS_CSS_CLASS);
+    let recognition_age_label = metadata_label(RECOGNITION_AGE_CSS_CLASS);
     recognition_age_label.set_visible(false);
 
     let info_box = gtk::Box::builder()
@@ -882,7 +882,8 @@ pub(super) fn build_ui(
     let release_info_reservation = metadata_reservation_label(ALBUM_RESERVATION_CSS_CLASS);
     let genre_reservation = metadata_reservation_label(DETAILS_RESERVATION_CSS_CLASS);
     genre_reservation.set_visible(false);
-    let recognition_age_reservation = metadata_reservation_label(DETAILS_RESERVATION_CSS_CLASS);
+    let recognition_age_reservation =
+        metadata_reservation_label(RECOGNITION_AGE_RESERVATION_CSS_CLASS);
     recognition_age_reservation.set_visible(false);
     info_reservation.append(&release_info_reservation);
     info_reservation.append(&genre_reservation);
@@ -900,7 +901,7 @@ pub(super) fn build_ui(
     let immersive_release_info_label = metadata_label(ALBUM_CSS_CLASS);
     immersive_release_info_label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
     let immersive_genre_label = metadata_label(DETAILS_CSS_CLASS);
-    let immersive_recognition_age_label = metadata_label(DETAILS_CSS_CLASS);
+    let immersive_recognition_age_label = metadata_label(RECOGNITION_AGE_CSS_CLASS);
     immersive_recognition_age_label.set_visible(false);
     immersive_title_label.add_css_class(IMMERSIVE_INFO_CSS_CLASS);
     immersive_artist_label.add_css_class(IMMERSIVE_INFO_CSS_CLASS);
@@ -1025,7 +1026,7 @@ pub(super) fn build_ui(
     background_css.load_from_string(&format!(
         ".{BACKGROUND_CSS_CLASS} {{ background-color: transparent; color: #ffffff; }}
          .{TITLE_CSS_CLASS}, .{ARTIST_CSS_CLASS} {{ color: #ffffff; }}
-         .{ALBUM_CSS_CLASS}, .{DETAILS_CSS_CLASS} {{ color: rgba(255, 255, 255, {SECONDARY_METADATA_OPACITY}); }}
+         .{ALBUM_CSS_CLASS}, .{DETAILS_CSS_CLASS}, .{RECOGNITION_AGE_CSS_CLASS} {{ color: rgba(255, 255, 255, {SECONDARY_METADATA_OPACITY}); }}
          .{IMMERSIVE_INFO_CSS_CLASS} {{ text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95); }}
          .{MISSING_ARTWORK_CARD_CSS_CLASS} {{
              color: rgba(255, 255, 255, {CARD_ICON_ALPHA});

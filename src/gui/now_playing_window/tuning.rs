@@ -126,6 +126,7 @@ pub(super) mod typography {
     pub const ARTIST_BASE_FONT_SIZE: f64 = 24.0;
     pub const ALBUM_BASE_FONT_SIZE: f64 = 18.0;
     pub const DETAILS_BASE_FONT_SIZE: f64 = 18.0;
+    pub const RECOGNITION_AGE_BASE_FONT_SIZE: f64 = 16.0;
 }
 
 pub(super) mod cinema {
